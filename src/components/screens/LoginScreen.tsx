@@ -194,7 +194,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers }) =
                   type="text"
                   value={forgotEmail}
                   onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="an.nguyen@enterprisehr.vn hoặc NV-2023-045"
+                  placeholder="an.nguyen@coffeehouse.vn hoặc NV-2023-045"
                   className="w-full h-10 px-3 border border-[#c6c5d4] rounded-lg text-sm outline-none focus:border-[#000666]"
                 />
               </div>

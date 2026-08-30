@@ -55,7 +55,44 @@ export interface WeeklyData {
   isCurrent?: boolean;
 }
 
+
+
+export interface HandoverTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  completedBy?: string;
+  completedAt?: string;
+}
+
+export interface ShiftHandover {
+  id: string;
+  shiftName: string;           // "Ca sáng" | "Ca chiều" | "Ca tối"
+  shiftTime: string;           // "07:00 - 12:00"
+  fromEmployee: User;
+  toEmployee: User;
+  date: string;
+  dateString: string;
+  status: 'pending' | 'confirmed' | 'completed';
+  checklist: HandoverTask[];
+  notes: string;
+  previousNotes?: string;      // Ghi chú từ ca trước
+  confirmedAt?: string;
+  handoverPhoto?: string;      // Ảnh bàn giao
+}
+
 export type ActiveTab = 'home' | 'submit' | 'review' | 'profile';
+
+
+export interface CustomerRating {
+  id: string;
+  employeeId: string;
+  customerName: string;
+  rating: 'good' | 'normal' | 'bad';
+  comment?: string;
+  timestamp: string;
+  dateString: string;
+}
 
 export interface CheckInRecord {
   id: string;

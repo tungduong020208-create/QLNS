@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord } from './types';
-import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS } from './data/initialData';
+import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord, CustomerRating } from './types';
+import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS } from './data/initialData';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
@@ -46,6 +46,12 @@ export default function App() {
     const saved = localStorage.getItem('enterprise_hr_evidences');
     return saved ? JSON.parse(saved) : INITIAL_EVIDENCES;
   });
+  // Customer QR Ratings
+  const [customerRatings] = useState<CustomerRating[]>(() => {
+    const saved = localStorage.getItem('customerRatings');
+    return saved ? JSON.parse(saved) : INITIAL_CUSTOMER_RATINGS;
+  });
+
 
   // Notifications state
   const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
@@ -259,6 +265,7 @@ export default function App() {
           <HomeScreen
             currentUser={currentUser}
             evidences={evidences}
+            customerRatings={customerRatings}
             onNavigateSubmit={() => setActiveTab('submit')}
             onSelectEvidence={(evidence) => setSelectedEvidence(evidence)}
             onNavigateReview={() => setActiveTab('review')}

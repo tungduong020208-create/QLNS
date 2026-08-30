@@ -697,7 +697,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             </div>
             <h3 className="font-headline text-lg font-bold text-[#1b1b21] mb-1">Đăng xuất tài khoản?</h3>
             <p className="text-xs text-[#454652] mb-5">
-              Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng hệ thống Enterprise HR.
+              Bạn sẽ cần đăng nhập lại để tiếp tục sử dụng hệ thống Coffee House HR.
             </p>
 
             <div className="flex gap-2">

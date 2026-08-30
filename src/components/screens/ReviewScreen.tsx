@@ -18,7 +18,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const isManager = currentUser.role === 'manager';
-  const [reviewingId, setReviewingId] = useState<string|null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [reviewNote, setReviewNote] = useState('');
   const [reviewPoints, setReviewPoints] = useState(10);
 
