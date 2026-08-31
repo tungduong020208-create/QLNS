@@ -81,7 +81,7 @@ export interface ShiftHandover {
   handoverPhoto?: string;      // Ảnh bàn giao
 }
 
-export type ActiveTab = 'home' | 'submit' | 'review' | 'profile' | 'approval';
+export type ActiveTab = 'home' | 'submit' | 'review' | 'profile' | 'approval' | 'qr_review';
 
 
 export interface CustomerRating {
@@ -113,6 +113,19 @@ export interface ApprovalRequest {
   reviewedAt?: string;
   reviewedBy?: string;
   createdAt: string;
+}
+
+export interface QRReview {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  employeeAvatar: string;
+  customerName: string;
+  stars: number;
+  comment?: string;
+  timestamp: string;
+  dateString: string;
+  sentToGoogle: boolean;
 }
 
 export interface CheckInRecord {

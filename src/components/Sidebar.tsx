@@ -16,6 +16,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const tabs: { id: ActiveTab; label: string; icon: string }[] = [
     { id: 'home', label: 'Trang chủ', icon: 'home' },
+    { id: 'qr_review' as ActiveTab, label: 'QR Đánh giá', icon: 'qr_code_scanner' },
     ...(currentUser.role === 'employee' ? [{ id: 'submit' as ActiveTab, label: 'Báo cáo', icon: 'assignment' }] : []),
     ...(currentUser.role === 'manager' ? [{ id: 'approval' as ActiveTab, label: 'Duyệt', icon: 'how_to_reg' }] : []),
     { id: 'review', label: 'Bàn giao ca', icon: 'handshake' },
@@ -24,7 +25,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <nav className="hidden md:flex flex-col w-64 bg-[#fbf8ff] border-r border-[#c6c5d4] fixed top-0 left-0 h-full z-40 p-4 pt-20">
-      <div className="flex items-center gap-3 mb-8 px-2">
+      <button
+        onClick={() => onSelectTab('profile')}
+        className="flex items-center gap-3 mb-8 px-2 py-2 rounded-xl hover:bg-[#f5f2fb] transition-colors text-left w-full"
+      >
         <img
           className="w-10 h-10 rounded-full object-cover border border-[#c6c5d4]"
           src={currentUser.avatar}
@@ -32,8 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
         <div className="min-w-0">
           <h2 className="font-headline text-sm font-bold text-[#000666] truncate">{currentUser.name}</h2>
-                  </div>
-      </div>
+        </div>
+      </button>
 
       <div className="flex flex-col gap-2 flex-1">
         {tabs.map((tab) => {

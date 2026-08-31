@@ -1,4 +1,4 @@
-import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating, ApprovalRequest } from '../types';
+import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating, ApprovalRequest, QRReview } from '../types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -416,5 +416,68 @@ export const INITIAL_APPROVAL_REQUESTS: ApprovalRequest[] = [
     reviewedAt: 'Hôm nay, 16:10',
     reviewedBy: 'Trần Văn Hùng',
     createdAt: '2026-08-31T15:45:00'
+  },
+];
+
+export const INITIAL_QR_REVIEWS: QRReview[] = [
+  {
+    id: 'qr-1',
+    employeeId: 'usr-1',
+    employeeName: 'Nguyễn Văn An',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    customerName: 'Khách hàng Trang',
+    stars: 5,
+    comment: 'Cà phê rất ngon, nhân viên dễ thương!',
+    timestamp: 'Hôm nay, 09:15',
+    dateString: '2026-08-31T09:15:00',
+    sentToGoogle: true
+  },
+  {
+    id: 'qr-2',
+    employeeId: 'usr-1',
+    employeeName: 'Nguyễn Văn An',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    customerName: 'Khách hàng Hùng',
+    stars: 4,
+    comment: 'Không gian sạch sẽ, đồ uống tạm ổn.',
+    timestamp: 'Hôm nay, 10:30',
+    dateString: '2026-08-31T10:30:00',
+    sentToGoogle: false
+  },
+  {
+    id: 'qr-3',
+    employeeId: 'usr-3',
+    employeeName: 'Nguyễn Thị Mai',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    customerName: 'Khách hàng Lan',
+    stars: 5,
+    comment: 'Cà phê thơm ngon, nhân viên dễ thương!',
+    timestamp: 'Hôm nay, 11:00',
+    dateString: '2026-08-31T11:00:00',
+    sentToGoogle: true
+  },
+  {
+    id: 'qr-4',
+    employeeId: 'usr-1',
+    employeeName: 'Nguyễn Văn An',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    customerName: 'Khách hàng Minh',
+    stars: 2,
+    comment: 'Pha chế quá chậm, đợi 15 phút.',
+    timestamp: 'Hôm nay, 13:20',
+    dateString: '2026-08-31T13:20:00',
+    sentToGoogle: false
+  },
+  {
+    id: 'qr-5',
+    employeeId: 'usr-3',
+    employeeName: 'Nguyễn Thị Mai',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    customerName: 'Khách hàng Thủy',
+    stars: 3,
+    comment: 'Bình thường.',
+    timestamp: 'Hôm nay, 14:45',
+    dateString: '2026-08-31T14:45:00',
+    sentToGoogle: false
   },
 ];

@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord, CustomerRating, ApprovalRequest } from './types';
-import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_APPROVAL_REQUESTS } from './data/initialData';
+import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord, CustomerRating, ApprovalRequest, QRReview } from './types';
+import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_APPROVAL_REQUESTS, INITIAL_QR_REVIEWS } from './data/initialData';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
@@ -20,6 +20,7 @@ import { ToastNotification, ToastMessage } from './components/modals/ToastNotifi
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
 import { ApprovalScreen } from './components/screens/ApprovalScreen';
+import { QRReviewScreen } from './components/screens/QRReviewScreen';
 
 export default function App() {
   // Users state
@@ -70,6 +71,12 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_APPROVAL_REQUESTS;
   });
 
+  // QR Reviews state
+  const [qrReviews, setQrReviews] = useState<QRReview[]>(() => {
+    const saved = localStorage.getItem('coffeehouse_qr_reviews');
+    return saved ? JSON.parse(saved) : INITIAL_QR_REVIEWS;
+  });
+
   // Check-in state
   const [checkInRecord, setCheckInRecord] = useState<CheckInRecord | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
@@ -90,6 +97,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('coffeehouse_approvals', JSON.stringify(approvalRequests));
   }, [approvalRequests]);
+
+  useEffect(() => {
+    localStorage.setItem('coffeehouse_qr_reviews', JSON.stringify(qrReviews));
+  }, [qrReviews]);
 
   useEffect(() => {
     localStorage.setItem('enterprise_hr_current_user_id', currentUser.id);
@@ -236,6 +247,17 @@ export default function App() {
     addToast('error', 'Đã từ chối', 'Yêu cầu đã bị từ chối');
   };
 
+  const handleAddQRReview = (review: QRReview) => {
+    setQrReviews(prev => [review, ...prev]);
+    addToast(
+      'success',
+      'Đã ghi nhận đánh giá',
+      review.sentToGoogle
+        ? 'Đánh giá 5 sao sẽ được gửi lên Google Reviews'
+        : 'Đánh giá đã lưu để xử lý nội bộ'
+    );
+  };
+
   const handleMarkNotificationRead = (id: string) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
@@ -315,6 +337,14 @@ export default function App() {
             currentUser={currentUser}
             onBack={() => setActiveTab('home')}
             onSubmit={handleSubmitEvidence}
+          />
+        )}
+
+        {activeTab === 'qr_review' && (
+          <QRReviewScreen
+            currentUser={currentUser}
+            reviews={qrReviews}
+            onAddReview={handleAddQRReview}
           />
         )}
 

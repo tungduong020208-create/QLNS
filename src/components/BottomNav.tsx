@@ -15,6 +15,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   currentUser
 }) => {  const allTabs: { id: ActiveTab; label: string; icon: string }[] = [
     { id: 'home', label: 'Trang chủ', icon: 'home' },
+    { id: 'qr_review', label: 'QR', icon: 'qr_code_scanner' },
     { id: 'submit', label: 'Báo cáo', icon: 'assignment' },
     { id: 'approval', label: 'Duyệt', icon: 'how_to_reg' },
     { id: 'review', label: 'Bàn giao ca', icon: 'handshake' },
