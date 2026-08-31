@@ -5,22 +5,14 @@ interface ReviewScreenProps {
   currentUser: User;
   evidences: EvidenceItem[];
   onReactEvidence?: (evidenceId: string, reactionType: 'good' | 'bad') => void;
-  onReviewEvidence?: (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => void;
-  onSelectEvidence?: (evidence: EvidenceItem) => void;
 }
 
 export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   currentUser,
   evidences,
   onReactEvidence,
-  onReviewEvidence,
-  onSelectEvidence
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const isManager = currentUser.role === 'manager';
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [reviewNote, setReviewNote] = useState('');
-  const [reviewPoints, setReviewPoints] = useState(10);
 
   const sortedEvidences = [...evidences].sort((a, b) => {
     return new Date(b.dateString).getTime() - new Date(a.dateString).getTime();
@@ -35,14 +27,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const getCounts = (item: EvidenceItem) => {
     const r = item.reactions || [];
     return { good: r.filter(x => x.type === 'good').length, bad: r.filter(x => x.type === 'bad').length };
-  };
-
-  const submitReview = (id: string, status: 'good'|'bad') => {
-    if (onReviewEvidence) {
-      onReviewEvidence(id, status, reviewPoints, reviewNote || (status === 'good' ? 'Đạt yêu cầu' : 'Cần xử lý'));
-    }
-    setReviewingId(null);
-    setReviewNote('');
   };
 
   const getUserReaction = (item: EvidenceItem): 'good' | 'bad' | null => {
@@ -104,63 +88,9 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                   <img className="w-full h-full object-cover" src={item.imageUrl} alt={item.title} />
                 </div>
 
-                {isManager && item.status === 'pending' && (
-                  <div className="pt-3 border-t border-[#c6c5d4]/40">
-                    {reviewingId === item.id ? (
-                      <div className="space-y-3">
-                        <div>
-                          <label className="text-xs text-[#454652] font-medium mb-1 block">Điểm số</label>
-                          <input type="number" value={reviewPoints} onChange={e => setReviewPoints(parseInt(e.target.value) || 0)}
-                            className="w-24 px-3 py-2 border border-[#c6c5d4] rounded-lg text-sm focus:outline-none focus:border-[#000666]" />
-                        </div>
-                        <div>
-                          <label className="text-xs text-[#454652] font-medium mb-1 block">Nhận xét</label>
-                          <textarea value={reviewNote} onChange={e => setReviewNote(e.target.value)} placeholder="Nhập nhận xét..."
-                            className="w-full px-3 py-2 border border-[#c6c5d4] rounded-lg text-sm focus:outline-none focus:border-[#000666] resize-none" rows={2} />
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => submitReview(item.id, 'good')} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green-500 text-white hover:bg-green-600 transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">thumb_up</span>Xác nhận
-                          </button>
-                          <button onClick={() => submitReview(item.id, 'bad')} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-red-500 text-white hover:bg-red-600 transition-colors">
-                            <span className="material-symbols-outlined text-[18px]">thumb_down</span>Cần xử lý
-                          </button>
-                          <button onClick={() => setReviewingId(null)} className="px-4 py-2.5 rounded-xl font-semibold text-sm border border-[#c6c5d4] text-[#454652] hover:bg-[#f5f2fb] transition-colors">Hủy</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button onClick={() => { setReviewingId(item.id); setReviewNote(''); setReviewPoints(10); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-green-50 text-green-600 border border-green-200 hover:bg-green-100 transition-colors">
-                          <span className="material-symbols-outlined text-[18px]">thumb_up</span>Xác nhận
-                        </button>
-                        <button onClick={() => { setReviewingId(item.id); setReviewNote(''); setReviewPoints(-10); }}
-                          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">
-                          <span className="material-symbols-outlined text-[18px]">thumb_down</span>Cần xử lý
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {isManager && item.status !== 'pending' && item.managerNote && (
-                  <div className="pt-3 border-t border-[#c6c5d4]/40">
-                    <div className="flex items-center gap-2 text-xs text-[#767683] mb-1">
-                      <span>{item.reviewedBy}</span><span>•</span><span>{item.reviewedAt}</span>
-                    </div>
-                    <p className="text-sm text-[#1b1b21] bg-[#f9f8fc] p-2 rounded-lg">"{item.managerNote}"</p>
-                    <div className="mt-2 text-sm font-semibold">
-                      <span className={item.points > 0 ? 'text-green-600' : 'text-red-500'}>
-                        {item.points > 0 ? '+' : ''}{item.points} điểm
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {!isManager && (
-                  <div className="flex gap-3 pt-2 border-t border-[#c6c5d4]/40">
-                    <button
-                      onClick={() => onReactEvidence && onReactEvidence(item.id, 'good')}
+                <div className="flex gap-3 pt-2 border-t border-[#c6c5d4]/40">
+                  <button
+                    onClick={() => onReactEvidence && onReactEvidence(item.id, 'good')}
                     className={"flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-all " + (userReaction === 'good' ? 'bg-green-100 text-green-700 border-2 border-green-500' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-green-50 hover:text-green-600')}
                   >
                     <span className="material-symbols-outlined text-[20px]">thumb_up</span>
@@ -171,7 +101,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                   </button>
 
                   <button
-                      onClick={() => onReactEvidence && onReactEvidence(item.id, 'bad')}
+                    onClick={() => onReactEvidence && onReactEvidence(item.id, 'bad')}
                     className={"flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-sm transition-all " + (userReaction === 'bad' ? 'bg-red-100 text-red-700 border-2 border-red-500' : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-red-50 hover:text-red-600')}
                   >
                     <span className="material-symbols-outlined text-[20px]">thumb_down</span>
@@ -181,9 +111,8 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     )}
                   </button>
                 </div>
-                )}
 
-                {!isManager && (goodCount > 0 || badCount > 0) && (
+                {(goodCount > 0 || badCount > 0) && (
                   <div className="text-xs text-[#767683] text-center">
                     {goodCount > 0 && <span>{goodCount} người đánh giá tốt</span>}
                     {goodCount > 0 && badCount > 0 && <span> • </span>}

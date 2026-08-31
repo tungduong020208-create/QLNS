@@ -290,8 +290,6 @@ export default function App() {
             currentUser={currentUser}
             evidences={evidences}
             onReactEvidence={handleReactEvidence}
-            onReviewEvidence={handleReviewEvidence}
-            onSelectEvidence={(evidence) => setSelectedEvidence(evidence)}
           />
         )}
 
