@@ -13,18 +13,18 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   onSelectTab,
   pendingReviewCount = 0,
   currentUser
-}) => {
-  const allTabs: { id: ActiveTab; label: string; icon: string }[] = [
+}) => {  const allTabs: { id: ActiveTab; label: string; icon: string }[] = [
     { id: 'home', label: 'Trang chủ', icon: 'home' },
     { id: 'submit', label: 'Báo cáo', icon: 'assignment' },
+    { id: 'approval', label: 'Duyệt', icon: 'how_to_reg' },
     { id: 'review', label: 'Bàn giao ca', icon: 'handshake' },
     { id: 'profile', label: 'Cá nhân', icon: 'person' },
   ];
   
   // Filter tabs based on role
-  const tabs = currentUser?.role === 'manager' 
+  const tabs = currentUser?.role === 'manager'
     ? allTabs.filter(t => t.id !== 'submit')
-    : allTabs;
+    : allTabs.filter(t => t.id !== 'approval');
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#fbf8ff] border-t border-[#c6c5d4] rounded-t-xl shadow-sm md:hidden">
@@ -50,6 +50,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               </span>
               {tab.id === 'review' && pendingReviewCount > 0 && (
                 <span className="absolute -top-1 -right-2 bg-[#ba1a1a] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                  {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
+                </span>
+              )}
+              {tab.id === 'approval' && pendingReviewCount > 0 && (
+                <span className="absolute -top-1 -right-2 bg-[#d97706] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                   {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
                 </span>
               )}

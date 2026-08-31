@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tabs: { id: ActiveTab; label: string; icon: string }[] = [
     { id: 'home', label: 'Trang chủ', icon: 'home' },
     ...(currentUser.role === 'employee' ? [{ id: 'submit' as ActiveTab, label: 'Báo cáo', icon: 'assignment' }] : []),
+    ...(currentUser.role === 'manager' ? [{ id: 'approval' as ActiveTab, label: 'Duyệt', icon: 'how_to_reg' }] : []),
     { id: 'review', label: 'Bàn giao ca', icon: 'handshake' },
     { id: 'profile', label: 'Cá nhân', icon: 'person' },
   ];
@@ -59,6 +60,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               {tab.id === 'review' && pendingReviewCount > 0 && (
                 <span className="bg-[#ba1a1a] text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {pendingReviewCount}
+                </span>
+              )}
+              {tab.id === 'approval' && pendingReviewCount > 0 && (
+                <span className="bg-[#d97706] text-white text-xs font-bold px-2 py-0.5 rounded-full">
                   {pendingReviewCount}
                 </span>
               )}

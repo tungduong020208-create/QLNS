@@ -1,4 +1,4 @@
-import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating } from '../types';
+import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating, ApprovalRequest } from '../types';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -340,5 +340,81 @@ export const INITIAL_CUSTOMER_RATINGS: CustomerRating[] = [
     rating: 'good',
     timestamp: 'Hôm nay, 14:45 PM',
     dateString: '2026-08-30T14:45:00'
+  },
+];
+
+export const INITIAL_APPROVAL_REQUESTS: ApprovalRequest[] = [
+  {
+    id: 'apr-1',
+    type: 'shift_swap',
+    title: 'Xin đổi ca chiều với ca sáng',
+    description: 'Ngày 01/09, em có việc gia đình buổi chiều nên muốn đổi ca chiều (12-18h) với ca sáng (07-12h). Anh Nam đã đồng ý đổi.',
+    employeeId: 'usr-1',
+    employeeName: 'Nguyễn Văn An',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    date: 'Hôm nay, 09:15',
+    dateString: '2026-08-31T09:15:00',
+    status: 'pending',
+    targetEmployee: 'Nam Lê',
+    targetEmployeeId: 'usr-4',
+    createdAt: '2026-08-31T09:15:00'
+  },
+  {
+    id: 'apr-2',
+    type: 'time_off',
+    title: 'Xin nghỉ phép 1 ngày',
+    description: 'Ngày 02/09 em cần nghỉ phép để đi khám bệnh. Em đã sắp xếp xong việc với ca chiều.',
+    employeeId: 'usr-3',
+    employeeName: 'Nguyễn Thị Mai',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    date: 'Hôm nay, 10:30',
+    dateString: '2026-08-31T10:30:00',
+    status: 'pending',
+    createdAt: '2026-08-31T10:30:00'
+  },
+  {
+    id: 'apr-3',
+    type: 'overtime',
+    title: 'Xin tăng ca thêm 2 tiếng',
+    description: 'Tối nay ca tối (18-22h), em muốn tăng ca thêm đến 00h vì quán có buổi tiệc đặt trước. Em muốn nhận thêm thu nhập.',
+    employeeId: 'usr-1',
+    employeeName: 'Nguyễn Văn An',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    date: 'Hôm nay, 14:00',
+    dateString: '2026-08-31T14:00:00',
+    status: 'pending',
+    createdAt: '2026-08-31T14:00:00'
+  },
+  {
+    id: 'apr-4',
+    type: 'other',
+    title: 'Xin phép mang dụng cụ cá nhân',
+    description: 'Em muốn mang máy pha cà phê cá nhân (dòng Delonghi) vào quán để trưng bày góc cà phê handmade. Máy sẽ đặt ở khu vực quầy pha chế.',
+    employeeId: 'usr-3',
+    employeeName: 'Nguyễn Thị Mai',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    date: 'Hôm qua, 16:20',
+    dateString: '2026-08-30T16:20:00',
+    status: 'approved',
+    managerNote: 'Đồng ý, nhớ giữ vệ sinh khu vực quầy.',
+    reviewedAt: 'Hôm qua, 17:00',
+    reviewedBy: 'Trần Văn Hùng',
+    createdAt: '2026-08-30T16:20:00'
+  },
+  {
+    id: 'apr-5',
+    type: 'shift_swap',
+    title: 'Xin đổi ca sáng với ca tối',
+    description: 'Ngày 03/09 em có lịch học上午 nên muốn đổi ca sáng (07-12h) với ca tối (18-22h). Em đã thống nhất với bạn Linh.',
+    employeeId: 'usr-3',
+    employeeName: 'Nguyễn Thị Mai',
+    employeeAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    date: 'Hôm nay, 15:45',
+    dateString: '2026-08-31T15:45:00',
+    status: 'rejected',
+    managerNote: 'Ca sáng 03/09 đã hết người. Xin chọn ngày khác.',
+    reviewedAt: 'Hôm nay, 16:10',
+    reviewedBy: 'Trần Văn Hùng',
+    createdAt: '2026-08-31T15:45:00'
   },
 ];

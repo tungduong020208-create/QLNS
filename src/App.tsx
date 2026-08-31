@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord, CustomerRating } from './types';
-import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS } from './data/initialData';
+import { User, EvidenceItem, NotificationItem, ActiveTab, CheckInRecord, CustomerRating, ApprovalRequest } from './types';
+import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_APPROVAL_REQUESTS } from './data/initialData';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
@@ -19,6 +19,7 @@ import { EvidenceDetailModal } from './components/modals/EvidenceDetailModal';
 import { ToastNotification, ToastMessage } from './components/modals/ToastNotification';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
+import { ApprovalScreen } from './components/screens/ApprovalScreen';
 
 export default function App() {
   // Users state
@@ -63,6 +64,12 @@ export default function App() {
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
+  // Approval requests state
+  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>(() => {
+    const saved = localStorage.getItem('coffeehouse_approvals');
+    return saved ? JSON.parse(saved) : INITIAL_APPROVAL_REQUESTS;
+  });
+
   // Check-in state
   const [checkInRecord, setCheckInRecord] = useState<CheckInRecord | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
@@ -79,6 +86,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('enterprise_hr_users', JSON.stringify(users));
   }, [users]);
+
+  useEffect(() => {
+    localStorage.setItem('coffeehouse_approvals', JSON.stringify(approvalRequests));
+  }, [approvalRequests]);
 
   useEffect(() => {
     localStorage.setItem('enterprise_hr_current_user_id', currentUser.id);
@@ -203,6 +214,28 @@ export default function App() {
     );
   };
 
+  const handleApproveRequest = (id: string, note: string) => {
+    setApprovalRequests(prev =>
+      prev.map(r =>
+        r.id === id
+          ? { ...r, status: 'approved' as const, managerNote: note, reviewedAt: new Date().toLocaleString('vi-VN'), reviewedBy: currentUser.name }
+          : r
+      )
+    );
+    addToast('success', 'Đã duyệt yêu cầu', 'Yêu cầu đã được phê duyệt thành công');
+  };
+
+  const handleRejectRequest = (id: string, note: string) => {
+    setApprovalRequests(prev =>
+      prev.map(r =>
+        r.id === id
+          ? { ...r, status: 'rejected' as const, managerNote: note, reviewedAt: new Date().toLocaleString('vi-VN'), reviewedBy: currentUser.name }
+          : r
+      )
+    );
+    addToast('error', 'Đã từ chối', 'Yêu cầu đã bị từ chối');
+  };
+
   const handleMarkNotificationRead = (id: string) => {
     setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, read: true } : n)
@@ -282,6 +315,15 @@ export default function App() {
             currentUser={currentUser}
             onBack={() => setActiveTab('home')}
             onSubmit={handleSubmitEvidence}
+          />
+        )}
+
+        {activeTab === 'approval' && currentUser.role === 'manager' && (
+          <ApprovalScreen
+            currentUser={currentUser}
+            requests={approvalRequests}
+            onApprove={handleApproveRequest}
+            onReject={handleRejectRequest}
           />
         )}
 

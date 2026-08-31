@@ -81,7 +81,7 @@ export interface ShiftHandover {
   handoverPhoto?: string;      // Ảnh bàn giao
 }
 
-export type ActiveTab = 'home' | 'submit' | 'review' | 'profile';
+export type ActiveTab = 'home' | 'submit' | 'review' | 'profile' | 'approval';
 
 
 export interface CustomerRating {
@@ -92,6 +92,27 @@ export interface CustomerRating {
   comment?: string;
   timestamp: string;
   dateString: string;
+}
+
+export type ApprovalType = 'shift_swap' | 'time_off' | 'overtime' | 'other';
+
+export interface ApprovalRequest {
+  id: string;
+  type: ApprovalType;
+  title: string;
+  description: string;
+  employeeId: string;
+  employeeName: string;
+  employeeAvatar: string;
+  date: string;
+  dateString: string;
+  status: 'pending' | 'approved' | 'rejected';
+  targetEmployee?: string;
+  targetEmployeeId?: string;
+  managerNote?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdAt: string;
 }
 
 export interface CheckInRecord {
