@@ -368,12 +368,6 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
                         )}
                       </div>
 
-                      {/* Check-in button for in-progress session */}
-                      {session.status === 'in-progress' && !session.checkIn && (
-                        <button className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors">
-                          Check-in
-                        </button>
-                      )}
                     </div>
                   </div>
                 ))}
