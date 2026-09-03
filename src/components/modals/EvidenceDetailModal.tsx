@@ -29,7 +29,7 @@ export const EvidenceDetailModal: React.FC<EvidenceDetailModalProps> = ({
             />
             <div>
               <h3 className="font-heading font-bold text-sm text-[#0F1E44]">{evidence.employeeName}</h3>
-              <p className="text-[11px] text-[#7A829A]">{evidence.timestamp} • {evidence.department}</p>
+              <p className="text-[11px] text-[#7A829A]">{evidence.timestamp}</p>
             </div>
           </div>
           <button
@@ -56,7 +56,7 @@ export const EvidenceDetailModal: React.FC<EvidenceDetailModalProps> = ({
             <div>
               <h2 className="font-heading text-lg font-bold text-[#0F1E44]">{evidence.title}</h2>
               <span className="inline-block mt-1 text-xs font-semibold px-2 py-0.5 rounded bg-[#F5EDDF] text-[#7A829A]">
-                {evidence.department}
+                {evidence.employeeName}
               </span>
             </div>
 

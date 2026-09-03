@@ -47,7 +47,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
             </div>
             <div>
               <h4 className="font-heading font-bold text-[#0F1E44] text-lg">{employee.name}</h4>
-              <p className="text-sm text-[#7A829A]">{employee.department}</p>
+              <p className="text-sm text-[#7A829A]">{employee.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</p>
               <p className="text-xs text-[#7A829A] mt-0.5">{employee.employeeCode}</p>
             </div>
           </div>

@@ -66,7 +66,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       const newEvidence: EvidenceItem = {
         id: `ev-${Date.now()}`,
         title: jobTitle.trim(),
-        department: currentUser.department,
+        department: '',
         timestamp: timeString,
         dateString: now.toISOString(),
         imageUrl: selectedImage,
@@ -144,8 +144,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
         const s = searchTerm.toLowerCase();
         return (
           item.employeeName.toLowerCase().includes(s) ||
-          item.title.toLowerCase().includes(s) ||
-          item.department.toLowerCase().includes(s)
+          item.title.toLowerCase().includes(s)
         );
       })
       .sort((a, b) => {
@@ -436,8 +435,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                     <span className="font-semibold text-sm md:text-base text-[#0F1E44] block">{item.employeeName}</span>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-[#7A829A]">{item.timestamp}</span>
-                      <span className="text-xs text-[#7A829A]">•</span>
-                      <span className="text-xs text-[#7A829A]">{item.department}</span>
                     </div>
                   </div>
                 </div>

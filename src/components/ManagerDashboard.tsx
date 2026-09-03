@@ -187,7 +187,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-[#1b1b21] truncate">{status.user.name}
                 </div>
-                <div className="text-xs text-[#767683]">{status.user.department}</div>
+                <div className="text-xs text-[#767683]">{status.user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</div>
               </div>
               <div className="flex items-center gap-2">
                 {/* Check-in method badge */}

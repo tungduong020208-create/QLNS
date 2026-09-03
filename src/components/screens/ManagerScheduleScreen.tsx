@@ -55,9 +55,6 @@ const getWeekDays = (monday: Date): Date[] => {
   return days;
 };
 
-// Department list
-const DEPARTMENTS = ['Tất cả', 'Quầy pha chế', 'Khu vực phục vụ', 'Kho nguyên liệu', 'Quản lý'];
-
 // Shift templates
 const SHIFT_TEMPLATES = [
   { name: 'Ca sáng', startTime: '07:00', endTime: '12:00' },
@@ -82,7 +79,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
   // Filter state
   const [filterEmployee, setFilterEmployee] = useState<string>('all');
-  const [filterDepartment, setFilterDepartment] = useState<string>('Tất cả');
   const [filterShift, setFilterShift] = useState<string>('all');
 
   // Modal state
@@ -119,18 +115,12 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       // Employee filter
       if (filterEmployee !== 'all' && shift.employeeId !== filterEmployee) return false;
 
-      // Department filter
-      if (filterDepartment !== 'Tất cả') {
-        const user = allUsers.find((u) => u.id === shift.employeeId);
-        if (user && user.department !== filterDepartment) return false;
-      }
-
       // Shift filter
       if (filterShift !== 'all' && shift.shiftName !== filterShift) return false;
 
       return true;
     });
-  }, [shifts, filterEmployee, filterDepartment, filterShift, allUsers]);
+  }, [shifts, filterEmployee, filterShift, allUsers]);
 
   // Get shifts for a specific date
   const getShiftsForDate = useCallback(
@@ -369,20 +359,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-[#7A829A] mb-1">Bộ phận</label>
-            <select
-              value={filterDepartment}
-              onChange={(e) => setFilterDepartment(e.target.value)}
-              className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
-            >
-              {DEPARTMENTS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label className="block text-xs font-semibold text-[#7A829A] mb-1">Ca làm</label>
             <select
               value={filterShift}
@@ -396,11 +372,10 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
             </select>
           </div>
         </div>
-        {(filterEmployee !== 'all' || filterDepartment !== 'Tất cả' || filterShift !== 'all') && (
+        {(filterEmployee !== 'all' || filterShift !== 'all') && (
           <button
             onClick={() => {
               setFilterEmployee('all');
-              setFilterDepartment('Tất cả');
               setFilterShift('all');
             }}
             className="mt-3 text-xs font-semibold text-[#EFC14B] hover:underline"
@@ -629,7 +604,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                     .filter((u) => u.role !== 'manager')
                     .map((u) => (
                       <option key={u.id} value={u.id}>
-                        {u.name} - {u.department}
+                        {u.name} - {u.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
                       </option>
                     ))}
                 </select>
@@ -852,7 +827,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                   .filter((u) => u.id !== showSwapModal.employeeId && u.role !== 'manager')
                   .map((u) => (
                     <option key={u.id} value={u.id}>
-                      {u.name} - {u.department}
+                      {u.name} - {u.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
                     </option>
                   ))}
               </select>

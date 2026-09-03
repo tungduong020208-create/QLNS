@@ -206,7 +206,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                   <option value="">-- Chọn đồng nghiệp --</option>
                   {availableTargets.map((user) => (
                     <option key={user.id} value={user.id}>
-                      {user.name} - {user.department}
+                      {user.name} - {user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
                     </option>
                   ))}
                 </select>

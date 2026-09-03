@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
                   <div className="flex-1 min-w-0">
                     <div className="truncate text-sm">{user.name}</div>
-                    <div className="text-[11px] text-[#7A829A] truncate">{user.role === 'manager' ? 'Quản lý' : user.department}</div>
+                    <div className="text-[11px] text-[#7A829A] truncate">{user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</div>
                   </div>
                   {currentUser.id === user.id && (
                     <span className="material-symbols-outlined text-[18px] text-[#EFC14B]">check</span>

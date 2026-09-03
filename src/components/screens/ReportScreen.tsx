@@ -28,11 +28,10 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
 
   const handleExportCSV = () => {
     // Generate CSV data with UTF-8 BOM
-    const headers = ['Mã minh chứng', 'Tên công việc', 'Phòng ban', 'Nhân viên', 'Thời gian', 'Trạng thái', 'Điểm số', 'Ghi chú duyệt'];
+    const headers = ['Mã minh chứng', 'Tên công việc', 'Nhân viên', 'Thời gian', 'Trạng thái', 'Điểm số', 'Ghi chú duyệt'];
     const rows = evidences.map(item => [
       item.id,
       `"${item.title.replace(/"/g, '""')}"`,
-      `"${item.department}"`,
       `"${item.employeeName}"`,
       `"${item.timestamp}"`,
       item.status === 'good' ? 'TỐT' : item.status === 'bad' ? 'CHƯA TỐT' : 'CHỜ DUYỆT',
@@ -277,7 +276,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
 
               <div className="flex-1 min-w-0">
                 <div className="font-semibold text-sm text-[#0F1E44] truncate">{emp.name}</div>
-                <div className="text-xs text-[#7A829A] truncate">{emp.department}</div>
+                <div className="text-xs text-[#7A829A] truncate">Nhân viên</div>
               </div>
 
               <div className="bg-[#ffdad6] text-[#93000a] font-bold text-xs px-3 py-1 rounded-full flex items-center gap-1 flex-shrink-0">

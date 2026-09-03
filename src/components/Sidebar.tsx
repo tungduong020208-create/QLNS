@@ -40,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
         <div className="min-w-0">
           <h2 className="font-heading text-sm font-bold text-white truncate">{currentUser.name}</h2>
-          <p className="text-[11px] text-[#7A829A] truncate">{currentUser.role === 'manager' ? 'Quản lý' : currentUser.department}</p>
+          <p className="text-[11px] text-[#7A829A] truncate">{currentUser.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</p>
         </div>
       </button>
 

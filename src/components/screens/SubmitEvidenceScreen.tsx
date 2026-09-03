@@ -82,7 +82,7 @@ export const SubmitEvidenceScreen: React.FC<SubmitEvidenceScreenProps> = ({
       const newEvidence: EvidenceItem = {
         id: `ev-${Date.now()}`,
         title: jobTitle.trim(),
-        department: currentUser.department,
+        department: '',
         timestamp: timeString,
         dateString: now.toISOString(),
         imageUrl: selectedImage,

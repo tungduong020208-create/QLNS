@@ -139,7 +139,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </h1>
         <p className="text-sm font-semibold text-[#7A829A] mb-2">{currentUser.employeeCode}</p>
         <span className="inline-block px-3.5 py-1 text-[#0F1E44] bg-[#EFC14B]/20 border border-[#EFC14B] rounded-full text-xs font-bold uppercase tracking-wider">
-          {currentUser.role === 'manager' ? 'QUẢN LÝ' : currentUser.department}
+          {currentUser.role === 'manager' ? 'QUẢN LÝ' : 'NHÂN VIÊN'}
         </span>
       </section>
 

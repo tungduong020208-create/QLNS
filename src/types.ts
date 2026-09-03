@@ -4,8 +4,8 @@ export interface User {
   id: string;
   name: string;
   employeeCode: string;
-  department: string;
-  role: UserRole;
+  department?: string;        // Deprecated - kept for backward compat
+  role: UserRole;             // Only 'manager' or 'employee'
   avatar: string;
   email: string;
   phone?: string;
@@ -24,7 +24,7 @@ export interface EvidenceReaction {
 export interface EvidenceItem {
   id: string;
   title: string;
-  department: string;
+  department?: string;  // Deprecated
   timestamp: string;
   dateString: string;
   imageUrl: string;

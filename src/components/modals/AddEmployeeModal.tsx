@@ -8,7 +8,6 @@ interface AddEmployeeModalProps {
   existingUsers: User[];
 }
 
-const DEPARTMENTS = ['Quầy pha chế', 'Khu vực phục vụ', 'Kho nguyên liệu', 'Quản lý'];
 const ROLES: { value: UserRole; label: string }[] = [
   { value: 'employee', label: 'Nhân viên' },
   { value: 'manager', label: 'Quản lý' },
@@ -41,7 +40,6 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [department, setDepartment] = useState(DEPARTMENTS[0]);
   const [role, setRole] = useState<UserRole>('employee');
   const [tempPassword] = useState(() => generateTempPassword());
   const [showPassword, setShowPassword] = useState(false);
@@ -77,7 +75,6 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
       id: `usr-${Date.now()}`,
       name: name.trim(),
       employeeCode,
-      department,
       role,
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}&backgroundColor=EFC14B`,
       email: email.trim().toLowerCase(),
@@ -95,7 +92,6 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
     setName('');
     setEmail('');
     setPhone('');
-    setDepartment(DEPARTMENTS[0]);
     setRole('employee');
     setError('');
     setStep('form');
@@ -185,22 +181,6 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                   placeholder="0912 345 678"
                   className="w-full h-10 px-3 border border-[#E8DFD0] rounded-lg text-sm focus:border-[#EFC14B] outline-none"
                 />
-              </div>
-
-              {/* Department */}
-              <div>
-                <label className="block text-xs font-semibold text-[#7A829A] mb-1 uppercase tracking-wide">
-                  Bộ phận
-                </label>
-                <select
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full h-10 px-3 border border-[#E8DFD0] rounded-lg text-sm focus:border-[#EFC14B] outline-none bg-white"
-                >
-                  {DEPARTMENTS.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
               </div>
 
               {/* Role */}
@@ -335,7 +315,6 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                   setName('');
                   setEmail('');
                   setPhone('');
-                  setDepartment(DEPARTMENTS[0]);
                   setRole('employee');
                   setError('');
                 }}
