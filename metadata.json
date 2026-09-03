@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise HR - Quản lý Nhân sự",
+  "description": "Hệ thống Quản lý Nhân sự Tích hợp - Theo dõi hiệu suất, nộp & duyệt minh chứng và báo cáo tổng hợp",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

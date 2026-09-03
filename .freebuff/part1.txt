@@ -1,0 +1,39 @@
+import React from 'react';
+import { User, EvidenceItem, CheckInRecord, CustomerRating } from '../../types';
+import CheckInCheckOut from '../CheckInCheckOut';
+import WorkSchedule from '../WorkSchedule';
+
+interface HomeScreenProps {
+  currentUser: User;
+  evidences: EvidenceItem[];
+  customerRatings: CustomerRating[];
+  onNavigateSubmit: () => void;
+  onSelectEvidence: (evidence: EvidenceItem) => void;
+  onNavigateReview?: () => void;
+  checkInRecord?: CheckInRecord | null;
+  onCheckIn?: (record: CheckInRecord) => void;
+}
+
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  currentUser,
+  evidences,
+  customerRatings,
+  onCheckIn
+}) => {
+  const myRatings = currentUser.role === 'manager'
+    ? customerRatings
+    : customerRatings.filter(r => r.employeeId === currentUser.id);
+
+  const goodCount = myRatings.filter(r => r.rating === 'good').length;
+  const badCount = myRatings.filter(r => r.rating === 'bad').length;
+  const totalPoints = goodCount - badCount;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRatings = myRatings.filter(r => r.dateString.startsWith(today));
+  const todayGood = todayRatings.filter(r => r.rating === 'good').length;
+
+  const recentRatings = [...myRatings]
+    .sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime())
+    .slice(0, 5);
+
+  return (

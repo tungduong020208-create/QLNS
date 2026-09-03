@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy: #0F1E44;
+  --color-navy-light: #1A2D5A;
+  --color-golden: #EFC14B;
+  --color-golden-hover: #D4A833;
+  --color-golden-light: rgba(239, 193, 75, 0.12);
+  --color-golden-glow: rgba(239, 193, 75, 0.25);
+  --color-cream: #FDF8EE;
+  --color-cream-dark: #F5EDDF;
+  --color-text-primary: #0F1E44;
+  --color-text-body: #3D4663;
+  --color-text-muted: #7A829A;
+  --color-red-accent: #FF3131;
+  --color-green-accent: #4CAF72;
+}
+
+@layer base {
+  body {
+    font-family: 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--color-text-body);
+    background-color: var(--color-cream);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--color-navy);
+  }
+}
+
+.font-heading {
+  font-family: 'Fraunces', Georgia, serif;
+}
+
+.font-body {
+  font-family: 'Be Vietnam Pro', system-ui, sans-serif;
+}
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
+
+.material-symbols-outlined.fill {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(239, 193, 75, 0.15);
+}
+
+/* AiiCafe brand shadows */
+.shadow-golden {
+  box-shadow: 0 4px 20px rgba(239, 193, 75, 0.3);
+}
+
+.shadow-navy {
+  box-shadow: 0 4px 16px rgba(15, 30, 68, 0.08);
+}
+
+.shadow-lg-brand {
+  box-shadow: 0 8px 32px rgba(15, 30, 68, 0.12);
+}
+
+/* Smooth transitions */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
