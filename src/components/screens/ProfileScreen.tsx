@@ -6,6 +6,9 @@ interface ProfileScreenProps {
   onUpdateUser: (updated: Partial<User>) => void;
   onLogout: () => void;
   evidences: EvidenceItem[];
+  onOpenAddEmployee?: () => void;  // Manager only
+  mustChangePassword?: boolean;   // Force password change flow
+  onChangePassword?: (newPassword: string) => void;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
@@ -13,6 +16,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onUpdateUser,
   onLogout,
   evidences,
+  onOpenAddEmployee,
+  mustChangePassword,
+  onChangePassword,
 }) => {
   const [activeModal, setActiveModal] = useState<'account' | 'password' | 'notifications' | 'support' | 'logout' | null>(null);
 
@@ -32,6 +38,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [notifApproval, setNotifApproval] = useState(true);
   const [notifReward, setNotifReward] = useState(true);
   const [notifRemind, setNotifRemind] = useState(true);
+  const [notifSchedule, setNotifSchedule] = useState(true);
+  const [notifPeerReview, setNotifPeerReview] = useState(true);
   const [notifSound, setNotifSound] = useState(false);
 
   // Support form state
@@ -219,46 +227,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* Manager: Team Management */}
         {currentUser.role === 'manager' && (
-          <button
-            type="button"
-            onClick={() => setActiveModal('team')}
-            className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 bg-[#EFC14B]/20 text-[#0F1E44] rounded-xl group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[22px]">group</span>
+          <>
+            <button
+              type="button"
+              onClick={() => setActiveModal('team')}
+              className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 bg-[#EFC14B]/20 text-[#0F1E44] rounded-xl group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-[22px]">group</span>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#0F1E44]">Quản lý nhân viên</h3>
+                  <p className="text-xs text-[#7A829A]">Xem danh sách và hiệu suất team</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-[#0F1E44]">Quản lý nhân viên</h3>
-                <p className="text-xs text-[#7A829A]">Xem danh sách và hiệu suất team</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
-              chevron_right
-            </span>
-          </button>
-        )}
+              <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
+                chevron_right
+              </span>
+            </button>
 
-        {/* Manager: Reports Overview */}
-        {currentUser.role === 'manager' && (
-          <button
-            type="button"
-            onClick={() => setActiveModal('reports')}
-            className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="p-2.5 bg-[#EFC14B]/20 text-[#0F1E44] rounded-xl group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[22px]">assessment</span>
+            {/* Add Employee Button (Manager only) */}
+            <button
+              type="button"
+              onClick={onOpenAddEmployee}
+              className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="p-2.5 bg-green-100 text-green-700 rounded-xl group-hover:scale-105 transition-transform">
+                  <span className="material-symbols-outlined text-[22px]">person_add</span>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#0F1E44]">Thêm nhân viên</h3>
+                  <p className="text-xs text-[#7A829A]">Tạo tài khoản mới cho nhân viên</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-sm font-bold text-[#0F1E44]">Báo cáo tổng hợp</h3>
-                <p className="text-xs text-[#7A829A]">Thống kê hiệu suất toàn bộ nhân viên</p>
-              </div>
-            </div>
-            <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
-              chevron_right
-            </span>
-          </button>
+              <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
+                chevron_right
+              </span>
+            </button>
+          </>
         )}
 
         {/* Logout */}
@@ -445,13 +453,26 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
               <label className="flex items-center justify-between p-2.5 bg-[#FDF8EE] rounded-xl cursor-pointer">
                 <div>
-                  <div className="font-bold text-[#0F1E44]">Thưởng điểm & xếp hạng</div>
-                  <div className="text-[11px] text-[#7A829A]">Khi nhận điểm thưởng tuần/tháng</div>
+                  <div className="font-bold text-[#0F1E44]">Thay đổi lịch làm việc</div>
+                  <div className="text-[11px] text-[#7A829A]">Khi quản lý thêm/sửa/xóa ca</div>
                 </div>
                 <input
                   type="checkbox"
-                  checked={notifReward}
-                  onChange={(e) => setNotifReward(e.target.checked)}
+                  checked={notifSchedule}
+                  onChange={(e) => setNotifSchedule(e.target.checked)}
+                  className="w-4 h-4 text-[#EFC14B] rounded focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-2.5 bg-[#FDF8EE] rounded-xl cursor-pointer">
+                <div>
+                  <div className="font-bold text-[#0F1E44]">Đánh giá chéo</div>
+                  <div className="text-[11px] text-[#7A829A]">Khi có người đánh giá bạn</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifPeerReview}
+                  onChange={(e) => setNotifPeerReview(e.target.checked)}
                   className="w-4 h-4 text-[#EFC14B] rounded focus:ring-0 cursor-pointer"
                 />
               </label>
@@ -465,6 +486,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   type="checkbox"
                   checked={notifRemind}
                   onChange={(e) => setNotifRemind(e.target.checked)}
+                  className="w-4 h-4 text-[#EFC14B] rounded focus:ring-0 cursor-pointer"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-2.5 bg-[#FDF8EE] rounded-xl cursor-pointer">
+                <div>
+                  <div className="font-bold text-[#0F1E44]">Thưởng điểm & xếp hạng</div>
+                  <div className="text-[11px] text-[#7A829A]">Khi nhận điểm thưởng tuần/tháng</div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={notifReward}
+                  onChange={(e) => setNotifReward(e.target.checked)}
                   className="w-4 h-4 text-[#EFC14B] rounded focus:ring-0 cursor-pointer"
                 />
               </label>
@@ -559,50 +593,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               ))}
             </div>
             <button onClick={() => setActiveModal(null)} className="w-full py-2.5 bg-[#0F1E44] text-white rounded-xl text-xs font-bold hover:bg-[#1A2D5A] mt-3">Đóng</button>
-          </div>
-        </div>
-      )}
-
-      {/* Reports Overview Modal (Manager only) */}
-      {activeModal === 'reports' && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-lg border border-[#E8DFD0] animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Báo cáo tổng hợp</h3>
-                <p className="text-xs text-[#7A829A]">Thống kê hiệu suất team</p>
-              </div>
-              <button onClick={() => setActiveModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-[#4CAF72]/10 rounded-xl p-4 text-center">
-                <div className="font-heading text-2xl font-bold text-[#4CAF72]">
-                  {evidences.filter(e => e.status === 'good').length}
-                </div>
-                <div className="text-xs text-[#4CAF72]">Minh chứng tốt</div>
-              </div>
-              <div className="bg-[#FF3131]/10 rounded-xl p-4 text-center">
-                <div className="font-heading text-2xl font-bold text-[#FF3131]">
-                  {evidences.filter(e => e.status === 'bad').length}
-                </div>
-                <div className="text-xs text-[#FF3131]">Chưa tốt</div>
-              </div>
-              <div className="bg-[#EFC14B]/15 rounded-xl p-4 text-center">
-                <div className="font-heading text-2xl font-bold text-[#D4A833]">
-                  {evidences.filter(e => e.status === 'pending').length}
-                </div>
-                <div className="text-xs text-[#7A829A]">Chưa đánh giá</div>
-              </div>
-              <div className="bg-[#0F1E44]/10 rounded-xl p-4 text-center">
-                <div className="font-heading text-2xl font-bold text-[#0F1E44]">
-                  {evidences.reduce((sum, e) => sum + e.points, 0)}
-                </div>
-                <div className="text-xs text-[#0F1E44]">Tổng điểm</div>
-              </div>
-            </div>
-            <button onClick={() => setActiveModal(null)} className="w-full py-2.5 bg-[#0F1E44] text-white rounded-xl text-xs font-bold hover:bg-[#1A2D5A]">Đóng</button>
           </div>
         </div>
       )}

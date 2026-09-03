@@ -18,13 +18,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'home', label: 'My Shift', icon: 'home' },
     ...(currentUser.role === 'manager'
       ? [
-          { id: 'approval' as ActiveTab, label: 'Duyệt', icon: 'how_to_reg' },
-          { id: 'manager_schedule' as ActiveTab, label: 'QL Lịch làm việc', icon: 'calendar_month' },
+          { id: 'approval' as ActiveTab, label: 'Pending', icon: 'how_to_reg' },
+          { id: 'manager_schedule' as ActiveTab, label: 'Schedule', icon: 'calendar_month' },
         ]
       : []),
-    { id: 'review', label: 'Bàn giao ca', icon: 'handshake' },
-    { id: 'peer_review', label: 'Đánh giá chéo', icon: 'rate_review' },
-    { id: 'profile', label: 'Cá nhân', icon: 'person' },
+    { id: 'review', label: 'Handover', icon: 'handshake' },
+    { id: 'peer_review', label: 'Peer Review', icon: 'rate_review' },
+    { id: 'profile', label: 'Profile', icon: 'person' },
   ];
 
   return (

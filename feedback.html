@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AiiCafe - Đánh giá dịch vụ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Fraunces:wght@700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Be Vietnam Pro', sans-serif;
+      background: #FDF8EE;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      max-width: 400px;
+      width: 100%;
+    }
+    .card {
+      background: white;
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: 0 8px 32px rgba(15, 30, 68, 0.12);
+      border: 1px solid #E8DFD0;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .logo h1 {
+      font-family: 'Fraunces', serif;
+      color: #0F1E44;
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+    .logo p {
+      color: #7A829A;
+      font-size: 14px;
+    }
+    .title {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .title h2 {
+      font-family: 'Fraunces', serif;
+      color: #0F1E44;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .title p {
+      color: #7A829A;
+      font-size: 13px;
+    }
+    .rating-section {
+      margin-bottom: 24px;
+    }
+    .rating-label {
+      font-weight: 600;
+      color: #0F1E44;
+      font-size: 14px;
+      margin-bottom: 12px;
+      display: block;
+    }
+    .rating-stars {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .star-btn {
+      width: 48px;
+      height: 48px;
+      border: 2px solid #E8DFD0;
+      border-radius: 12px;
+      background: #FDF8EE;
+      cursor: pointer;
+      font-size: 24px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .star-btn:hover {
+      border-color: #EFC14B;
+      background: #EFC14B20;
+    }
+    .star-btn.active {
+      border-color: #EFC14B;
+      background: #EFC14B;
+      transform: scale(1.1);
+    }
+    .categories {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .category-btn {
+      padding: 10px 12px;
+      border: 1px solid #E8DFD0;
+      border-radius: 10px;
+      background: #FDF8EE;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      color: #3D4663;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .category-btn:hover {
+      border-color: #EFC14B;
+    }
+    .category-btn.active {
+      border-color: #0F1E44;
+      background: #0F1E44;
+      color: white;
+    }
+    .comment-box {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #E8DFD0;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: none;
+      margin-bottom: 20px;
+      outline: none;
+    }
+    .comment-box:focus {
+      border-color: #EFC14B;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 14px;
+      background: #0F1E44;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .submit-btn:hover {
+      background: #1A2D5A;
+    }
+    .submit-btn:disabled {
+      background: #7A829A;
+      cursor: not-allowed;
+    }
+    .success-message {
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+    .success-message.show {
+      display: block;
+    }
+    .success-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+    .success-message h3 {
+      font-family: 'Fraunces', serif;
+      color: #0F1E44;
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .success-message p {
+      color: #7A829A;
+      font-size: 14px;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 16px;
+      color: #7A829A;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="logo">
+        <h1>AiiCafe</h1>
+        <p>Where love brews and dreams grow</p>
+      </div>
+
+      <div id="feedbackForm">
+        <div class="title">
+          <h2>Đánh giá dịch vụ</h2>
+          <p>Phản hồi của bạn giúp chúng tôi cải thiện mỗi ngày</p>
+        </div>
+
+        <div class="rating-section">
+          <label class="rating-label">Bạn đánh giá mấy sao?</label>
+          <div class="rating-stars">
+            <button class="star-btn" data-rating="1">★</button>
+            <button class="star-btn" data-rating="2">★</button>
+            <button class="star-btn" data-rating="3">★</button>
+            <button class="star-btn" data-rating="4">★</button>
+            <button class="star-btn" data-rating="5">★</button>
+          </div>
+        </div>
+
+        <div class="rating-section">
+          <label class="rating-label">Đánh giá về:</label>
+          <div class="categories">
+            <button class="category-btn" data-category="ca-phe">☕ Cà phê</button>
+            <button class="category-btn" data-category="am-thuc">🍳 Ẩm thực</button>
+            <button class="category-btn" data-category="dich-vu">👨‍🍳 Phục vụ</button>
+            <button class="category-btn" data-category="khong-gian">🏠 Không gian</button>
+            <button class="category-btn" data-category="gia-ca">💰 Giá cả</button>
+            <button class="category-btn" data-category="sang-tao">💡 Sáng tạo</button>
+          </div>
+        </div>
+
+        <textarea class="comment-box" id="comment" rows="3" placeholder="Nhận xét thêm (tùy chọn)..." maxlength="200"></textarea>
+
+        <button class="submit-btn" id="submitBtn" disabled>Gửi đánh giá</button>
+      </div>
+
+      <div class="success-message" id="successMessage">
+        <div class="success-icon">🎉</div>
+        <h3>Cảm ơn bạn!</h3>
+        <p>Đánh giá đã được ghi nhận. Chúc bạn có trải nghiệm tuyệt vời tại AiiCafe!</p>
+      </div>
+    </div>
+
+    <p class="footer">© 2024 AiiCafe — Where love brews and dreams grow</p>
+  </div>
+
+  <script>
+    let selectedRating = 0;
+    let selectedCategory = '';
+
+    // Star rating
+    document.querySelectorAll('.star-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedRating = parseInt(btn.dataset.rating);
+        document.querySelectorAll('.star-btn').forEach((b, i) => {
+          b.classList.toggle('active', i < selectedRating);
+        });
+        updateSubmitBtn();
+      });
+    });
+
+    // Category selection
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        selectedCategory = btn.dataset.category;
+        updateSubmitBtn();
+      });
+    });
+
+    // Update submit button
+    function updateSubmitBtn() {
+      document.getElementById('submitBtn').disabled = selectedRating === 0;
+    }
+
+    // Submit
+    document.getElementById('submitBtn').addEventListener('click', () => {
+      const data = {
+        rating: selectedRating,
+        category: selectedCategory,
+        comment: document.getElementById('comment').value,
+        timestamp: new Date().toISOString()
+      };
+
+      // Save to localStorage (in real app, send to server)
+      const reviews = JSON.parse(localStorage.getItem('aiicafe_customer_reviews') || '[]');
+      reviews.push(data);
+      localStorage.setItem('aiicafe_customer_reviews', JSON.stringify(reviews));
+
+      // Show success
+      document.getElementById('feedbackForm').style.display = 'none';
+      document.getElementById('successMessage').classList.add('show');
+    });
+  </script>
+</body>
+</html>

@@ -24,6 +24,7 @@ import { ApprovalScreen } from './components/screens/ApprovalScreen';
 import { QRReviewScreen } from './components/screens/QRReviewScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
 import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
+import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 
 export default function App() {
   // Users state
@@ -148,6 +149,7 @@ export default function App() {
   // Check-in state
   const [checkInRecord, setCheckInRecord] = useState<CheckInRecord | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
+  const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
 
   // Persist to local storage
   useEffect(() => {
@@ -212,6 +214,24 @@ export default function App() {
   const handleSwitchUser = (user: User) => {
     setCurrentUser(user);
     addToast('info', 'Đã chuyển tài khoản', `Đang xem với tư cách: ${user.name} (${user.role === 'manager' ? 'Quản lý' : 'Nhân viên'})`);
+  };
+
+  const handleAddEmployee = (newEmployee: User, tempPassword: string) => {
+    setUsers(prev => [...prev, newEmployee]);
+    addToast('success', 'Tạo tài khoản thành công', `Tài khoản ${newEmployee.name} (${newEmployee.employeeCode}) đã được tạo`);
+    setShowAddEmployeeModal(false);
+  };
+
+  const handlePasswordChanged = (userId: string, newPassword: string) => {
+    setUsers(prev => prev.map(u => 
+      u.id === userId 
+        ? { ...u, password: newPassword, mustChangePassword: false }
+        : u
+    ));
+    // Also update current user if it's the same
+    if (currentUser.id === userId) {
+      setCurrentUser(prev => ({ ...prev, password: newPassword, mustChangePassword: false }));
+    }
   };
 
   const handleUpdateUser = (updatedFields: Partial<User>) => {
@@ -392,7 +412,7 @@ export default function App() {
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen bg-[#FDF8EE]">
-        <LoginScreen onLogin={handleLogin} allUsers={users} />
+        <LoginScreen onLogin={handleLogin} allUsers={users} onPasswordChanged={handlePasswordChanged} />
         <ToastNotification toasts={toasts} onDismiss={handleDismissToast} />
       </div>
     );
@@ -497,6 +517,7 @@ export default function App() {
             onUpdateUser={handleUpdateUser}
             onLogout={handleLogout}
             evidences={evidences}
+            onOpenAddEmployee={() => setShowAddEmployeeModal(true)}
           />
         )}
       </main>
@@ -524,6 +545,16 @@ export default function App() {
         onClose={() => setSelectedEmployee(null)}
         onNavigateToReview={() => setActiveTab('review')}
       />
+
+      {/* Add Employee Modal (Manager only) */}
+      {currentUser.role === 'manager' && (
+        <AddEmployeeModal
+          isOpen={showAddEmployeeModal}
+          onClose={() => setShowAddEmployeeModal(false)}
+          onAddEmployee={handleAddEmployee}
+          existingUsers={users}
+        />
+      )}
 
       {/* Toast Notifications */}
       <ToastNotification toasts={toasts} onDismiss={handleDismissToast} />

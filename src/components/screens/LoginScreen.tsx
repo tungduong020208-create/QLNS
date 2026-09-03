@@ -1,19 +1,32 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
 
+// Set to true ONLY for staging/development builds
+// In production, set this to false to hide demo accounts
+const IS_DEMO_ENABLED = false;
+
 interface LoginScreenProps {
   onLogin: (user: User) => void;
   allUsers: User[];
+  onPasswordChanged?: (userId: string, newPassword: string) => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers }) => {
-  const [username, setUsername] = useState('NV-2023-045');
-  const [password, setPassword] = useState('••••••••');
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onPasswordChanged }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState(false);
+
+  // Force password change state
+  const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,26 +34,191 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers }) =
       setErrorMsg('Vui lòng nhập tài khoản hoặc mã nhân viên');
       return;
     }
+    if (!password.trim()) {
+      setErrorMsg('Vui lòng nhập mật khẩu');
+      return;
+    }
 
-    // Check if matches any user by code, email or name
+    // Find user by code or email
     const foundUser = allUsers.find(
       u => u.employeeCode.toLowerCase() === username.trim().toLowerCase() ||
-           u.email.toLowerCase() === username.trim().toLowerCase() ||
-           u.name.toLowerCase().includes(username.trim().toLowerCase())
+           u.email.toLowerCase() === username.trim().toLowerCase()
     );
 
-    if (foundUser) {
-      onLogin(foundUser);
-    } else {
-      // Default to the first employee if not found
-      onLogin(allUsers[0]);
+    if (!foundUser) {
+      setErrorMsg('Tài khoản không tồn tại trong hệ thống');
+      return;
     }
+
+    // Check password (for demo: use stored password or default 'aiicafe')
+    const storedPassword = foundUser.password || 'aiicafe';
+    if (password !== storedPassword) {
+      setErrorMsg('Mật khẩu không đúng. Vui lòng thử lại.');
+      return;
+    }
+
+    // Check if must change password
+    if (foundUser.mustChangePassword) {
+      setPendingUser(foundUser);
+      setMustChangePassword(true);
+      return;
+    }
+
+    // Login successful
+    onLogin(foundUser);
   };
 
+  // Demo quick-login handler (only in staging)
   const handleQuickLogin = (user: User) => {
     setUsername(user.employeeCode);
+    setPassword(user.password || 'aiicafe');
+
+    if (user.mustChangePassword) {
+      setPendingUser(user);
+      setMustChangePassword(true);
+      return;
+    }
+
     onLogin(user);
   };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError('');
+
+    if (newPassword.length < 6) {
+      setPwError('Mật khẩu phải có ít nhất 6 ký tự');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    if (pendingUser && onPasswordChanged) {
+      onPasswordChanged(pendingUser.id, newPassword);
+    }
+
+    setPwSuccess(true);
+
+    // Auto-login after 2 seconds
+    setTimeout(() => {
+      if (pendingUser) {
+        onLogin({ ...pendingUser, mustChangePassword: false, password: newPassword });
+      }
+    }, 2000);
+  };
+
+  // Force password change modal
+  if (mustChangePassword && pendingUser) {
+    return (
+      <div className="bg-[#FDF8EE] text-[#3D4663] min-h-screen w-full flex items-center justify-center relative overflow-hidden p-4">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#EFC14B] opacity-20 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#0F1E44] opacity-10 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="z-10 w-full max-w-md">
+          <div className="glass-panel rounded-2xl shadow-lg p-6 sm:p-8 flex flex-col gap-6 border border-[#E8DFD0]/60 bg-white/90">
+            {/* Header */}
+            <div className="flex flex-col items-center justify-center text-center gap-3">
+              <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#0F1E44] text-3xl">lock_reset</span>
+              </div>
+              <div>
+                <h1 className="font-heading text-2xl font-bold text-[#0F1E44] tracking-tight">
+                  Đổi mật khẩu
+                </h1>
+                <p className="text-sm text-[#7A829A] mt-1">
+                  Đây là lần đăng nhập đầu tiên. Vui lòng đổi mật khẩu để tiếp tục.
+                </p>
+              </div>
+            </div>
+
+            {pwSuccess ? (
+              <div className="text-center py-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="material-symbols-outlined text-green-600 text-3xl">check_circle</span>
+                </div>
+                <p className="text-sm font-semibold text-green-700">Đổi mật khẩu thành công!</p>
+                <p className="text-xs text-[#7A829A] mt-1">Đang đăng nhập...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
+                {pwError && (
+                  <div className="p-2.5 bg-[#FF3131]/10 text-[#FF3131] text-xs rounded-lg border border-[#FF3131]/30 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[16px]">error</span>
+                    {pwError}
+                  </div>
+                )}
+
+                {/* User Info */}
+                <div className="bg-[#FDF8EE] rounded-xl p-3 border border-[#E8DFD0]/50">
+                  <div className="flex items-center gap-3">
+                    <img src={pendingUser.avatar} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    <div>
+                      <p className="text-sm font-bold text-[#0F1E44]">{pendingUser.name}</p>
+                      <p className="text-xs text-[#7A829A]">{pendingUser.employeeCode}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* New Password */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-[#7A829A] uppercase tracking-wide">
+                    Mật khẩu mới
+                  </label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#7A829A] text-[20px]">
+                      lock
+                    </span>
+                    <input
+                      className="w-full h-11 pl-10 pr-3 rounded-lg border border-[#E8DFD0] bg-white focus:border-[#EFC14B] focus:ring-2 focus:ring-[#EFC14B]/30 text-sm text-[#0F1E44] transition-colors outline-none"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Nhập mật khẩu mới (tối thiểu 6 ký tự)"
+                      type="password"
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                {/* Confirm Password */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-[#7A829A] uppercase tracking-wide">
+                    Xác nhận mật khẩu
+                  </label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[#7A829A] text-[20px]">
+                      lock
+                    </span>
+                    <input
+                      className="w-full h-11 pl-10 pr-3 rounded-lg border border-[#E8DFD0] bg-white focus:border-[#EFC14B] focus:ring-2 focus:ring-[#EFC14B]/30 text-sm text-[#0F1E44] transition-colors outline-none"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Nhập lại mật khẩu mới"
+                      type="password"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full h-11 bg-[#0F1E44] text-white rounded-lg font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#1A2D5A] transition-all shadow-navy active:scale-[0.98] cursor-pointer mt-1"
+                >
+                  <span>Đổi mật khẩu & Đăng nhập</span>
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </button>
+              </form>
+            )}
+
+            <div className="text-center pt-3 border-t border-[#E8DFD0]/40">
+              <p className="text-xs text-[#7A829A]">© 2024 AiiCafe — Where love brews and dreams grow</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#FDF8EE] text-[#3D4663] min-h-screen w-full flex items-center justify-center relative overflow-hidden p-4">
@@ -63,29 +241,42 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers }) =
             </div>
           </div>
 
-          {/* Quick Account Switcher for Demo */}
-          <div className="bg-[#FDF8EE] p-3 rounded-xl border border-[#E8DFD0]/50">
-            <div className="text-[11px] font-semibold text-[#7A829A] uppercase tracking-wider mb-2 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[14px]">account_circle</span>
-              Chọn tài khoản thử nghiệm nhanh:
-            </div>
-            <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-              {allUsers.map((user) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => handleQuickLogin(user)}
-                  className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-[#E8DFD0]/60 hover:border-[#EFC14B] hover:bg-[#EFC14B]/10 text-left transition-all text-xs group"
-                >
-                  <img src={user.avatar} alt={user.name} className="w-6 h-6 rounded-full object-cover" />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-[#0F1E44] truncate">{user.name.split(' ').slice(-2).join(' ')}</p>
-                    <p className="text-[10px] text-[#7A829A]">{user.role === 'manager' ? 'Quản lý' : user.department}</p>
-                  </div>
-                </button>
-              ))}
+          {/* Security Notice */}
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 flex items-start gap-2">
+            <span className="material-symbols-outlined text-[16px] mt-0.5">shield</span>
+            <div>
+              <p className="font-semibold">Đăng nhập được kiểm soát</p>
+              <p className="text-[11px] text-blue-600 mt-0.5">
+                Chỉ quản lý mới có quyền tạo tài khoản. Vui lòng liên hệ quản lý cửa hàng để được cấp tài khoản.
+              </p>
             </div>
           </div>
+
+          {/* Demo Quick Login (staging/development only) */}
+          {IS_DEMO_ENABLED && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">science</span>
+                Demo Mode - Quick Login
+              </div>
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                {allUsers.filter(u => u.isAccountActive !== false).slice(0, 4).map((user) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => handleQuickLogin(user)}
+                    className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-amber-200/60 hover:border-amber-400 hover:bg-amber-100/50 text-left transition-all text-xs"
+                  >
+                    <img src={user.avatar} alt={user.name} className="w-5 h-5 rounded-full object-cover" />
+                    <div className="min-w-0">
+                      <p className="font-semibold text-amber-800 truncate text-[11px]">{user.name.split(' ').slice(-1)[0]}</p>
+                      <p className="text-[9px] text-amber-600">{user.role === 'manager' ? 'Admin' : 'Emp'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">

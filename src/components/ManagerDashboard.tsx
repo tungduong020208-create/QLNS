@@ -37,23 +37,34 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, []);
 
   useEffect(() => {
+    // Load check-in records from localStorage
+    const storedRecords = localStorage.getItem('coffeehouse_checkin_records');
+    const allCheckInRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
+    
     const employees = allUsers.filter(u => u.role === 'employee');
     const statuses: EmployeeCheckInStatus[] = employees.map(emp => {
       const empEvidences = evidences.filter(e => e.employeeId === emp.id);
       const pendingCount = empEvidences.filter(e => e.status === 'pending').length;
-      const goodCount = empEvidences.filter(e => e.status === 'good').length;
-      const badCount = empEvidences.filter(e => e.status === 'bad').length;
       const avgScore = empEvidences.length > 0 
         ? empEvidences.reduce((acc, e) => acc + e.points, 0) / empEvidences.length 
         : 0;
 
-      // Simulate check-in status (in real app, this would come from API)
-      const hasCheckedIn = Math.random() > 0.3;
-      const hasCheckedOut = hasCheckedIn ? Math.random() > 0.5 : false;
+      // Get actual check-in records for this employee
+      const empRecords = allCheckInRecords[emp.id] || [];
+      const today = new Date().toISOString().split('T')[0];
+      const todayRecords = empRecords.filter(r => {
+        const recordDate = new Date(r.timestamp).toISOString().split('T')[0];
+        return recordDate === today;
+      });
+      
+      const lastCheckIn = todayRecords.find(r => r.type === 'checkin');
+      const lastCheckOut = todayRecords.find(r => r.type === 'checkout');
+      const hasCheckedIn = !!lastCheckIn;
+      const hasCheckedOut = !!lastCheckOut;
 
       return {
         user: emp,
-        checkInRecord: null,
+        checkInRecord: lastCheckIn || null,
         hasCheckedIn,
         hasCheckedOut,
         pendingEvidenceCount: pendingCount,
@@ -179,6 +190,17 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                 <div className="text-xs text-[#767683]">{status.user.department}</div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Check-in method badge */}
+                {status.checkInRecord?.checkInMethod && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    status.checkInRecord.checkInMethod === 'photo' ? 'text-green-600 bg-green-100' :
+                    status.checkInRecord.checkInMethod === 'gps' ? 'text-blue-600 bg-blue-100' :
+                    'text-amber-600 bg-amber-100'
+                  }`}>
+                    {status.checkInRecord.checkInMethod === 'photo' ? '📸' :
+                     status.checkInRecord.checkInMethod === 'gps' ? '📍' : '🔢'}
+                  </span>
+                )}
                 {status.hasCheckedOut ? (
                   <span className="flex items-center gap-1 text-xs font-medium text-[#767683] bg-gray-100 px-2 py-1 rounded-full">
                     <span className="material-symbols-outlined text-[14px]">logout</span>Đã về
@@ -203,6 +225,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         </div>
       </div>
 
+      {/* Evidence section removed */}
+      {false && (
       <div className="bg-white border border-[#c6c5d4]/60 rounded-2xl p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -242,6 +266,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 };

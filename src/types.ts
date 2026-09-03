@@ -9,6 +9,9 @@ export interface User {
   avatar: string;
   email: string;
   phone?: string;
+  password?: string;          // Hashed password (for auth)
+  mustChangePassword?: boolean; // Force change on first login
+  isAccountActive?: boolean;   // Admin can deactivate
 }
 
 export type EvidenceStatus = 'good' | 'pending' | 'bad';
@@ -131,14 +134,37 @@ export interface QRReview {
   sentToGoogle: boolean;
 }
 
+export type CheckInMethod = 'photo' | 'gps' | 'pin';
+
+export interface CheckInLocation {
+  latitude: number;
+  longitude: number;
+  accuracy: number;        // meters
+  distanceFromStore?: number; // meters
+}
+
 export interface CheckInRecord {
   id: string;
   type: 'checkin' | 'checkout';
   time: string;
   address: string;
-  photo: string; // base64 data URL
+  photo: string;           // base64 data URL (empty if fallback)
   smileDetected: boolean;
-  timestamp: number; // unix ms
+  timestamp: number;       // unix ms
+
+  // Fallback fields
+  checkInMethod: CheckInMethod;
+  location?: CheckInLocation;
+  pinAttempt?: number;     // Number of PIN attempts
+  fallbackReason?: string; // 'camera_error' | 'camera_denied' | 'user_choice'
+}
+
+export interface StoreLocation {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radius: number;          // meters (default: 100)
 }
 
 // Peer Review / Cross Evaluation types
