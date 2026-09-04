@@ -1,25 +1,40 @@
 import React from 'react';
-import { ActiveTab, User } from '../types';
+import { useLocation } from 'react-router-dom';
+import { User } from '../types';
+import { ROUTES } from '../routes';
 
 interface SidebarProps {
-  activeTab: ActiveTab;
-  onSelectTab: (tab: ActiveTab) => void;
   currentUser: User;
   pendingReviewCount?: number;
+  onNavigate: (tab: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
-  activeTab,
-  onSelectTab,
   currentUser,
-  pendingReviewCount = 0
+  pendingReviewCount = 0,
+  onNavigate,
 }) => {
-  const tabs: { id: ActiveTab; label: string; icon: string }[] = [
+  const location = useLocation();
+
+  // Map route paths to tab IDs for active state detection
+  const tabFromPath = (pathname: string): string => {
+    if (pathname === '/' || pathname.endsWith('/home')) return 'home';
+    if (pathname.includes('/approval')) return 'approval';
+    if (pathname.includes('/schedule')) return 'manager_schedule';
+    if (pathname.includes('/handover')) return 'review';
+    if (pathname.includes('/peer-review')) return 'peer_review';
+    if (pathname.includes('/profile')) return 'profile';
+    return 'home';
+  };
+
+  const activeTab = tabFromPath(location.pathname);
+
+  const tabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: 'My Shift', icon: 'home' },
     ...(currentUser.role === 'manager'
       ? [
-          { id: 'approval' as ActiveTab, label: 'Pending', icon: 'how_to_reg' },
-          { id: 'manager_schedule' as ActiveTab, label: 'Schedule', icon: 'calendar_month' },
+          { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
+          { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
         ]
       : []),
     { id: 'review', label: 'Handover', icon: 'handshake' },
@@ -30,7 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <nav className="hidden md:flex flex-col w-64 bg-[#0F1E44] fixed top-0 left-0 h-full z-40 p-4 pt-20">
       <button
-        onClick={() => onSelectTab('profile')}
+        onClick={() => onNavigate('profile')}
         className="flex items-center gap-3 mb-8 px-3 py-3 rounded-xl hover:bg-white/10 transition-colors text-left w-full"
       >
         <img
@@ -50,7 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <button
               key={tab.id}
-              onClick={() => onSelectTab(tab.id)}
+              onClick={() => onNavigate(tab.id)}
               className={`flex items-center justify-between p-3 rounded-xl transition-all text-left group ${
                 isActive
                   ? 'bg-[#EFC14B] text-[#0F1E44] font-bold shadow-golden'
@@ -58,11 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <div className="flex items-center gap-3">
-                <span
-                  className={`material-symbols-outlined text-[22px] ${
-                    isActive ? 'fill' : ''
-                  }`}
-                >
+                <span className={`material-symbols-outlined text-[22px] ${isActive ? 'fill' : ''}`}>
                   {tab.icon}
                 </span>
                 <span className="text-sm font-medium">{tab.label}</span>
@@ -78,9 +89,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
         })}
       </div>
 
-      <div className="p-3 bg-white/5 rounded-xl mt-auto text-xs text-white/50">
-        <div className="font-heading font-semibold text-[#EFC14B] mb-0.5">AiiCafe HR v2.4</div>
+      <div className="p-3 bg-white/5 rounded-xl mt-auto text-xs text-white/50 space-y-1.5">
+        <div className="font-heading font-semibold text-[#EFC14B] mb-0.5">AiiCafe HR v2.5</div>
         <p className="text-[11px] text-white/40">Quản lý nhân viên</p>
+        <div className="border-t border-white/10 pt-1.5 space-y-1">
+          <a href="mailto:ken02022008@gmail.com" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
+            <span className="material-symbols-outlined text-[11px]">mail</span>ken02022008@gmail.com
+          </a>
+          <a href="tel:0962499209" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
+            <span className="material-symbols-outlined text-[11px]">call</span>096 2499 209
+          </a>
+          <a href="https://zalo.me/0962499209" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-[#EFC14B] transition-colors">
+            <span className="material-symbols-outlined text-[11px]">chat</span>Zalo hỗ trợ
+          </a>
+        </div>
       </div>
     </nav>
   );

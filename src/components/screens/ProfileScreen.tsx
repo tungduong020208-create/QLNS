@@ -518,23 +518,80 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       {activeModal === 'support' && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-lg border border-[#E8DFD0] animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-1">Hỗ trợ kỹ thuật & Quản trị</h3>
-            <p className="text-xs text-[#7A829A] mb-3">
-              Hotline: <strong>1900 6868</strong> hoặc gửi tin nhắn bên dưới:
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Hỗ trợ kỹ thuật</h3>
+              <button onClick={() => setActiveModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <p className="text-xs text-[#7A829A] mb-4">
+              Liên hệ quản lý cửa hàng nếu bạn gặp sự cố hoặc cần hỗ trợ.
             </p>
 
+            {/* Contact Info Cards */}
+            <div className="space-y-2.5 mb-4">
+              {/* Email */}
+              <a
+                href="mailto:ken02022008@gmail.com"
+                className="flex items-center gap-3 p-3 bg-[#FDF8EE] rounded-xl hover:bg-[#F5EDDF] transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-lg bg-[#EFC14B]/20 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-[#0F1E44] text-[20px]">mail</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-[#7A829A] font-medium">Email hỗ trợ</p>
+                  <p className="text-xs font-semibold text-[#0F1E44] truncate group-hover:text-[#000666]">ken02022008@gmail.com</p>
+                </div>
+                <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] text-[18px] ml-auto flex-shrink-0">open_in_new</span>
+              </a>
+
+              {/* Phone */}
+              <a
+                href="tel:0962499209"
+                className="flex items-center gap-3 p-3 bg-[#FDF8EE] rounded-xl hover:bg-[#F5EDDF] transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-green-600 text-[20px]">call</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-[#7A829A] font-medium">Điện thoại</p>
+                  <p className="text-xs font-semibold text-[#0F1E44] group-hover:text-green-600">096 2499 209</p>
+                </div>
+                <span className="material-symbols-outlined text-[#7A829A] group-hover:text-green-600 text-[18px] ml-auto flex-shrink-0">phone_in_talk</span>
+              </a>
+
+              {/* Zalo */}
+              <a
+                href="https://zalo.me/0962499209"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 bg-[#FDF8EE] rounded-xl hover:bg-[#F5EDDF] transition-colors group"
+              >
+                <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <span className="text-blue-600 font-bold text-sm">Zalo</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] text-[#7A829A] font-medium">Chat Zalo</p>
+                  <p className="text-xs font-semibold text-[#0F1E44] group-hover:text-blue-600">Nhắn tin nhanh qua Zalo</p>
+                </div>
+                <span className="material-symbols-outlined text-[#7A829A] group-hover:text-blue-600 text-[18px] ml-auto flex-shrink-0">chat</span>
+              </a>
+            </div>
+
+            {/* Quick message form */}
             {supportSuccess ? (
-              <div className="p-3 bg-[#EFC14B]/20 text-[#0F1E44] text-xs font-bold rounded-xl mb-4 text-center">
+              <div className="p-3 bg-[#EFC14B]/20 text-[#0F1E44] text-xs font-bold rounded-xl mb-2 text-center">
                 ✓ Đã gửi yêu cầu hỗ trợ! Bộ phận quản lý sẽ liên hệ lại.
               </div>
             ) : (
-              <form onSubmit={handleSendSupport} className="space-y-3 text-xs mb-3">
+              <form onSubmit={handleSendSupport} className="space-y-2.5 text-xs">
                 <textarea
-                  rows={3}
+                  rows={2}
                   value={supportMessage}
                   onChange={(e) => setSupportMessage(e.target.value)}
-                  placeholder="Mô tả sự cố hoặc thắc mắc của bạn..."
-                  className="w-full p-3 border border-[#E8DFD0] rounded-xl text-xs focus:border-[#EFC14B] outline-none"
+                  placeholder="Hoặc mô tả sự cố của bạn ở đây..."
+                  className="w-full p-3 border border-[#E8DFD0] rounded-xl text-xs focus:border-[#EFC14B] outline-none resize-none"
                 />
                 <div className="flex gap-2 justify-end">
                   <button
@@ -542,7 +599,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     onClick={() => setActiveModal(null)}
                     className="px-4 py-2 font-semibold text-[#7A829A] hover:bg-[#FDF8EE] rounded-lg"
                   >
-                    Hủy
+                    Đóng
                   </button>
                   <button
                     type="submit"

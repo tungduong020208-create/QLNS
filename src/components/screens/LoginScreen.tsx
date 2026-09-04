@@ -212,7 +212,20 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
             )}
 
             <div className="text-center pt-3 border-t border-[#E8DFD0]/40">
-              <p className="text-xs text-[#7A829A]">© 2024 AiiCafe — Where love brews and dreams grow</p>
+              <p className="text-[11px] text-[#7A829A]">© 2025 AiiCafe — Where love brews and dreams grow</p>
+              <div className="flex items-center justify-center gap-3 mt-1.5">
+                <a href="mailto:ken02022008@gmail.com" className="text-[11px] text-[#7A829A] hover:text-[#0F1E44] transition-colors flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">mail</span>Email
+                </a>
+                <span className="text-[#E8DFD0]">|</span>
+                <a href="tel:0962499209" className="text-[11px] text-[#7A829A] hover:text-[#0F1E44] transition-colors flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">call</span>096 2499 209
+                </a>
+                <span className="text-[#E8DFD0]">|</span>
+                <a href="https://zalo.me/0962499209" target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-500 hover:text-blue-700 transition-colors flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">chat</span>Zalo
+                </a>
+              </div>
             </div>
           </div>
         </div>
@@ -247,7 +260,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
             <div>
               <p className="font-semibold">Đăng nhập được kiểm soát</p>
               <p className="text-[11px] text-blue-600 mt-0.5">
-                Chỉ quản lý mới có quyền tạo tài khoản. Vui lòng liên hệ quản lý cửa hàng để được cấp tài khoản.
+                Chỉ quản lý mới có quyền tạo tài khoản. Liên hệ <a href="tel:0962499209" className="font-semibold underline">096 2499 209</a> hoặc <a href="mailto:ken02022008@gmail.com" className="font-semibold underline">Email</a> để được cấp tài khoản.
               </p>
             </div>
           </div>
@@ -361,8 +374,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
           </form>
 
           {/* Footer */}
-          <div className="text-center pt-3 border-t border-[#E8DFD0]/40">
-            <p className="text-xs text-[#7A829A]">© 2024 AiiCafe — Where love brews and dreams grow</p>
+          <div className="pt-3 border-t border-[#E8DFD0]/40">
+            <p className="text-[11px] text-[#7A829A] text-center mb-2">© 2025 AiiCafe — Where love brews and dreams grow</p>
+            <div className="flex flex-col gap-1.5">
+              <a href="mailto:ken02022008@gmail.com" className="flex items-center justify-center gap-1.5 text-[11px] text-[#7A829A] hover:text-[#0F1E44] transition-colors">
+                <span className="material-symbols-outlined text-[13px]">mail</span>
+                ken02022008@gmail.com
+              </a>
+              <a href="tel:0962499209" className="flex items-center justify-center gap-1.5 text-[11px] text-[#7A829A] hover:text-[#0F1E44] transition-colors">
+                <span className="material-symbols-outlined text-[13px]">call</span>
+                096 2499 209
+              </a>
+              <a href="https://zalo.me/0962499209" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 text-[11px] text-[#7A829A] hover:text-blue-600 transition-colors">
+                <span className="material-symbols-outlined text-[13px]">chat</span>
+                Chat Zalo hỗ trợ
+              </a>
+            </div>
           </div>
         </div>
       </div>

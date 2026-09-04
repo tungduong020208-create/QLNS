@@ -1,20 +1,34 @@
 import React from 'react';
-import { ActiveTab, User } from '../types';
+import { useLocation } from 'react-router-dom';
+import { User } from '../types';
 
 interface BottomNavProps {
-  activeTab: ActiveTab;
-  onSelectTab: (tab: ActiveTab) => void;
   pendingReviewCount?: number;
   currentUser?: User;
+  onNavigate: (tab: string) => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
-  activeTab,
-  onSelectTab,
   pendingReviewCount = 0,
-  currentUser
+  currentUser,
+  onNavigate,
 }) => {
-  const allTabs: { id: ActiveTab; label: string; icon: string }[] = [
+  const location = useLocation();
+
+  // Map route paths to tab IDs for active state detection
+  const tabFromPath = (pathname: string): string => {
+    if (pathname === '/' || pathname.endsWith('/home')) return 'home';
+    if (pathname.includes('/approval')) return 'approval';
+    if (pathname.includes('/schedule')) return 'manager_schedule';
+    if (pathname.includes('/handover')) return 'review';
+    if (pathname.includes('/peer-review')) return 'peer_review';
+    if (pathname.includes('/profile')) return 'profile';
+    return 'home';
+  };
+
+  const activeTab = tabFromPath(location.pathname);
+
+  const allTabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: 'My Shift', icon: 'home' },
     { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
     { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
@@ -35,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
         return (
           <button
             key={tab.id}
-            onClick={() => onSelectTab(tab.id)}
+            onClick={() => onNavigate(tab.id)}
             className={`flex flex-col items-center justify-center transition-all duration-200 relative group ${
               isActive
                 ? 'bg-[#EFC14B] text-[#0F1E44] rounded-full px-4 py-1.5 scale-95 font-semibold shadow-golden'
@@ -43,11 +57,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
             }`}
           >
             <div className="relative">
-              <span
-                className={`material-symbols-outlined text-[24px] ${
-                  isActive ? 'fill' : ''
-                }`}
-              >
+              <span className={`material-symbols-outlined text-[24px] ${isActive ? 'fill' : ''}`}>
                 {tab.icon}
               </span>
 
