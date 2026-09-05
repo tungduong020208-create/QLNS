@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { User, EvidenceItem, NotificationItem } from '../../types';
 import { toDateStr, isWeekend } from '../../utils/schedule';
 
@@ -29,6 +29,14 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [selectedDate, setSelectedDate] = useState<string>(() => toDateStr(new Date()));
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-mark handover notifications as read when this section is visible
+  useEffect(() => {
+    if (onMarkNotificationRead && notifications.length > 0) {
+      const unreadHandover = notifications.filter(n => n.category === 'handover' && !n.read);
+      unreadHandover.forEach(n => onMarkNotificationRead(n.id));
+    }
+  }, [notifications, onMarkNotificationRead]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

@@ -205,25 +205,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </span>
         </button>
 
-        {/* 5. Support */}
-        <button
-          type="button"
-          onClick={() => setActiveModal('support')}
-          className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="p-2.5 bg-[#F5EDDF] text-[#0F1E44] rounded-xl group-hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-[22px]">help</span>
+        {/* 5. Support — Employee only */}
+        {currentUser.role !== 'manager' && (
+          <button
+            type="button"
+            onClick={() => setActiveModal('support')}
+            className="w-full flex items-center justify-between p-4 hover:bg-[#FDF8EE] transition-colors text-left group cursor-pointer"
+          >
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-[#F5EDDF] text-[#0F1E44] rounded-xl group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-[22px]">help</span>
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-[#0F1E44]">Hỗ trợ</h3>
+                <p className="text-xs text-[#7A829A]">Liên hệ khi gặp sự cố</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#0F1E44]">Hỗ trợ</h3>
-              <p className="text-xs text-[#7A829A]">Liên hệ quản lý cửa hàng</p>
-            </div>
-          </div>
-          <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
-            chevron_right
-          </span>
-        </button>
+            <span className="material-symbols-outlined text-[#7A829A] group-hover:text-[#EFC14B] group-hover:translate-x-0.5 transition-all">
+              chevron_right
+            </span>
+          </button>
+        )}
 
         {/* Manager: Team Management */}
         {currentUser.role === 'manager' && (
@@ -238,7 +240,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   <span className="material-symbols-outlined text-[22px]">group</span>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-[#0F1E44]">Quản lý nhân viên</h3>
+                  <h3 className="text-sm font-bold text-[#0F1E44]">Đội ngũ</h3>
                   <p className="text-xs text-[#7A829A]">Xem danh sách và hiệu suất team</p>
                 </div>
               </div>
@@ -519,14 +521,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-lg border border-[#E8DFD0] animate-in fade-in zoom-in-95 duration-150">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Hỗ trợ kỹ thuật</h3>
+              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Hỗ trợ</h3>
               <button onClick={() => setActiveModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <p className="text-xs text-[#7A829A] mb-4">
-              Liên hệ quản lý cửa hàng nếu bạn gặp sự cố hoặc cần hỗ trợ.
+              Liên hệ khi gặp sự cố hoặc cần hỗ trợ.
             </p>
 
             {/* Contact Info Cards */}
@@ -620,7 +622,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-lg border border-[#E8DFD0] max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-150">
             <div className="flex justify-between items-center mb-3">
               <div>
-                <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Quản lý nhân viên</h3>
+                <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Đội ngũ</h3>
                 <p className="text-xs text-[#7A829A]">Danh sách nhân viên trong team</p>
               </div>
               <button onClick={() => setActiveModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">

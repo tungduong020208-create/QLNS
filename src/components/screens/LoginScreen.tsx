@@ -1,10 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
 
-// Set to true ONLY for staging/development builds
-// In production, set this to false to hide demo accounts
-const IS_DEMO_ENABLED = false;
-
 interface LoginScreenProps {
   onLogin: (user: User) => void;
   allUsers: User[];
@@ -50,7 +46,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
       return;
     }
 
-    // Check password (for demo: use stored password or default 'aiicafe')
+    // Check password
     const storedPassword = foundUser.password || 'aiicafe';
     if (password !== storedPassword) {
       setErrorMsg('Mật khẩu không đúng. Vui lòng thử lại.');
@@ -66,20 +62,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
 
     // Login successful
     onLogin(foundUser);
-  };
-
-  // Demo quick-login handler (only in staging)
-  const handleQuickLogin = (user: User) => {
-    setUsername(user.employeeCode);
-    setPassword(user.password || 'aiicafe');
-
-    if (user.mustChangePassword) {
-      setPendingUser(user);
-      setMustChangePassword(true);
-      return;
-    }
-
-    onLogin(user);
   };
 
   const handleChangePassword = (e: React.FormEvent) => {
@@ -250,7 +232,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
             />
             <div>
               <h1 className="font-heading text-3xl font-bold text-[#0F1E44] tracking-tight">AiiCafe</h1>
-              <p className="text-sm text-[#7A829A] mt-1">Hệ thống Quản lý nhân viên</p>
+              <p className="text-sm text-[#7A829A] mt-1">Hệ thống quản trị nhân sự</p>
             </div>
           </div>
 
@@ -264,32 +246,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
               </p>
             </div>
           </div>
-
-          {/* Demo Quick Login (staging/development only) */}
-          {IS_DEMO_ENABLED && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-              <div className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider mb-2 flex items-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">science</span>
-                Demo Mode - Quick Login
-              </div>
-              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto">
-                {allUsers.filter(u => u.isAccountActive !== false).slice(0, 4).map((user) => (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => handleQuickLogin(user)}
-                    className="flex items-center gap-2 p-1.5 rounded-lg bg-white border border-amber-200/60 hover:border-amber-400 hover:bg-amber-100/50 text-left transition-all text-xs"
-                  >
-                    <img src={user.avatar} alt={user.name} className="w-5 h-5 rounded-full object-cover" />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-amber-800 truncate text-[11px]">{user.name.split(' ').slice(-1)[0]}</p>
-                      <p className="text-[9px] text-amber-600">{user.role === 'manager' ? 'Admin' : 'Emp'}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">

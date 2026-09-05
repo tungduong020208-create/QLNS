@@ -6,8 +6,6 @@ interface HeaderProps {
   notifications: NotificationItem[];
   onMarkNotificationRead: (id: string) => void;
   onClearAllNotifications: () => void;
-  onSwitchUser?: (user: User) => void;
-  allUsers: User[];
   onNavigateToProfile: () => void;
   onLogout: () => void;
 }
@@ -17,14 +15,11 @@ export const Header: React.FC<HeaderProps> = ({
   notifications,
   onMarkNotificationRead,
   onClearAllNotifications,
-  onSwitchUser,
-  allUsers,
   onNavigateToProfile,
   onLogout
 }) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Only show management notifications in the bell
   const managementNotifications = notifications.filter(n => n.category === 'management');
@@ -33,79 +28,29 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="fixed top-0 left-0 w-full z-40 bg-[#FDF8EE] border-b border-[#E8DFD0] flex justify-between items-center px-4 h-16">
       <div className="flex items-center gap-3">
-        <button
-          onClick={() => setShowUserMenu(!showUserMenu)}
-          className="relative h-9 w-9 rounded-full overflow-hidden border-2 border-[#EFC14B] flex-shrink-0 hover:shadow-golden transition-all cursor-pointer"
-          title="Chuyển đổi tài khoản"
-        >
-          <img
-            alt={currentUser.name}
-            className="w-full h-full object-cover"
-            src={currentUser.avatar}
-          />
-        </button>
-
-        <div className="flex items-center gap-2">
-          <img
-            src="/aiicafe-logo-blue.png"
-            alt="AiiCafe"
-            className="h-8 w-auto"
-          />
-          {currentUser.role === 'manager' && (
-            <span className="hidden sm:inline-block text-[10px] uppercase font-semibold bg-[#0F1E44] text-[#EFC14B] px-2 py-0.5 rounded-full">
-              Quản lý
-            </span>
-          )}
-        </div>
+        <img
+          src="/aiicafe-logo-blue.png"
+          alt="AiiCafe"
+          className="h-8 w-auto"
+        />
+        {currentUser.role === 'manager' && (
+          <span className="hidden sm:inline-block text-[10px] uppercase font-semibold bg-[#0F1E44] text-[#EFC14B] px-2 py-0.5 rounded-full">
+            Quản lý
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-1 relative">
-        {/* User Switch Dropdown */}
-        {showUserMenu && (
-          <div className="absolute left-0 top-12 bg-white rounded-xl shadow-lg border border-[#E8DFD0] p-2 w-64 z-50 animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-3 py-2 border-b border-[#F5EDDF] text-xs font-semibold text-[#7A829A] uppercase tracking-wider">
-              Chuyển đổi người dùng thử nghiệm
-            </div>
-            <div className="py-1 space-y-1">
-              {allUsers.map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => {
-                    if (onSwitchUser) onSwitchUser(user);
-                    setShowUserMenu(false);
-                  }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left text-sm transition-colors ${
-                    currentUser.id === user.id ? 'bg-[#EFC14B]/15 text-[#0F1E44] font-semibold' : 'hover:bg-[#FDF8EE] text-[#3D4663]'
-                  }`}
-                >
-                  <img src={user.avatar} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
-                  <div className="flex-1 min-w-0">
-                    <div className="truncate text-sm">{user.name}</div>
-                    <div className="text-[11px] text-[#7A829A] truncate">{user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</div>
-                  </div>
-                  {currentUser.id === user.id && (
-                    <span className="material-symbols-outlined text-[18px] text-[#EFC14B]">check</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <div className="pt-2 border-t border-[#F5EDDF]">
-              <button
-                onClick={() => {
-                  setShowUserMenu(false);
-                  onNavigateToProfile();
-                }}
-                className="w-full text-center text-xs text-[#0F1E44] font-semibold py-1 hover:underline"
-              >
-                Xem chi tiết hồ sơ cá nhân
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Notifications Button */}
         <button
-          onClick={() => setShowNotifs(!showNotifs)}
+          onClick={() => {
+            const opening = !showNotifs;
+            setShowNotifs(opening);
+            // Auto-mark all management notifications as read when opening
+            if (opening && unreadCount > 0) {
+              onClearAllNotifications();
+            }
+          }}
           aria-label="Thông báo"
           className="relative text-[#0F1E44] hover:bg-[#EFC14B]/15 transition-colors rounded-full p-2 flex items-center justify-center"
         >
@@ -129,13 +74,10 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 )}
               </div>
-              {managementNotifications.length > 0 && (
-                <button
-                  onClick={onClearAllNotifications}
-                  className="text-xs text-[#EFC14B] hover:underline font-semibold"
-                >
-                  Đánh dấu đã đọc
-                </button>
+              {managementNotifications.length > 0 && unreadCount === 0 && (
+                <span className="text-xs text-[#7A829A] font-medium">
+                  Đã đọc
+                </span>
               )}
             </div>
 

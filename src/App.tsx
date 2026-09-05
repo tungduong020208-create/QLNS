@@ -179,16 +179,13 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Clear session/auth data from localStorage (keep persistent data like notifications, evidences)
+    localStorage.removeItem('enterprise_hr_current_user_id');
+    localStorage.removeItem('enterprise_hr_auth');
     setIsLoggedIn(false);
     setCurrentUser(null);
     addToast('info', 'Đã đăng xuất', 'Phiên làm việc đã kết thúc an toàn');
     navigate(ROUTES.LOGIN, { replace: true });
-  };
-
-  const handleSwitchUser = (user: User) => {
-    setCurrentUser(user);
-    addToast('info', 'Đã chuyển tài khoản', `Đang xem với tư cách: ${user.name} (${user.role === 'manager' ? 'Quản lý' : 'Nhân viên'})`);
-    navigate(getDefaultHomeRoute(user.role), { replace: true });
   };
 
   // ─── User management ───
@@ -331,8 +328,8 @@ export default function App() {
   };
 
   const handleClearAllNotifications = () => {
+    // Silently mark all notifications as read (no toast — the badge disappearing is the feedback)
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    addToast('info', 'Đã đọc thông báo', 'Tất cả thông báo đã được đánh dấu đã đọc');
   };
 
   const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
@@ -371,8 +368,6 @@ export default function App() {
           notifications={notifications}
           onMarkNotificationRead={handleMarkNotificationRead}
           onClearAllNotifications={handleClearAllNotifications}
-          onSwitchUser={handleSwitchUser}
-          allUsers={users}
           onNavigateToProfile={() => goTo('profile')}
           onLogout={handleLogout}
         />

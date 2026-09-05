@@ -311,29 +311,6 @@ export const ATTENTION_EMPLOYEES = [
   }
 ];
 
-export const SAMPLE_EVIDENCE_PRESETS = [
-  {
-    title: 'Sắp xếp kệ hàng hóa siêu thị',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBi1b_s5yyvTQOjMbVUSb30QgRhSanL4zJfOg1nwPJgmISFNk2srl_1xXRLwSSci327felTKkZ_rArylb8Ua0M3s7CCplqdZWbL7eyO3ktIeCst5cAI_UeXeqvDiJYzbCchy45htK223PdhXiPYGL5JkND94hf2t84mRZPtA50Zmkl2QU71AJGwzqpVE_T_WFEzi6wXAPNPtsWTQ_kz60mudJfdMpNjYT2ipQNfcvv5EiLa6H9DgMRX',
-    dept: 'Khu vực phục vụ'
-  },
-  {
-    title: 'Kiểm kê bàn giao tài liệu sổ sách',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCJ7GQ0vjWTjTnAMyBHl3kMbodRW9AkykufAorCoCC1zaGYfMgV7xoXaDy1z3f5U7X68pj3bBUFKLJlY9N9LQsmKUJQomGftyTsm37kVhkj5NS82x2cFQLLKsOyHpn9FmkKEakOSUVB_7Hv5upoGv7V7XWIiz9DRgVAL-EBCVHpJGp-V4W-aGPCobkZt4Q4mGgRQNhuOSe_LuZC5JLCRebJmVmUz4CJ4IpJg6gNqfnNnNB-ZyuSwJOy',
-    dept: 'Kho nguyên liệu'
-  },
-  {
-    title: 'Trưng bày áo sơ mi nam theo layout',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBpB7scRZnte0G7E7-Q93CRPbIrgFh07H33rh094uq_sxfAn16SN8cfjmtHw6RRH8JTP9azwKG2RtQu8soPqt3q5p1rmcNkIIrAtmY8XVAUHUzAPBY-15bWKauVDCC47lxzvCFzWqbrWHdn3bJT3LFj3aOlY_WLbpATZFv_sOpzZtgFmXgcP89y7-VKVqrVIPrb9AcohBjBjRC5X4pMafE__Qdg6pz0lL_OxqYZDiifJwEXgTGItmYB',
-    dept: 'Khu vực phục vụ'
-  },
-  {
-    title: 'Khu vực quầy pha chế gọn gàng cuối ngày',
-    url: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD_59L-uzGVUrGJA7VYkMPgn-KSZ4alh_5rBpsFXwPMfzwPxncV04ew18FZeWcrNENiz5Kes53cixxJVWE7ZihWVv0Xedjvus1OtAws1eBeyK2IWQEe2Y3sRHJ7Pb5ZpVTANtBFh9RsHLN1HquQpqXHr7mFMitZu4-HBBA6QbhQ8oXz6wHsfkm3a_BN5EGWyC_90arsquRvqHvfwtFhC9V0100B32UqHgxQLnlV-XcC5CzGMYUfjjZe',
-    dept: 'Khu vực phục vụ'
-  }
-];
-
 export const INITIAL_CUSTOMER_RATINGS: CustomerRating[] = [
   {
     id: 'cr-1',

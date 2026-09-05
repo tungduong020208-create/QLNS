@@ -50,6 +50,7 @@ export interface NotificationItem {
   read: boolean;
   type: 'reward' | 'penalty' | 'pending' | 'system';
   category: NotificationCategory;
+  userId?: string;          // Optional: ties notification to a specific user
 }
 
 export interface WeeklyData {

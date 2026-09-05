@@ -90,19 +90,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div className="p-3 bg-white/5 rounded-xl mt-auto text-xs text-white/50 space-y-1.5">
-        <div className="font-heading font-semibold text-[#EFC14B] mb-0.5">AiiCafe HR v2.5</div>
-        <p className="text-[11px] text-white/40">Quản lý nhân viên</p>
-        <div className="border-t border-white/10 pt-1.5 space-y-1">
-          <a href="mailto:ken02022008@gmail.com" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
-            <span className="material-symbols-outlined text-[11px]">mail</span>ken02022008@gmail.com
-          </a>
-          <a href="tel:0962499209" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
-            <span className="material-symbols-outlined text-[11px]">call</span>096 2499 209
-          </a>
-          <a href="https://zalo.me/0962499209" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-[#EFC14B] transition-colors">
-            <span className="material-symbols-outlined text-[11px]">chat</span>Zalo hỗ trợ
-          </a>
-        </div>
+        <div className="font-heading font-semibold text-[#EFC14B] mb-0.5">AiiCafe HR</div>
+        {currentUser.role !== 'manager' && (
+          <div className="border-t border-white/10 pt-1.5 space-y-1">
+            <a href="mailto:ken02022008@gmail.com" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
+              <span className="material-symbols-outlined text-[11px]">mail</span>ken02022008@gmail.com
+            </a>
+            <a href="tel:0962499209" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-white/70 transition-colors">
+              <span className="material-symbols-outlined text-[11px]">call</span>096 2499 209
+            </a>
+            <a href="https://zalo.me/0962499209" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-[10px] text-white/40 hover:text-[#EFC14B] transition-colors">
+              <span className="material-symbols-outlined text-[11px]">chat</span>Zalo hỗ trợ
+            </a>
+          </div>
+        )}
       </div>
     </nav>
   );
