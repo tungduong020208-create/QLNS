@@ -239,6 +239,17 @@ const SmileDetector: React.FC<{
   );
 };
 
+const STORAGE_KEY_CHECKIN = 'aiicafe_checkin_session';
+
+interface CheckInSession {
+  employeeId: string;
+  hasCheckedIn: boolean;
+  checkInTime: string;
+  checkInTimestamp: number;
+  checkInMethod: CheckInMethod;
+  address: string;
+}
+
 const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn }) => {
   const [now, setNow] = useState(new Date());
   const [address, setAddress] = useState('Đang lấy vị trí...');
@@ -247,10 +258,51 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   const [view, setView] = useState<ModalView>('idle');
   const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
   const [record, setRecord] = useState<CheckInRecord | null>(null);
-  const [hasCheckedIn, setHasCheckedIn] = useState(false);
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [checkInMethod, setCheckInMethod] = useState<CheckInMethod | null>(null);
   const [actionType, setActionType] = useState<ActionType>('checkin');
+
+  // Restored from localStorage
+  const [hasCheckedIn, setHasCheckedIn] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
+      if (saved) {
+        const session: CheckInSession = JSON.parse(saved);
+        if (session.employeeId === employeeId && session.hasCheckedIn) return true;
+      }
+    } catch {}
+    return false;
+  });
+  const [checkInTime, setCheckInTime] = useState<string | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
+      if (saved) {
+        const session: CheckInSession = JSON.parse(saved);
+        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInTime;
+      }
+    } catch {}
+    return null;
+  });
+  const [checkInTimestamp, setCheckInTimestamp] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
+      if (saved) {
+        const session: CheckInSession = JSON.parse(saved);
+        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInTimestamp;
+      }
+    } catch {}
+    return null;
+  });
+  const [checkInMethod, setCheckInMethod] = useState<CheckInMethod | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
+      if (saved) {
+        const session: CheckInSession = JSON.parse(saved);
+        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInMethod;
+      }
+    } catch {}
+    return null;
+  });
+  const [workHoursSummary, setWorkHoursSummary] = useState<{ hours: string; duration: string } | null>(null);
+  const [permissionDeniedMsg, setPermissionDeniedMsg] = useState<string | null>(null);
 
   // Fallback state
   const [cameraRetryCount, setCameraRetryCount] = useState(0);
@@ -366,6 +418,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
   const createRecord = (method: CheckInMethod, photo: string = '', location?: any, pinAttempt?: number, fallbackReason?: string) => {
     const now = new Date();
+    const timestamp = now.getTime();
     const newRecord: CheckInRecord = {
       id: `checkin-${Date.now()}`,
       type: actionType,
@@ -373,7 +426,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       address,
       photo,
       smileDetected: method === 'photo',
-      timestamp: now.getTime(),
+      timestamp,
       checkInMethod: method,
       location,
       pinAttempt,
@@ -387,9 +440,34 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     if (actionType === 'checkin') {
       setHasCheckedIn(true);
       setCheckInTime(formatTime(now));
+      setCheckInTimestamp(timestamp);
+      // Persist check-in session to localStorage
+      const session: CheckInSession = {
+        employeeId,
+        hasCheckedIn: true,
+        checkInTime: formatTime(now),
+        checkInTimestamp: timestamp,
+        checkInMethod: method,
+        address,
+      };
+      localStorage.setItem(STORAGE_KEY_CHECKIN, JSON.stringify(session));
     } else {
+      // Calculate work hours
+      if (checkInTimestamp) {
+        const diffMs = timestamp - checkInTimestamp;
+        const diffHours = diffMs / (1000 * 60 * 60);
+        const hours = Math.floor(diffHours);
+        const minutes = Math.floor((diffHours - hours) * 60);
+        setWorkHoursSummary({
+          hours: diffHours.toFixed(1),
+          duration: hours > 0 ? `${hours} tiếng ${minutes} phút` : `${minutes} phút`,
+        });
+      }
       setHasCheckedIn(false);
       setCheckInTime(null);
+      setCheckInTimestamp(null);
+      // Clear persisted session
+      localStorage.removeItem(STORAGE_KEY_CHECKIN);
     }
   };
 
@@ -404,11 +482,28 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setView('permission');
   };
 
-  const handlePermissionAllow = () => {
-    setView('camera');
+  const handlePermissionAllow = async () => {
+    setPermissionDeniedMsg(null);
+    try {
+      // Actually request camera permission via browser API
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Got permission — stop the stream and open our camera modal
+      stream.getTracks().forEach((t) => t.stop());
+      setView('camera');
+    } catch (err) {
+      // Permission denied or camera unavailable
+      setPermissionDeniedMsg(
+        err?.name === 'NotAllowedError'
+          ? 'Bạn đã từ chối quyền camera. Vui lòng chọn phương án dự phòng.'
+          : 'Camera không khả dụng. Vui lòng chọn phương án dự phòng.'
+      );
+      setCameraRetryCount((prev) => prev + 1);
+      setView('fallback-select');
+    }
   };
 
   const handlePermissionDeny = () => {
+    setPermissionDeniedMsg(null);
     setView('fallback-select');
   };
 
@@ -503,6 +598,16 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setGpsDistance(null);
     setPinInput('');
     setPinError('');
+    setWorkHoursSummary(null);
+    setPermissionDeniedMsg(null);
+  };
+
+  const formatElapsed = (startTimestamp: number, nowMs: number): string => {
+    const diff = Math.floor((nowMs - startTimestamp) / 1000);
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+    return `${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -586,6 +691,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                       {getCheckInMethodLabel(checkInMethod || 'photo')}
                     </p>
                   </div>
+                  {checkInTimestamp && (
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-green-700 tabular-nums">
+                        {formatElapsed(checkInTimestamp, now.getTime())}
+                      </p>
+                      <p className="text-[10px] text-green-600">đang làm</p>
+                    </div>
+                  )}
                 </div>
               </div>
               <button
@@ -633,6 +746,12 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
             </div>
 
+            {permissionDeniedMsg && (
+              <div className="bg-[#FF3131]/10 rounded-xl p-3 mb-4 flex items-start gap-2">
+                <span className="material-symbols-outlined text-[#FF3131] text-lg mt-0.5">warning</span>
+                <p className="text-xs text-[#FF3131] font-medium">{permissionDeniedMsg}</p>
+              </div>
+            )}
             <div className="flex gap-3">
               <button
                 onClick={handlePermissionDeny}
@@ -934,6 +1053,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <div className="flex justify-between">
                   <span className="text-xs text-[#7A829A]">Khoảng cách</span>
                   <span className="text-xs font-bold text-[#0F1E44]">{record.location.distanceFromStore}m</span>
+                </div>
+              )}
+              {actionType === 'checkout' && workHoursSummary && (
+                <div className="flex justify-between items-center pt-2 border-t border-[#E8DFD0]">
+                  <span className="text-xs text-[#7A829A]">Tổng giờ làm</span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-[#4CAF72]">{workHoursSummary.duration}</span>
+                    <span className="text-[10px] text-[#7A829A] ml-1">({workHoursSummary.hours}h)</span>
+                  </div>
                 </div>
               )}
             </div>
