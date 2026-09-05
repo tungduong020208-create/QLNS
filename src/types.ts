@@ -173,12 +173,12 @@ export interface PeerReviewCriteria {
   id: string;
   question: string;
   category: string;
-  options: string[];
+  maxStars: number;          // 1-5 star rating
 }
 
 export interface PeerReviewAnswer {
   criteriaId: string;
-  answer: string;
+  stars: number;             // 1-5 stars
 }
 
 export interface PeerReviewSubmission {
@@ -190,7 +190,21 @@ export interface PeerReviewSubmission {
   targetName: string;
   targetAvatar: string;
   answers: PeerReviewAnswer[];
+  totalScore: number;        // Sum of all star ratings
+  avgScore: number;          // Average star score
   comment?: string;
   submittedAt: string;
-  dateString: string;
+  dateString: string;        // ISO date for day-level dedup
+  monthKey: string;          // 'YYYY-MM' for monthly dedup
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  role: UserRole;
+  totalScore: number;        // Sum of all received scores
+  avgScore: number;          // Average score across all reviews received
+  reviewCount: number;       // Number of reviews received
+  rank: number;              // Position on leaderboard
 }

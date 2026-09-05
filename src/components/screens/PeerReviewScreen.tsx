@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, PeerReviewCriteria, PeerReviewSubmission } from '../../types';
+import { User, PeerReviewCriteria, PeerReviewSubmission, LeaderboardEntry } from '../../types';
 import { PEER_REVIEW_CRITERIA } from '../../data/peerReviewData';
 
 interface PeerReviewScreenProps {
@@ -9,62 +9,164 @@ interface PeerReviewScreenProps {
   onSubmitReview: (submission: PeerReviewSubmission) => void;
 }
 
+// ─── Helper: compute leaderboard from peer reviews ───
+function computeLeaderboard(
+  peerReviews: PeerReviewSubmission[],
+  allUsers: User[],
+  monthKey: string,
+): LeaderboardEntry[] {
+  // Filter reviews for the given month
+  const monthReviews = peerReviews.filter((r) => r.monthKey === monthKey);
+
+  // Aggregate scores per target employee
+  const scoreMap = new Map<string, { total: number; count: number }>();
+  for (const review of monthReviews) {
+    const existing = scoreMap.get(review.targetId) || { total: 0, count: 0 };
+    existing.total += review.avgScore;
+    existing.count += 1;
+    scoreMap.set(review.targetId, existing);
+  }
+
+  // Build entries for ALL employees (even those with 0 reviews)
+  const entries: LeaderboardEntry[] = allUsers.map((user) => {
+    const data = scoreMap.get(user.id);
+    return {
+      userId: user.id,
+      userName: user.name,
+      userAvatar: user.avatar,
+      role: user.role,
+      totalScore: data ? Math.round(data.total * 100) / 100 : 0,
+      avgScore: data ? Math.round((data.total / data.count) * 100) / 100 : 0,
+      reviewCount: data ? data.count : 0,
+      rank: 0,
+    };
+  });
+
+  // Sort by avgScore descending, then by reviewCount descending
+  entries.sort((a, b) => {
+    if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
+    return b.reviewCount - a.reviewCount;
+  });
+
+  // Assign ranks
+  entries.forEach((entry, idx) => {
+    entry.rank = idx + 1;
+  });
+
+  return entries;
+}
+
+// ─── Star Rating Component ───
+const StarRating: React.FC<{
+  value: number;
+  onChange?: (stars: number) => void;
+  max?: number;
+  size?: 'sm' | 'md' | 'lg';
+  readonly?: boolean;
+}> = ({ value, onChange, max = 5, size = 'md', readonly = false }) => {
+  const sizeClasses = {
+    sm: 'text-lg',
+    md: 'text-2xl',
+    lg: 'text-3xl',
+  };
+
+  return (
+    <div className="flex items-center gap-0.5">
+      {Array.from({ length: max }, (_, i) => i + 1).map((star) => (
+        <button
+          key={star}
+          type="button"
+          disabled={readonly}
+          onClick={() => onChange?.(star)}
+          className={`${sizeClasses[size]} transition-all ${
+            readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'
+          } ${
+            star <= value
+              ? 'text-[#EFC14B]'
+              : 'text-[#E8DFD0]'
+          }`}
+        >
+          <span className="material-symbols-outlined" style={{ fontVariationSettings: star <= value ? "'FILL' 1" : "'FILL' 0" }}>
+            star
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// ─── Main Component ───
 export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
   currentUser,
   allUsers,
   peerReviews,
   onSubmitReview,
 }) => {
-  // Employee view state
-  const [selectedTarget, setSelectedTarget] = useState<string>('');
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [comment, setComment] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [successMessage, setSuccessMessage] = useState('');
-  const [showForm, setShowForm] = useState(false);
-
-  // Manager view state
-  const [filterTarget, setFilterTarget] = useState<string>('all');
-  const [filterEvaluator, setFilterEvaluator] = useState<string>('all');
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
-  const [filterDateTo, setFilterDateTo] = useState<string>('');
-  const [selectedReview, setSelectedReview] = useState<PeerReviewSubmission | null>(null);
-
   const isManager = currentUser.role === 'manager';
 
-  // Get list of employees (excluding current user) for employee view
+  // Tab state: employees get [Đánh giá, Xếp hạng], managers get [Xếp hạng, Lịch sử]
+  const [activeTab, setActiveTab] = useState<'review' | 'leaderboard' | 'history'>(
+    isManager ? 'leaderboard' : 'review'
+  );
+
+  // Review form state
+  const [reviewTargets, setReviewTargets] = useState<
+    { userId: string; answers: Record<string, number>; comment: string }[]
+  >([]);
+  const [selectedNewTarget, setSelectedNewTarget] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // History filter state (manager only)
+  const [filterTarget, setFilterTarget] = useState('all');
+  const [filterEvaluator, setFilterEvaluator] = useState('all');
+  const [selectedReview, setSelectedReview] = useState<PeerReviewSubmission | null>(null);
+
+  // Current month key
+  const currentMonthKey = useMemo(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  // Check if current user has already reviewed a specific target this month
+  const getMonthlyReviewStatus = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const review of peerReviews) {
+      if (review.evaluatorId === currentUser.id && review.monthKey === currentMonthKey) {
+        map.set(review.targetId, true);
+      }
+    }
+    return map;
+  }, [peerReviews, currentUser.id, currentMonthKey]);
+
+  // Available targets (excluding self and already-reviewed this month)
   const availableTargets = useMemo(() => {
-    return allUsers.filter((u) => u.id !== currentUser.id);
-  }, [allUsers, currentUser.id]);
-
-  // Check if current employee has already reviewed someone today
-  const hasReviewedToday = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    return peerReviews.some(
-      (r) => r.evaluatorId === currentUser.id && r.dateString === today
+    return allUsers.filter(
+      (u) => u.id !== currentUser.id && !getMonthlyReviewStatus.has(u.id)
     );
-  }, [peerReviews, currentUser.id]);
+  }, [allUsers, currentUser.id, getMonthlyReviewStatus]);
 
-  // Filter reviews for manager view
+  // Leaderboard
+  const leaderboard = useMemo(() => {
+    return computeLeaderboard(peerReviews, allUsers, currentMonthKey);
+  }, [peerReviews, allUsers, currentMonthKey]);
+
+  // My rank
+  const myRank = useMemo(() => {
+    return leaderboard.find((e) => e.userId === currentUser.id);
+  }, [leaderboard, currentUser.id]);
+
+  // Filtered reviews for manager
   const filteredReviews = useMemo(() => {
     if (!isManager) return [];
-
-    return peerReviews.filter((review) => {
-      // Filter by target employee
-      if (filterTarget !== 'all' && review.targetId !== filterTarget) return false;
-
-      // Filter by evaluator
-      if (filterEvaluator !== 'all' && review.evaluatorId !== filterEvaluator) return false;
-
-      // Filter by date range
-      if (filterDateFrom && review.dateString < filterDateFrom) return false;
-      if (filterDateTo && review.dateString > filterDateTo) return false;
-
+    return peerReviews.filter((r) => {
+      if (filterTarget !== 'all' && r.targetId !== filterTarget) return false;
+      if (filterEvaluator !== 'all' && r.evaluatorId !== filterEvaluator) return false;
       return true;
-    });
-  }, [peerReviews, isManager, filterTarget, filterEvaluator, filterDateFrom, filterDateTo]);
+    }).sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  }, [peerReviews, isManager, filterTarget, filterEvaluator]);
 
-  // Get unique evaluators and targets for filter dropdowns
+  // Unique evaluators & targets for filters
   const uniqueEvaluators = useMemo(() => {
     const ids = new Set(peerReviews.map((r) => r.evaluatorId));
     return allUsers.filter((u) => ids.has(u.id));
@@ -75,86 +177,121 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
     return allUsers.filter((u) => ids.has(u.id));
   }, [peerReviews, allUsers]);
 
-  const handleAnswerChange = (criteriaId: string, answer: string) => {
-    setAnswers((prev) => ({ ...prev, [criteriaId]: answer }));
+  // All targets (including already reviewed) for history filter
+  const allTargets = useMemo(() => {
+    return allUsers.filter((u) => u.id !== currentUser.id);
+  }, [allUsers, currentUser.id]);
+
+  // ─── Handlers ───
+  const handleAddTarget = () => {
+    if (!selectedNewTarget) return;
+    if (reviewTargets.some((t) => t.userId === selectedNewTarget)) return;
+
+    setReviewTargets((prev) => [
+      ...prev,
+      { userId: selectedNewTarget, answers: {}, comment: '' },
+    ]);
+    setSelectedNewTarget('');
   };
 
-  const handleSubmit = () => {
-    if (!selectedTarget) return;
-    if (Object.keys(answers).length < PEER_REVIEW_CRITERIA.length) return;
+  const handleRemoveTarget = (userId: string) => {
+    setReviewTargets((prev) => prev.filter((t) => t.userId !== userId));
+  };
+
+  const handleStarChange = (userId: string, criteriaId: string, stars: number) => {
+    setReviewTargets((prev) =>
+      prev.map((t) =>
+        t.userId === userId
+          ? { ...t, answers: { ...t.answers, [criteriaId]: stars } }
+          : t
+      )
+    );
+  };
+
+  const handleCommentChange = (userId: string, comment: string) => {
+    setReviewTargets((prev) =>
+      prev.map((t) => (t.userId === userId ? { ...t, comment } : t))
+    );
+  };
+
+  const handleSubmitAll = () => {
+    // Validate all targets have all criteria answered
+    const allComplete = reviewTargets.every(
+      (t) => Object.keys(t.answers).length === PEER_REVIEW_CRITERIA.length
+    );
+    if (!allComplete) return;
 
     setIsSubmitting(true);
 
-    const targetUser = allUsers.find((u) => u.id === selectedTarget);
-    if (!targetUser) return;
-
     const now = new Date();
-    const submission: PeerReviewSubmission = {
-      id: `pr-${Date.now()}`,
-      evaluatorId: currentUser.id,
-      evaluatorName: currentUser.name,
-      evaluatorAvatar: currentUser.avatar,
-      targetId: selectedTarget,
-      targetName: targetUser.name,
-      targetAvatar: targetUser.avatar,
-      answers: PEER_REVIEW_CRITERIA.map((c) => ({
+    const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Submit each target as a separate PeerReviewSubmission
+    for (const target of reviewTargets) {
+      const targetUser = allUsers.find((u) => u.id === target.userId);
+      if (!targetUser) continue;
+
+      const answers = PEER_REVIEW_CRITERIA.map((c) => ({
         criteriaId: c.id,
-        answer: answers[c.id] || '',
-      })),
-      comment: comment.trim() || undefined,
-      submittedAt: now.toISOString(),
-      dateString: now.toISOString().split('T')[0],
-    };
+        stars: target.answers[c.id] || 0,
+      }));
+
+      const totalScore = answers.reduce((sum, a) => sum + a.stars, 0);
+      const avgScore = Math.round((totalScore / answers.length) * 100) / 100;
+
+      const submission: PeerReviewSubmission = {
+        id: `pr-${Date.now()}-${target.userId}`,
+        evaluatorId: currentUser.id,
+        evaluatorName: currentUser.name,
+        evaluatorAvatar: currentUser.avatar,
+        targetId: target.userId,
+        targetName: targetUser.name,
+        targetAvatar: targetUser.avatar,
+        answers,
+        totalScore,
+        avgScore,
+        comment: target.comment.trim() || undefined,
+        submittedAt: now.toISOString(),
+        dateString: now.toISOString().split('T')[0],
+        monthKey,
+      };
+
+      onSubmitReview(submission);
+    }
 
     setTimeout(() => {
-      onSubmitReview(submission);
       setIsSubmitting(false);
-      setSuccessMessage('Gửi đánh giá thành công!');
-      setSelectedTarget('');
-      setAnswers({});
-      setComment('');
-      setShowForm(false);
+      setReviewTargets([]);
+      setSuccessMessage(`Đã gửi đánh giá cho ${reviewTargets.length} đồng nghiệp!`);
       setTimeout(() => setSuccessMessage(''), 3000);
     }, 600);
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
       day: 'numeric',
       month: 'numeric',
       year: 'numeric',
     });
   };
 
-  const getScoreSummary = (answers: { criteriaId: string; answer: string }[]) => {
-    const goodCount = answers.filter(
-      (a) => a.answer === 'Rất tốt' || a.answer === 'Xuất sắc' || a.answer === 'Luôn tuân thủ'
-    ).length;
-    return `${goodCount}/${answers.length}`;
+  const getMonthLabel = (key: string) => {
+    const [y, m] = key.split('-');
+    const months = ['Th 1', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7', 'Th 8', 'Th 9', 'Th 10', 'Th 11', 'Th 12'];
+    return `${months[parseInt(m) - 1]} ${y}`;
   };
 
+  // ─── Render ───
   return (
     <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đánh giá chéo</h2>
-          <p className="text-xs text-[#7A829A] mt-0.5">
-            {isManager
-              ? 'Xem tổng hợp kết quả đánh giá chéo của tất cả nhân viên'
-              : 'Đánh giá đồng nghiệp và đóng góp ý kiến xây dựng'}
-          </p>
-        </div>
-        {!isManager && !hasReviewedToday && !showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-[#0F1E44] text-white rounded-xl text-sm font-semibold shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all"
-          >
-            <span className="material-symbols-outlined text-[20px]">rate_review</span>
-            <span>Đánh giá mới</span>
-          </button>
-        )}
+      <div className="mb-5">
+        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Peer Review</h2>
+        <p className="text-xs text-[#7A829A] mt-0.5">
+          {isManager
+            ? 'Xem bảng xếp hạng và lịch sử đánh giá chéo'
+            : 'Đánh giá đồng nghiệp và theo dõi xếp hạng'}
+        </p>
       </div>
 
       {/* Success Message */}
@@ -165,127 +302,215 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
         </div>
       )}
 
-      {/* Employee View */}
-      {!isManager && (
-        <>
-          {/* Already reviewed today notice */}
-          {hasReviewedToday && !showForm && (
-            <div className="bg-[#EFC14B]/15 border border-[#EFC14B]/30 rounded-2xl p-5 text-center mb-6">
-              <span className="material-symbols-outlined text-4xl text-[#EFC14B] mb-2 block">check_circle</span>
-              <h3 className="font-heading font-bold text-[#0F1E44] mb-1">Đã đánh giá hôm nay</h3>
-              <p className="text-xs text-[#7A829A]">Bạn đã gửi đánh giá chéo cho hôm nay. Hãy quay lại vào ngày mai!</p>
+      {/* Tab Navigation */}
+      <div className="flex gap-2 mb-5 bg-[#F5EDDF] rounded-xl p-1">
+        {isManager ? (
+          <>
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'leaderboard'
+                  ? 'bg-[#0F1E44] text-white shadow-sm'
+                  : 'text-[#7A829A] hover:text-[#0F1E44]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] align-middle mr-1">leaderboard</span>
+              Xếp hạng
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'history'
+                  ? 'bg-[#0F1E44] text-white shadow-sm'
+                  : 'text-[#7A829A] hover:text-[#0F1E44]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] align-middle mr-1">history</span>
+              Lịch sử
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => setActiveTab('review')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'review'
+                  ? 'bg-[#0F1E44] text-white shadow-sm'
+                  : 'text-[#7A829A] hover:text-[#0F1E44]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] align-middle mr-1">rate_review</span>
+              Đánh giá
+            </button>
+            <button
+              onClick={() => setActiveTab('leaderboard')}
+              className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'leaderboard'
+                  ? 'bg-[#0F1E44] text-white shadow-sm'
+                  : 'text-[#7A829A] hover:text-[#0F1E44]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] align-middle mr-1">leaderboard</span>
+              Xếp hạng
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* TAB: REVIEW FORM (Employee only)                    */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {activeTab === 'review' && !isManager && (
+        <div className="space-y-4">
+          {/* My rank badge */}
+          {myRank && myRank.reviewCount > 0 && (
+            <div className="bg-gradient-to-r from-[#EFC14B]/20 to-[#EFC14B]/5 border border-[#EFC14B]/30 rounded-2xl p-4 flex items-center gap-4">
+              <div className="w-12 h-12 bg-[#EFC14B]/30 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-xl font-heading font-bold text-[#0F1E44]">#{myRank.rank}</span>
+              </div>
+              <div>
+                <p className="text-sm font-bold text-[#0F1E44]">Xếp hạng của bạn</p>
+                <p className="text-xs text-[#7A829A]">
+                  Điểm TB: {myRank.avgScore.toFixed(1)} ★ · {myRank.reviewCount} đánh giá
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Evaluation Form */}
-          {showForm && (
-            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-5 shadow-sm mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Đánh giá đồng nghiệp</h3>
-                <button
-                  onClick={() => {
-                    setShowForm(false);
-                    setSelectedTarget('');
-                    setAnswers({});
-                    setComment('');
-                  }}
-                  className="text-[#7A829A] hover:text-[#0F1E44]"
-                >
-                  <span className="material-symbols-outlined">close</span>
-                </button>
-              </div>
-
-              {/* Select target employee */}
-              <div className="mb-5">
-                <label className="block text-sm font-semibold text-[#0F1E44] mb-2">Chọn đồng nghiệp đánh giá</label>
+          {/* Add target selector */}
+          {availableTargets.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm">
+              <h3 className="text-sm font-bold text-[#0F1E44] mb-3">Thêm đồng nghiệp đánh giá</h3>
+              <div className="flex gap-2">
                 <select
-                  value={selectedTarget}
-                  onChange={(e) => setSelectedTarget(e.target.value)}
-                  className="w-full rounded-xl border border-[#E8DFD0] bg-white px-4 py-3 text-sm text-[#0F1E44] focus:border-[#EFC14B] focus:ring-1 focus:ring-[#EFC14B] outline-none"
+                  value={selectedNewTarget}
+                  onChange={(e) => setSelectedNewTarget(e.target.value)}
+                  className="flex-1 rounded-xl border border-[#E8DFD0] bg-white px-3 py-2.5 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none"
                 >
                   <option value="">-- Chọn đồng nghiệp --</option>
-                  {availableTargets.map((user) => (
-                    <option key={user.id} value={user.id}>
-                      {user.name} - {user.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
+                  {availableTargets.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
                     </option>
                   ))}
                 </select>
-              </div>
-
-              {/* Evaluation criteria */}
-              {selectedTarget && (
-                <div className="space-y-4 mb-5">
-                  <h4 className="text-sm font-bold text-[#0F1E44]">Tiêu chí đánh giá</h4>
-                  {PEER_REVIEW_CRITERIA.map((criteria) => (
-                    <div key={criteria.id} className="bg-[#FDF8EE] rounded-xl p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <p className="text-sm font-semibold text-[#0F1E44]">{criteria.question}</p>
-                          <p className="text-[10px] text-[#7A829A] uppercase tracking-wider">{criteria.category}</p>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {criteria.options.map((option) => (
-                          <button
-                            key={option}
-                            onClick={() => handleAnswerChange(criteria.id, option)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                              answers[criteria.id] === option
-                                ? 'bg-[#0F1E44] text-white shadow-sm'
-                                : 'bg-white text-[#3D4663] border border-[#E8DFD0] hover:border-[#EFC14B]'
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Comment */}
-              {selectedTarget && (
-                <div className="mb-5">
-                  <label className="block text-sm font-semibold text-[#0F1E44] mb-2">
-                    Nhận xét thêm <span className="text-[#7A829A] font-normal">(tùy chọn)</span>
-                  </label>
-                  <textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Chia sẻ thêm nhận xét về đồng nghiệp..."
-                    rows={3}
-                    className="w-full rounded-xl border border-[#E8DFD0] bg-white px-4 py-3 text-sm text-[#0F1E44] placeholder:text-[#7A829A] focus:border-[#EFC14B] focus:ring-1 focus:ring-[#EFC14B] outline-none resize-none"
-                  />
-                </div>
-              )}
-
-              {/* Submit button */}
-              {selectedTarget && (
                 <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || Object.keys(answers).length < PEER_REVIEW_CRITERIA.length}
-                  className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleAddTarget}
+                  disabled={!selectedNewTarget}
+                  className="px-4 py-2.5 bg-[#0F1E44] text-white rounded-xl text-sm font-semibold hover:bg-[#1A2D5A] disabled:opacity-40 transition-all"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Đang gửi...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[20px]">send</span>
-                      <span>Gửi đánh giá ({Object.keys(answers).length}/{PEER_REVIEW_CRITERIA.length})</span>
-                    </>
-                  )}
+                  <span className="material-symbols-outlined text-[18px]">add</span>
                 </button>
-              )}
+              </div>
             </div>
           )}
 
-          {/* Evaluation Criteria Preview */}
-          {!showForm && !hasReviewedToday && (
-            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-5 shadow-sm mb-6">
+          {/* No more targets available */}
+          {availableTargets.length === 0 && reviewTargets.length === 0 && (
+            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-8 text-center">
+              <span className="material-symbols-outlined text-5xl text-[#EFC14B] mb-3 block">check_circle</span>
+              <h3 className="font-heading font-bold text-[#0F1E44] mb-1">Đã đánh giá hết tháng này</h3>
+              <p className="text-xs text-[#7A829A]">
+                Bạn đã đánh giá tất cả đồng nghiệp trong tháng {getMonthLabel(currentMonthKey)}.
+              </p>
+            </div>
+          )}
+
+          {/* Review target cards */}
+          {reviewTargets.map((target) => {
+            const targetUser = allUsers.find((u) => u.id === target.userId);
+            if (!targetUser) return null;
+            const answeredCount = Object.keys(target.answers).length;
+            const allAnswered = answeredCount === PEER_REVIEW_CRITERIA.length;
+
+            return (
+              <div key={target.userId} className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm">
+                {/* Target header */}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={targetUser.avatar}
+                      alt={targetUser.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-[#EFC14B]"
+                    />
+                    <div>
+                      <h4 className="text-sm font-bold text-[#0F1E44]">{targetUser.name}</h4>
+                      <p className="text-[10px] text-[#7A829A]">{targetUser.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveTarget(target.userId)}
+                    className="text-[#FF3131] hover:bg-[#FF3131]/10 p-1.5 rounded-lg transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+
+                {/* Star criteria */}
+                <div className="space-y-3 mb-4">
+                  {PEER_REVIEW_CRITERIA.map((criteria) => (
+                    <div key={criteria.id} className="bg-[#FDF8EE] rounded-xl p-3">
+                      <p className="text-sm font-semibold text-[#0F1E44] mb-1">{criteria.question}</p>
+                      <p className="text-[10px] text-[#7A829A] uppercase tracking-wider mb-2">{criteria.category}</p>
+                      <StarRating
+                        value={target.answers[criteria.id] || 0}
+                        onChange={(stars) => handleStarChange(target.userId, criteria.id, stars)}
+                        size="md"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Comment */}
+                <div className="mb-3">
+                  <textarea
+                    value={target.comment}
+                    onChange={(e) => handleCommentChange(target.userId, e.target.value)}
+                    placeholder="Nhận xét thêm (tùy chọn)..."
+                    rows={2}
+                    className="w-full rounded-xl border border-[#E8DFD0] bg-white px-3 py-2.5 text-sm text-[#0F1E44] placeholder:text-[#7A829A] focus:border-[#EFC14B] outline-none resize-none"
+                  />
+                </div>
+
+                {/* Completion indicator */}
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-semibold ${allAnswered ? 'text-[#4CAF72]' : 'text-[#7A829A]'}`}>
+                    {allAnswered ? '✓ Đầy đủ' : `${answeredCount}/${PEER_REVIEW_CRITERIA.length} tiêu chí`}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Submit all button */}
+          {reviewTargets.length > 0 && (
+            <button
+              onClick={handleSubmitAll}
+              disabled={
+                isSubmitting ||
+                !reviewTargets.every(
+                  (t) => Object.keys(t.answers).length === PEER_REVIEW_CRITERIA.length
+                )
+              }
+              className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Đang gửi...</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[20px]">send</span>
+                  <span>Gửi đánh giá ({reviewTargets.length} người)</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Criteria preview (when no targets added yet) */}
+          {reviewTargets.length === 0 && availableTargets.length > 0 && (
+            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-5 shadow-sm">
               <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-3">Tiêu chí đánh giá</h3>
               <div className="space-y-3">
                 {PEER_REVIEW_CRITERIA.map((criteria, idx) => (
@@ -297,11 +522,14 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                       <p className="text-sm font-semibold text-[#0F1E44]">{criteria.question}</p>
                       <p className="text-[10px] text-[#7A829A] uppercase tracking-wider">{criteria.category}</p>
                     </div>
+                    <div className="text-[#EFC14B]">
+                      <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                    </div>
                   </div>
                 ))}
               </div>
               <p className="text-xs text-[#7A829A] mt-4 text-center">
-                Nhấn "Đánh giá mới" để bắt đầu đánh giá đồng nghiệp
+                Đánh giá từ 1-5 sao cho mỗi tiêu chí. Chọn đồng nghiệp ở trên để bắt đầu.
               </p>
             </div>
           )}
@@ -312,49 +540,163 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             <div>
               <h4 className="text-sm font-bold text-[#0F1E44] mb-1">Bảo mật đánh giá</h4>
               <p className="text-xs text-[#7A829A]">
-                Kết quả đánh giá chéo được bảo mật. Bạn KHÔNG xem được đánh giá của người khác về mình hoặc về người khác.
-                Chỉ quản lý mới có quyền xem tổng hợp.
+                Bạn được đánh giá tối đa 1 lần mỗi người trong tháng.
+                Kết quả được bảo mật — chỉ quản lý xem được chi tiết.
               </p>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* Manager View */}
-      {isManager && (
-        <>
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* TAB: LEADERBOARD (Both roles)                       */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {activeTab === 'leaderboard' && (
+        <div className="space-y-4">
+          {/* Month label */}
+          <div className="text-center mb-2">
+            <span className="inline-block px-3 py-1 bg-[#EFC14B]/15 text-[#0F1E44] text-xs font-bold rounded-full">
+              {getMonthLabel(currentMonthKey)}
+            </span>
+          </div>
+
+          {/* Leaderboard */}
+          {leaderboard.filter((e) => e.reviewCount > 0).length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E8DFD0] p-10 text-center">
+              <span className="material-symbols-outlined text-5xl text-[#E8DFD0] mb-3 block">leaderboard</span>
+              <h3 className="font-heading font-bold text-base text-[#0F1E44] mb-1">Chưa có dữ liệu</h3>
+              <p className="text-xs text-[#7A829A]">Chưa có đánh giá nào trong tháng này.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {leaderboard
+                .filter((e) => e.reviewCount > 0)
+                .map((entry, idx) => {
+                  const isMe = entry.userId === currentUser.id;
+                  const rankColors = ['bg-[#EFC14B] text-[#0F1E44]', 'bg-[#C0C0C0] text-[#333]', 'bg-[#CD7F32] text-white'];
+                  const rankBg = idx < 3 ? rankColors[idx] : 'bg-[#F5EDDF] text-[#7A829A]';
+
+                  return (
+                    <div
+                      key={entry.userId}
+                      className={`bg-white rounded-2xl border p-4 flex items-center gap-3 transition-all ${
+                        isMe ? 'border-[#EFC14B] shadow-golden' : 'border-[#E8DFD0] shadow-sm'
+                      }`}
+                    >
+                      {/* Rank badge */}
+                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-heading font-bold text-sm ${rankBg}`}>
+                        {entry.rank}
+                      </div>
+
+                      {/* Avatar */}
+                      <img
+                        src={entry.userAvatar}
+                        alt={entry.userName}
+                        className="w-10 h-10 rounded-full object-cover border border-[#E8DFD0]"
+                      />
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold truncate ${isMe ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
+                          {entry.userName} {isMe && '(Bạn)'}
+                        </p>
+                        <p className="text-[10px] text-[#7A829A]">
+                          {entry.reviewCount} đánh giá · {entry.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
+                        </p>
+                      </div>
+
+                      {/* Score */}
+                      <div className="text-right flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[#EFC14B] text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          <span className="text-lg font-heading font-bold text-[#0F1E44]">{entry.avgScore.toFixed(1)}</span>
+                        </div>
+                        <p className="text-[10px] text-[#7A829A]">điểm TB</p>
+                      </div>
+                    </div>
+                  );
+                })}
+
+              {/* Employees with 0 reviews */}
+              {leaderboard.filter((e) => e.reviewCount === 0).length > 0 && (
+                <>
+                  <div className="flex items-center gap-2 py-2">
+                    <div className="flex-1 h-px bg-[#E8DFD0]" />
+                    <span className="text-[10px] text-[#7A829A] font-semibold">Chưa có đánh giá</span>
+                    <div className="flex-1 h-px bg-[#E8DFD0]" />
+                  </div>
+                  {leaderboard
+                    .filter((e) => e.reviewCount === 0)
+                    .map((entry) => {
+                      const isMe = entry.userId === currentUser.id;
+                      return (
+                        <div
+                          key={entry.userId}
+                          className={`bg-white/60 rounded-2xl border border-[#E8DFD0]/50 p-3 flex items-center gap-3 opacity-60 ${
+                            isMe ? 'border-[#EFC14B]/50' : ''
+                          }`}
+                        >
+                          <div className="w-9 h-9 rounded-full bg-[#F5EDDF] flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-[#7A829A] text-[16px]">person</span>
+                          </div>
+                          <img
+                            src={entry.userAvatar}
+                            alt={entry.userName}
+                            className="w-8 h-8 rounded-full object-cover border border-[#E8DFD0]"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[#7A829A] truncate">
+                              {entry.userName} {isMe && '(Bạn)'}
+                            </p>
+                          </div>
+                          <span className="text-xs text-[#7A829A]">—</span>
+                        </div>
+                      );
+                    })}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* TAB: HISTORY (Manager only)                         */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {activeTab === 'history' && isManager && (
+        <div className="space-y-4">
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="bg-white rounded-xl p-4 border border-[#E8DFD0] text-center">
-              <p className="text-2xl font-heading font-bold text-[#0F1E44]">{peerReviews.length}</p>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#0F1E44]">{peerReviews.length}</p>
               <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Tổng đánh giá</p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-[#E8DFD0] text-center">
-              <p className="text-2xl font-heading font-bold text-[#EFC14B]">{uniqueTargets.length}</p>
-              <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Nhân viên được đánh giá</p>
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#EFC14B]">{uniqueTargets.length}</p>
+              <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Được đánh giá</p>
             </div>
-            <div className="bg-white rounded-xl p-4 border border-[#E8DFD0] text-center">
-              <p className="text-2xl font-heading font-bold text-[#4CAF72]">{uniqueEvaluators.length}</p>
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#4CAF72]">{uniqueEvaluators.length}</p>
               <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Người đánh giá</p>
             </div>
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm mb-5">
+          <div className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-3">
               <span className="material-symbols-outlined text-[#EFC14B] text-xl">filter_list</span>
               <h3 className="text-sm font-bold text-[#0F1E44]">Bộ lọc</h3>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-[#7A829A] mb-1">Nhân viên được đánh giá</label>
+                <label className="block text-xs font-semibold text-[#7A829A] mb-1">Được đánh giá</label>
                 <select
                   value={filterTarget}
                   onChange={(e) => setFilterTarget(e.target.value)}
                   className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
                 >
                   <option value="all">Tất cả</option>
-                  {uniqueTargets.map((u) => (
+                  {allTargets.map((u) => (
                     <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
@@ -372,33 +714,10 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#7A829A] mb-1">Từ ngày</label>
-                <input
-                  type="date"
-                  value={filterDateFrom}
-                  onChange={(e) => setFilterDateFrom(e.target.value)}
-                  className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-[#7A829A] mb-1">Đến ngày</label>
-                <input
-                  type="date"
-                  value={filterDateTo}
-                  onChange={(e) => setFilterDateTo(e.target.value)}
-                  className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
-                />
-              </div>
             </div>
-            {(filterTarget !== 'all' || filterEvaluator !== 'all' || filterDateFrom || filterDateTo) && (
+            {(filterTarget !== 'all' || filterEvaluator !== 'all') && (
               <button
-                onClick={() => {
-                  setFilterTarget('all');
-                  setFilterEvaluator('all');
-                  setFilterDateFrom('');
-                  setFilterDateTo('');
-                }}
+                onClick={() => { setFilterTarget('all'); setFilterEvaluator('all'); }}
                 className="mt-3 text-xs font-semibold text-[#EFC14B] hover:underline"
               >
                 Xóa bộ lọc
@@ -406,13 +725,13 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             )}
           </div>
 
-          {/* Reviews List */}
+          {/* Reviews list */}
           <div className="space-y-3">
             {filteredReviews.length === 0 ? (
               <div className="bg-white border border-[#E8DFD0]/50 rounded-2xl p-10 text-center">
-                <span className="material-symbols-outlined text-5xl text-[#E8DFD0] mb-3">rate_review</span>
-                <h3 className="font-heading font-bold text-base text-[#0F1E44] mb-1">Chưa có đánh giá nào</h3>
-                <p className="text-xs text-[#7A829A]">Không tìm thấy đánh giá chéo phù hợp với bộ lọc.</p>
+                <span className="material-symbols-outlined text-5xl text-[#E8DFD0] mb-3 block">rate_review</span>
+                <h3 className="font-heading font-bold text-base text-[#0F1E44] mb-1">Chưa có đánh giá</h3>
+                <p className="text-xs text-[#7A829A]">Không tìm thấy đánh giá phù hợp với bộ lọc.</p>
               </div>
             ) : (
               filteredReviews.map((review) => (
@@ -421,22 +740,14 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                   onClick={() => setSelectedReview(review)}
                   className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm hover:shadow-navy transition-all cursor-pointer"
                 >
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-3">
                       <div className="flex items-center -space-x-2">
-                        <img
-                          src={review.evaluatorAvatar}
-                          alt={review.evaluatorName}
-                          className="w-8 h-8 rounded-full border-2 border-white object-cover"
-                        />
+                        <img src={review.evaluatorAvatar} alt={review.evaluatorName} className="w-8 h-8 rounded-full border-2 border-white object-cover" />
                         <div className="w-6 h-6 bg-[#EFC14B] rounded-full flex items-center justify-center z-10">
                           <span className="material-symbols-outlined text-[10px] text-[#0F1E44]">arrow_forward</span>
                         </div>
-                        <img
-                          src={review.targetAvatar}
-                          alt={review.targetName}
-                          className="w-8 h-8 rounded-full border-2 border-white object-cover"
-                        />
+                        <img src={review.targetAvatar} alt={review.targetName} className="w-8 h-8 rounded-full border-2 border-white object-cover" />
                       </div>
                       <div>
                         <p className="text-xs text-[#7A829A]">
@@ -448,21 +759,23 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 bg-[#EFC14B]/15 px-2 py-1 rounded-full">
-                      <span className="material-symbols-outlined text-[12px] text-[#EFC14B]">star</span>
-                      <span className="text-xs font-bold text-[#0F1E44]">{getScoreSummary(review.answers)}</span>
+                      <span className="material-symbols-outlined text-[12px] text-[#EFC14B]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                      <span className="text-xs font-bold text-[#0F1E44]">{review.avgScore.toFixed(1)}</span>
                     </div>
                   </div>
                   {review.comment && (
-                    <p className="text-xs text-[#7A829A] bg-[#FDF8EE] rounded-lg px-3 py-2">"{review.comment}"</p>
+                    <p className="text-xs text-[#7A829A] bg-[#FDF8EE] rounded-lg px-3 py-2 mt-2">"{review.comment}"</p>
                   )}
                 </div>
               ))
             )}
           </div>
-        </>
+        </div>
       )}
 
-      {/* Review Detail Modal (Manager only) */}
+      {/* ═══════════════════════════════════════════════════ */}
+      {/* REVIEW DETAIL MODAL (Manager only)                  */}
+      {/* ═══════════════════════════════════════════════════ */}
       {selectedReview && isManager && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-lg border border-[#E8DFD0]">
@@ -470,28 +783,17 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             <div className="p-5 border-b border-[#F5EDDF]">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Chi tiết đánh giá</h3>
-                <button
-                  onClick={() => setSelectedReview(null)}
-                  className="text-[#7A829A] hover:text-[#0F1E44]"
-                >
+                <button onClick={() => setSelectedReview(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center -space-x-2">
-                  <img
-                    src={selectedReview.evaluatorAvatar}
-                    alt={selectedReview.evaluatorName}
-                    className="w-10 h-10 rounded-full border-2 border-white object-cover"
-                  />
+                  <img src={selectedReview.evaluatorAvatar} alt={selectedReview.evaluatorName} className="w-10 h-10 rounded-full border-2 border-white object-cover" />
                   <div className="w-7 h-7 bg-[#EFC14B] rounded-full flex items-center justify-center z-10">
                     <span className="material-symbols-outlined text-[12px] text-[#0F1E44]">arrow_forward</span>
                   </div>
-                  <img
-                    src={selectedReview.targetAvatar}
-                    alt={selectedReview.targetName}
-                    className="w-10 h-10 rounded-full border-2 border-white object-cover"
-                  />
+                  <img src={selectedReview.targetAvatar} alt={selectedReview.targetName} className="w-10 h-10 rounded-full border-2 border-white object-cover" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[#0F1E44]">
@@ -499,6 +801,11 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                   </p>
                   <p className="text-xs text-[#7A829A]">{formatDate(selectedReview.dateString)}</p>
                 </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <span className="text-xs font-bold text-[#7A829A]">Tổng điểm:</span>
+                <StarRating value={Math.round(selectedReview.avgScore)} readonly size="sm" />
+                <span className="text-sm font-heading font-bold text-[#0F1E44]">{selectedReview.avgScore.toFixed(1)}</span>
               </div>
             </div>
 
@@ -508,28 +815,16 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                 const answer = selectedReview.answers.find((a) => a.criteriaId === criteria.id);
                 return (
                   <div key={criteria.id} className="bg-[#FDF8EE] rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-semibold text-[#0F1E44]">{criteria.question}</p>
-                        <p className="text-[10px] text-[#7A829A]">{criteria.category}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-lg text-xs font-bold ${
-                        answer?.answer === 'Rất tốt' || answer?.answer === 'Xuất sắc' || answer?.answer === 'Luôn tuân thủ'
-                          ? 'bg-[#4CAF72]/15 text-[#4CAF72]'
-                          : answer?.answer === 'Tốt' || answer?.answer === 'Đạt yêu cầu' || answer?.answer === 'Thường tuân thủ'
-                          ? 'bg-[#EFC14B]/20 text-[#D4A833]'
-                          : 'bg-[#FF3131]/10 text-[#FF3131]'
-                      }`}>
-                        {answer?.answer || 'Chưa trả lời'}
-                      </span>
-                    </div>
+                    <p className="text-xs font-semibold text-[#0F1E44] mb-1">{criteria.question}</p>
+                    <p className="text-[10px] text-[#7A829A] uppercase tracking-wider mb-2">{criteria.category}</p>
+                    <StarRating value={answer?.stars || 0} readonly size="sm" />
                   </div>
                 );
               })}
 
               {selectedReview.comment && (
                 <div className="bg-[#EFC14B]/10 border border-[#EFC14B]/30 rounded-xl p-3">
-                  <p className="text-xs font-semibold text-[#0F1E44] mb-1">Nhận xét thêm:</p>
+                  <p className="text-xs font-semibold text-[#0F1E44] mb-1">Nhận xét:</p>
                   <p className="text-sm text-[#3D4663] italic">"{selectedReview.comment}"</p>
                 </div>
               )}

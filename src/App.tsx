@@ -289,7 +289,7 @@ export default function App() {
   // ─── Peer review ───
   const handleSubmitPeerReview = (submission: PeerReviewSubmission) => {
     setPeerReviews(prev => [submission, ...prev]);
-    addToast('success', 'Đã gửi đánh giá chéo', 'Đánh giá của bạn đã được ghi nhận thành công');
+    // Toast handled by PeerReviewScreen itself
   };
 
   // ─── Shift management ───
