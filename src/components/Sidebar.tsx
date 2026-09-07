@@ -22,6 +22,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
+    if (pathname.includes('/shift-registration')) return 'shift_registration';
     if (pathname.includes('/profile')) return 'profile';
     return 'home';
   };
@@ -35,6 +36,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : []),
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
+    ...(currentUser.role !== 'manager'
+      ? [{ id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' }]
+      : []),
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 

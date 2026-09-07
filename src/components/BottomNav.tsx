@@ -21,6 +21,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
+    if (pathname.includes('/shift-registration')) return 'shift_registration';
     if (pathname.includes('/profile')) return 'profile';
     return 'home';
   };
@@ -32,6 +33,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
+    { id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' },
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
