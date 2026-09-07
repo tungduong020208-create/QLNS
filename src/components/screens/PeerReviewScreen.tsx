@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { User, PeerReviewCriteria, PeerReviewSubmission, LeaderboardEntry } from '../../types';
+import { User, PeerReviewSubmission, LeaderboardEntry } from '../../types';
 import { PEER_REVIEW_CRITERIA } from '../../data/peerReviewData';
 
 interface PeerReviewScreenProps {
@@ -7,15 +7,15 @@ interface PeerReviewScreenProps {
   allUsers: User[];
   peerReviews: PeerReviewSubmission[];
   onSubmitReview: (submission: PeerReviewSubmission) => void;
+  onMarkNotificationRead?: (id: string) => void;
 }
 
-// ─── Helper: compute leaderboard from peer reviews ───
+// ─── Helper: compute leaderboard from peer reviews with tie-breaking ───
 function computeLeaderboard(
   peerReviews: PeerReviewSubmission[],
   allUsers: User[],
   monthKey: string,
 ): LeaderboardEntry[] {
-  // Filter reviews for the given month
   const monthReviews = peerReviews.filter((r) => r.monthKey === monthKey);
 
   // Aggregate scores per target employee
@@ -27,7 +27,7 @@ function computeLeaderboard(
     scoreMap.set(review.targetId, existing);
   }
 
-  // Build entries for ALL employees (even those with 0 reviews)
+  // Build entries for ALL employees
   const entries: LeaderboardEntry[] = allUsers.map((user) => {
     const data = scoreMap.get(user.id);
     return {
@@ -42,7 +42,7 @@ function computeLeaderboard(
     };
   });
 
-  // Sort by avgScore descending, then by reviewCount descending
+  // Sort: avgScore DESC → reviewCount DESC (tie-breaking)
   entries.sort((a, b) => {
     if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
     return b.reviewCount - a.reviewCount;
@@ -54,6 +54,22 @@ function computeLeaderboard(
   });
 
   return entries;
+}
+
+// ─── Get available month keys from reviews ───
+function getAvailableMonths(reviews: PeerReviewSubmission[]): string[] {
+  const keys = new Set(reviews.map((r) => r.monthKey));
+  return Array.from(keys).sort().reverse();
+}
+
+// ─── Get rank title/badge ───
+function getRankBadge(rank: number, avgScore: number): { title: string; color: string; icon: string } {
+  if (rank === 1) return { title: 'Ngôi sao', color: 'from-[#EFC14B] to-[#F5D76E]', icon: 'emoji_events' };
+  if (rank === 2) return { title: 'Xuất sắc', color: 'from-[#C0C0C0] to-[#D4D4D4]', icon: 'military_tech' };
+  if (rank === 3) return { title: 'Nổi bật', color: 'from-[#CD7F32] to-[#D4954A]', icon: 'workspace_premium' };
+  if (avgScore >= 4.5) return { title: 'Hoàn hảo', color: 'from-[#4CAF72] to-[#66BB6A]', icon: 'star' };
+  if (avgScore >= 3.5) return { title: 'Tốt', color: 'from-[#2196F3] to-[#42A5F5]', icon: 'thumb_up' };
+  return { title: '', color: '', icon: '' };
 }
 
 // ─── Star Rating Component ───
@@ -104,7 +120,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
 }) => {
   const isManager = currentUser.role === 'manager';
 
-  // Tab state: employees get [Đánh giá, Xếp hạng], managers get [Xếp hạng, Lịch sử]
+  // Tab state
   const [activeTab, setActiveTab] = useState<'review' | 'leaderboard' | 'history'>(
     isManager ? 'leaderboard' : 'review'
   );
@@ -122,11 +138,23 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
   const [filterEvaluator, setFilterEvaluator] = useState('all');
   const [selectedReview, setSelectedReview] = useState<PeerReviewSubmission | null>(null);
 
+  // Leaderboard filter state
+  const [selectedMonth, setSelectedMonth] = useState<string>('current');
+
   // Current month key
   const currentMonthKey = useMemo(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   }, []);
+
+  // Available months for filter
+  const availableMonths = useMemo(() => getAvailableMonths(peerReviews), [peerReviews]);
+
+  // Effective month key for leaderboard
+  const effectiveMonthKey = useMemo(() => {
+    if (selectedMonth === 'current') return currentMonthKey;
+    return selectedMonth;
+  }, [selectedMonth, currentMonthKey]);
 
   // Check if current user has already reviewed a specific target this month
   const getMonthlyReviewStatus = useMemo(() => {
@@ -148,8 +176,19 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
 
   // Leaderboard
   const leaderboard = useMemo(() => {
-    return computeLeaderboard(peerReviews, allUsers, currentMonthKey);
-  }, [peerReviews, allUsers, currentMonthKey]);
+    return computeLeaderboard(peerReviews, allUsers, effectiveMonthKey);
+  }, [peerReviews, allUsers, effectiveMonthKey]);
+
+  // Filtered leaderboard (only those with reviews)
+  const leaderboardWithReviews = useMemo(() => {
+    return leaderboard.filter((e) => e.reviewCount > 0);
+  }, [leaderboard]);
+
+  // Top 3
+  const top3 = useMemo(() => leaderboardWithReviews.slice(0, 3), [leaderboardWithReviews]);
+
+  // Rest of leaderboard (rank 4+)
+  const restOfLeaderboard = useMemo(() => leaderboardWithReviews.slice(3), [leaderboardWithReviews]);
 
   // My rank
   const myRank = useMemo(() => {
@@ -177,7 +216,6 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
     return allUsers.filter((u) => ids.has(u.id));
   }, [peerReviews, allUsers]);
 
-  // All targets (including already reviewed) for history filter
   const allTargets = useMemo(() => {
     return allUsers.filter((u) => u.id !== currentUser.id);
   }, [allUsers, currentUser.id]);
@@ -186,7 +224,6 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
   const handleAddTarget = () => {
     if (!selectedNewTarget) return;
     if (reviewTargets.some((t) => t.userId === selectedNewTarget)) return;
-
     setReviewTargets((prev) => [
       ...prev,
       { userId: selectedNewTarget, answers: {}, comment: '' },
@@ -215,18 +252,15 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
   };
 
   const handleSubmitAll = () => {
-    // Validate all targets have all criteria answered
     const allComplete = reviewTargets.every(
       (t) => Object.keys(t.answers).length === PEER_REVIEW_CRITERIA.length
     );
     if (!allComplete) return;
 
     setIsSubmitting(true);
-
     const now = new Date();
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
-    // Submit each target as a separate PeerReviewSubmission
     for (const target of reviewTargets) {
       const targetUser = allUsers.find((u) => u.id === target.userId);
       if (!targetUser) continue;
@@ -267,18 +301,17 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
     }, 600);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('vi-VN', {
-      day: 'numeric',
-      month: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   const getMonthLabel = (key: string) => {
+    if (key === 'current') return 'Tháng này';
     const [y, m] = key.split('-');
     const months = ['Th 1', 'Th 2', 'Th 3', 'Th 4', 'Th 5', 'Th 6', 'Th 7', 'Th 8', 'Th 9', 'Th 10', 'Th 11', 'Th 12'];
     return `${months[parseInt(m) - 1]} ${y}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('vi-VN', {
+      day: 'numeric', month: 'numeric', year: 'numeric',
+    });
   };
 
   // ─── Render ───
@@ -366,12 +399,12 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
           {myRank && myRank.reviewCount > 0 && (
             <div className="bg-gradient-to-r from-[#EFC14B]/20 to-[#EFC14B]/5 border border-[#EFC14B]/30 rounded-2xl p-4 flex items-center gap-4">
               <div className="w-12 h-12 bg-[#EFC14B]/30 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-xl font-heading font-bold text-[#0F1E44]">#{myRank.rank}</span>
+                <span className="material-symbols-outlined text-xl text-[#0F1E44]">emoji_events</span>
               </div>
               <div>
                 <p className="text-sm font-bold text-[#0F1E44]">Xếp hạng của bạn</p>
                 <p className="text-xs text-[#7A829A]">
-                  Điểm TB: {myRank.avgScore.toFixed(1)} ★ · {myRank.reviewCount} đánh giá
+                  #{myRank.rank} · Điểm TB: {myRank.avgScore.toFixed(1)} ★ · {myRank.reviewCount} đánh giá
                 </p>
               </div>
             </div>
@@ -389,9 +422,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                 >
                   <option value="">-- Chọn đồng nghiệp --</option>
                   {availableTargets.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}
-                    </option>
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
                 <button
@@ -405,14 +436,12 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             </div>
           )}
 
-          {/* No more targets available */}
+          {/* No more targets */}
           {availableTargets.length === 0 && reviewTargets.length === 0 && (
             <div className="bg-white rounded-2xl border border-[#E8DFD0] p-8 text-center">
               <span className="material-symbols-outlined text-5xl text-[#EFC14B] mb-3 block">check_circle</span>
               <h3 className="font-heading font-bold text-[#0F1E44] mb-1">Đã đánh giá hết tháng này</h3>
-              <p className="text-xs text-[#7A829A]">
-                Bạn đã đánh giá tất cả đồng nghiệp trong tháng {getMonthLabel(currentMonthKey)}.
-              </p>
+              <p className="text-xs text-[#7A829A]">Bạn đã đánh giá tất cả đồng nghiệp trong tháng.</p>
             </div>
           )}
 
@@ -425,28 +454,19 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
 
             return (
               <div key={target.userId} className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm">
-                {/* Target header */}
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={targetUser.avatar}
-                      alt={targetUser.name}
-                      className="w-10 h-10 rounded-full object-cover border-2 border-[#EFC14B]"
-                    />
+                    <img src={targetUser.avatar} alt={targetUser.name} className="w-10 h-10 rounded-full object-cover border-2 border-[#EFC14B]" />
                     <div>
                       <h4 className="text-sm font-bold text-[#0F1E44]">{targetUser.name}</h4>
                       <p className="text-[10px] text-[#7A829A]">{targetUser.role === 'manager' ? 'Quản lý' : 'Nhân viên'}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleRemoveTarget(target.userId)}
-                    className="text-[#FF3131] hover:bg-[#FF3131]/10 p-1.5 rounded-lg transition-colors"
-                  >
+                  <button onClick={() => handleRemoveTarget(target.userId)} className="text-[#FF3131] hover:bg-[#FF3131]/10 p-1.5 rounded-lg transition-colors">
                     <span className="material-symbols-outlined text-[18px]">close</span>
                   </button>
                 </div>
 
-                {/* Star criteria */}
                 <div className="space-y-3 mb-4">
                   {PEER_REVIEW_CRITERIA.map((criteria) => (
                     <div key={criteria.id} className="bg-[#FDF8EE] rounded-xl p-3">
@@ -461,18 +481,14 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
                   ))}
                 </div>
 
-                {/* Comment */}
-                <div className="mb-3">
-                  <textarea
-                    value={target.comment}
-                    onChange={(e) => handleCommentChange(target.userId, e.target.value)}
-                    placeholder="Nhận xét thêm (tùy chọn)..."
-                    rows={2}
-                    className="w-full rounded-xl border border-[#E8DFD0] bg-white px-3 py-2.5 text-sm text-[#0F1E44] placeholder:text-[#7A829A] focus:border-[#EFC14B] outline-none resize-none"
-                  />
-                </div>
+                <textarea
+                  value={target.comment}
+                  onChange={(e) => handleCommentChange(target.userId, e.target.value)}
+                  placeholder="Nhận xét thêm (tùy chọn)..."
+                  rows={2}
+                  className="w-full rounded-xl border border-[#E8DFD0] bg-white px-3 py-2.5 text-sm text-[#0F1E44] placeholder:text-[#7A829A] focus:border-[#EFC14B] outline-none resize-none mb-3"
+                />
 
-                {/* Completion indicator */}
                 <div className="flex items-center justify-between">
                   <span className={`text-xs font-semibold ${allAnswered ? 'text-[#4CAF72]' : 'text-[#7A829A]'}`}>
                     {allAnswered ? '✓ Đầy đủ' : `${answeredCount}/${PEER_REVIEW_CRITERIA.length} tiêu chí`}
@@ -482,15 +498,13 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             );
           })}
 
-          {/* Submit all button */}
+          {/* Submit button */}
           {reviewTargets.length > 0 && (
             <button
               onClick={handleSubmitAll}
               disabled={
                 isSubmitting ||
-                !reviewTargets.every(
-                  (t) => Object.keys(t.answers).length === PEER_REVIEW_CRITERIA.length
-                )
+                !reviewTargets.every((t) => Object.keys(t.answers).length === PEER_REVIEW_CRITERIA.length)
               }
               className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -508,7 +522,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             </button>
           )}
 
-          {/* Criteria preview (when no targets added yet) */}
+          {/* Criteria preview */}
           {reviewTargets.length === 0 && availableTargets.length > 0 && (
             <div className="bg-white rounded-2xl border border-[#E8DFD0] p-5 shadow-sm">
               <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-3">Tiêu chí đánh giá</h3>
@@ -540,8 +554,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             <div>
               <h4 className="text-sm font-bold text-[#0F1E44] mb-1">Bảo mật đánh giá</h4>
               <p className="text-xs text-[#7A829A]">
-                Bạn được đánh giá tối đa 1 lần mỗi người trong tháng.
-                Kết quả được bảo mật — chỉ quản lý xem được chi tiết.
+                Bạn được đánh giá tối đa 1 lần mỗi người trong tháng. Kết quả được bảo mật — chỉ quản lý xem được chi tiết.
               </p>
             </div>
           </div>
@@ -553,109 +566,211 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
       {/* ═══════════════════════════════════════════════════ */}
       {activeTab === 'leaderboard' && (
         <div className="space-y-4">
-          {/* Month label */}
-          <div className="text-center mb-2">
-            <span className="inline-block px-3 py-1 bg-[#EFC14B]/15 text-[#0F1E44] text-xs font-bold rounded-full">
-              {getMonthLabel(currentMonthKey)}
-            </span>
+          {/* Month Filter */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedMonth('current')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                selectedMonth === 'current'
+                  ? 'bg-[#0F1E44] text-white shadow-sm'
+                  : 'bg-[#F5EDDF] text-[#7A829A] hover:text-[#0F1E44]'
+              }`}
+            >
+              Tháng này
+            </button>
+            {availableMonths.map((key) => (
+              <button
+                key={key}
+                onClick={() => setSelectedMonth(key)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all ${
+                  selectedMonth === key
+                    ? 'bg-[#0F1E44] text-white shadow-sm'
+                    : 'bg-[#F5EDDF] text-[#7A829A] hover:text-[#0F1E44]'
+                }`}
+              >
+                {getMonthLabel(key)}
+              </button>
+            ))}
           </div>
 
-          {/* Leaderboard */}
-          {leaderboard.filter((e) => e.reviewCount > 0).length === 0 ? (
+          {/* Stats summary */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#0F1E44]">{leaderboardWithReviews.length}</p>
+              <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Được xếp hạng</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#EFC14B]">
+                {peerReviews.filter((r) => r.monthKey === effectiveMonthKey).length}
+              </p>
+              <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Lượt đánh giá</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
+              <p className="text-xl font-heading font-bold text-[#4CAF72]">
+                {leaderboardWithReviews.length > 0
+                  ? (leaderboardWithReviews.reduce((sum, e) => sum + e.avgScore, 0) / leaderboardWithReviews.length).toFixed(1)
+                  : '—'}
+              </p>
+              <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Điểm TB chung</p>
+            </div>
+          </div>
+
+          {leaderboardWithReviews.length === 0 ? (
             <div className="bg-white rounded-2xl border border-[#E8DFD0] p-10 text-center">
               <span className="material-symbols-outlined text-5xl text-[#E8DFD0] mb-3 block">leaderboard</span>
               <h3 className="font-heading font-bold text-base text-[#0F1E44] mb-1">Chưa có dữ liệu</h3>
-              <p className="text-xs text-[#7A829A]">Chưa có đánh giá nào trong tháng này.</p>
+              <p className="text-xs text-[#7A829A]">Chưa có đánh giá nào trong kỳ này.</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {leaderboard
-                .filter((e) => e.reviewCount > 0)
-                .map((entry, idx) => {
-                  const isMe = entry.userId === currentUser.id;
-                  const rankColors = ['bg-[#EFC14B] text-[#0F1E44]', 'bg-[#C0C0C0] text-[#333]', 'bg-[#CD7F32] text-white'];
-                  const rankBg = idx < 3 ? rankColors[idx] : 'bg-[#F5EDDF] text-[#7A829A]';
-
-                  return (
-                    <div
-                      key={entry.userId}
-                      className={`bg-white rounded-2xl border p-4 flex items-center gap-3 transition-all ${
-                        isMe ? 'border-[#EFC14B] shadow-golden' : 'border-[#E8DFD0] shadow-sm'
-                      }`}
-                    >
-                      {/* Rank badge */}
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 font-heading font-bold text-sm ${rankBg}`}>
-                        {entry.rank}
-                      </div>
-
-                      {/* Avatar */}
-                      <img
-                        src={entry.userAvatar}
-                        alt={entry.userName}
-                        className="w-10 h-10 rounded-full object-cover border border-[#E8DFD0]"
-                      />
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-bold truncate ${isMe ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
-                          {entry.userName} {isMe && '(Bạn)'}
-                        </p>
-                        <p className="text-[10px] text-[#7A829A]">
-                          {entry.reviewCount} đánh giá · {entry.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
-                        </p>
-                      </div>
-
-                      {/* Score */}
-                      <div className="text-right flex-shrink-0">
-                        <div className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-[#EFC14B] text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
-                          <span className="text-lg font-heading font-bold text-[#0F1E44]">{entry.avgScore.toFixed(1)}</span>
+            <>
+              {/* ─── TOP 3 PODIUM ─── */}
+              {top3.length >= 1 && (
+                <div className="bg-gradient-to-br from-[#0F1E44] to-[#1A2D5A] rounded-2xl p-5 shadow-lg">
+                  <div className="flex items-end justify-center gap-4">
+                    {/* 2nd Place */}
+                    {top3.length >= 2 && (
+                      <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                        <div className="relative mb-2">
+                          <img src={top3[1].userAvatar} alt={top3[1].userName} className="w-14 h-14 rounded-full border-3 border-[#C0C0C0] object-cover shadow-lg" />
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#C0C0C0] rounded-full flex items-center justify-center shadow">
+                            <span className="text-[10px] font-bold text-[#333]">2</span>
+                          </div>
                         </div>
-                        <p className="text-[10px] text-[#7A829A]">điểm TB</p>
+                        <p className="text-xs font-bold text-white truncate w-full text-center">{top3[1].userName}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="material-symbols-outlined text-[#C0C0C0] text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          <span className="text-xs font-bold text-white">{top3[1].avgScore.toFixed(1)}</span>
+                        </div>
+                        <div className="mt-1.5 px-2 py-0.5 bg-[#C0C0C0]/20 rounded-full">
+                          <span className="text-[9px] font-bold text-[#C0C0C0]">Xuất sắc</span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    )}
+
+                    {/* 1st Place */}
+                    {top3.length >= 1 && (
+                      <div className="flex flex-col items-center flex-1 max-w-[130px] -mt-4">
+                        <div className="relative mb-2">
+                          <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+                            <span className="material-symbols-outlined text-[#EFC14B] text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>emoji_events</span>
+                          </div>
+                          <img src={top3[0].userAvatar} alt={top3[0].userName} className="w-16 h-16 rounded-full border-3 border-[#EFC14B] object-cover shadow-xl" />
+                          <div className="absolute -bottom-1 -right-1 w-7 h-7 bg-[#EFC14B] rounded-full flex items-center justify-center shadow">
+                            <span className="text-[11px] font-bold text-[#0F1E44]">1</span>
+                          </div>
+                        </div>
+                        <p className="text-sm font-bold text-white truncate w-full text-center">{top3[0].userName}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="material-symbols-outlined text-[#EFC14B] text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          <span className="text-sm font-bold text-[#EFC14B]">{top3[0].avgScore.toFixed(1)}</span>
+                        </div>
+                        <div className="mt-1.5 px-2 py-0.5 bg-[#EFC14B]/20 rounded-full">
+                          <span className="text-[9px] font-bold text-[#EFC14B]">Ngôi sao</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 3rd Place */}
+                    {top3.length >= 3 && (
+                      <div className="flex flex-col items-center flex-1 max-w-[120px]">
+                        <div className="relative mb-2">
+                          <img src={top3[2].userAvatar} alt={top3[2].userName} className="w-14 h-14 rounded-full border-3 border-[#CD7F32] object-cover shadow-lg" />
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-[#CD7F32] rounded-full flex items-center justify-center shadow">
+                            <span className="text-[10px] font-bold text-white">3</span>
+                          </div>
+                        </div>
+                        <p className="text-xs font-bold text-white truncate w-full text-center">{top3[2].userName}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="material-symbols-outlined text-[#CD7F32] text-[12px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                          <span className="text-xs font-bold text-white">{top3[2].avgScore.toFixed(1)}</span>
+                        </div>
+                        <div className="mt-1.5 px-2 py-0.5 bg-[#CD7F32]/20 rounded-full">
+                          <span className="text-[9px] font-bold text-[#CD7F32]">Nổi bật</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ─── REST OF LEADERBOARD (Rank 4+) ─── */}
+              {restOfLeaderboard.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 py-1">
+                    <div className="flex-1 h-px bg-[#E8DFD0]" />
+                    <span className="text-[10px] text-[#7A829A] font-semibold">Xếp hạng tiếp theo</span>
+                    <div className="flex-1 h-px bg-[#E8DFD0]" />
+                  </div>
+                  {restOfLeaderboard.map((entry) => {
+                    const isMe = entry.userId === currentUser.id;
+                    const badge = getRankBadge(entry.rank, entry.avgScore);
+                    return (
+                      <div
+                        key={entry.userId}
+                        className={`bg-white rounded-2xl border p-3 flex items-center gap-3 transition-all ${
+                          isMe ? 'border-[#EFC14B] shadow-golden' : 'border-[#E8DFD0] shadow-sm'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#F5EDDF] flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-bold text-[#7A829A]">#{entry.rank}</span>
+                        </div>
+                        <img src={entry.userAvatar} alt={entry.userName} className="w-9 h-9 rounded-full object-cover border border-[#E8DFD0]" />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm font-bold truncate ${isMe ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
+                            {entry.userName} {isMe && '(Bạn)'}
+                          </p>
+                          <p className="text-[10px] text-[#7A829A]">
+                            {entry.reviewCount} đánh giá · {entry.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
+                          </p>
+                        </div>
+                        {badge.title && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 bg-gradient-to-r text-white rounded-full">{badge.title}</span>
+                        )}
+                        <div className="text-right flex-shrink-0">
+                          <div className="flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[#EFC14B] text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                            <span className="text-lg font-heading font-bold text-[#0F1E44]">{entry.avgScore.toFixed(1)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Employees with 0 reviews */}
               {leaderboard.filter((e) => e.reviewCount === 0).length > 0 && (
-                <>
-                  <div className="flex items-center gap-2 py-2">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 py-1">
                     <div className="flex-1 h-px bg-[#E8DFD0]" />
                     <span className="text-[10px] text-[#7A829A] font-semibold">Chưa có đánh giá</span>
                     <div className="flex-1 h-px bg-[#E8DFD0]" />
                   </div>
-                  {leaderboard
-                    .filter((e) => e.reviewCount === 0)
-                    .map((entry) => {
-                      const isMe = entry.userId === currentUser.id;
-                      return (
-                        <div
-                          key={entry.userId}
-                          className={`bg-white/60 rounded-2xl border border-[#E8DFD0]/50 p-3 flex items-center gap-3 opacity-60 ${
-                            isMe ? 'border-[#EFC14B]/50' : ''
-                          }`}
-                        >
-                          <div className="w-9 h-9 rounded-full bg-[#F5EDDF] flex items-center justify-center flex-shrink-0">
-                            <span className="material-symbols-outlined text-[#7A829A] text-[16px]">person</span>
-                          </div>
-                          <img
-                            src={entry.userAvatar}
-                            alt={entry.userName}
-                            className="w-8 h-8 rounded-full object-cover border border-[#E8DFD0]"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-[#7A829A] truncate">
-                              {entry.userName} {isMe && '(Bạn)'}
-                            </p>
-                          </div>
-                          <span className="text-xs text-[#7A829A]">—</span>
+                  {leaderboard.filter((e) => e.reviewCount === 0).map((entry) => {
+                    const isMe = entry.userId === currentUser.id;
+                    return (
+                      <div
+                        key={entry.userId}
+                        className={`bg-white/60 rounded-2xl border border-[#E8DFD0]/50 p-3 flex items-center gap-3 opacity-60 ${
+                          isMe ? 'border-[#EFC14B]/50' : ''
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#F5EDDF] flex items-center justify-center flex-shrink-0">
+                          <span className="material-symbols-outlined text-[#7A829A] text-[16px]">person</span>
                         </div>
-                      );
-                    })}
-                </>
+                        <img src={entry.userAvatar} alt={entry.userName} className="w-8 h-8 rounded-full object-cover border border-[#E8DFD0]" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[#7A829A] truncate">
+                            {entry.userName} {isMe && '(Bạn)'}
+                          </p>
+                        </div>
+                        <span className="text-xs text-[#7A829A]">—</span>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
-            </div>
+            </>
           )}
         </div>
       )}
@@ -779,7 +894,6 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
       {selectedReview && isManager && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col shadow-lg border border-[#E8DFD0]">
-            {/* Header */}
             <div className="p-5 border-b border-[#F5EDDF]">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Chi tiết đánh giá</h3>
@@ -809,7 +923,6 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
               </div>
             </div>
 
-            {/* Answers */}
             <div className="flex-1 overflow-y-auto p-5 space-y-3">
               {PEER_REVIEW_CRITERIA.map((criteria) => {
                 const answer = selectedReview.answers.find((a) => a.criteriaId === criteria.id);
@@ -830,7 +943,6 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
               )}
             </div>
 
-            {/* Footer */}
             <div className="p-4 border-t border-[#F5EDDF]">
               <button
                 onClick={() => setSelectedReview(null)}
