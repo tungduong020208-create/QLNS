@@ -18,11 +18,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
-    if (pathname.includes('/approval')) return 'approval';
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
-    if (pathname.includes('/shift-registration')) return 'shift_registration';
     if (pathname.includes('/profile')) return 'profile';
     return 'home';
   };
@@ -31,18 +29,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
   const allTabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: 'Lịch & Công', icon: 'home' },
-    { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
-    { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
+    { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
-    { id: 'shift_registration', label: 'Lịch tuần', icon: 'event_available' },
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
   // Filter tabs based on role
   const tabs = currentUser?.role === 'manager'
     ? allTabs
-    : allTabs.filter(t => t.id !== 'approval' && t.id !== 'manager_schedule');
+    : allTabs.filter(t => t.id !== "manager_schedule");
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#0F1E44] border-t border-[#1A2D5A] rounded-t-xl shadow-lg md:hidden">

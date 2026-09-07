@@ -25,6 +25,7 @@ import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
 import { ApprovalScreen } from './components/screens/ApprovalScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
 import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
+import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
 import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 
@@ -378,11 +379,9 @@ export default function App() {
     const routeMap: Record<string, Record<string, string>> = {
       manager: {
         home: ROUTES.MANAGER_DASHBOARD,
-        approval: ROUTES.MANAGER_APPROVAL,
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
-        shift_registration: ROUTES.MANAGER_SHIFT_REGISTRATION,
         profile: ROUTES.MANAGER_PROFILE,
       },
       employee: {
@@ -569,30 +568,18 @@ export default function App() {
                         onNavigateReview={() => goTo('review')}
                       />
                     } />
-                    <Route path="approval" element={
-                      <ApprovalScreen
-                        currentUser={currentUser}
-                        requests={approvalRequests}
-                        onApprove={handleApproveRequest}
-                        onReject={handleRejectRequest}
-                      />
-                    } />
                     <Route path="schedule" element={
-                      <ManagerScheduleScreen
+                      <ManagerScheduleTab
                         currentUser={currentUser}
                         allUsers={users}
+                        approvalRequests={approvalRequests}
+                        onApproveRequest={handleApproveRequest}
+                        onRejectRequest={handleRejectRequest}
                         shifts={shifts}
                         onAddShift={handleAddShift}
                         onUpdateShift={handleUpdateShift}
                         onDeleteShift={handleDeleteShift}
                         onSwapShifts={handleSwapShifts}
-                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
-                      />
-                    } />
-                    <Route path="shift-registration" element={
-                      <ShiftRegistrationScreen
-                        currentUser={currentUser}
-                        allUsers={users}
                         registrations={shiftRegistrations}
                         onSubmitRegistration={handleSubmitRegistration}
                         onUpdateRegistration={handleUpdateRegistration}

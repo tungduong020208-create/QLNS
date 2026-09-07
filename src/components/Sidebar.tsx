@@ -19,11 +19,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
-    if (pathname.includes('/approval')) return 'approval';
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
-    if (pathname.includes('/shift-registration')) return 'shift_registration';
     if (pathname.includes('/profile')) return 'profile';
     return 'home';
   };
@@ -33,16 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: 'Lịch & Công', icon: 'home' },
     ...(currentUser.role === 'manager'
-      ? [
-          { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
-          { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
-        ]
+      ? [{ id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' }]
       : []),
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
-    ...(currentUser.role === 'manager'
-      ? [{ id: 'shift_registration', label: 'Duyệt lịch', icon: 'event_available' }]
-      : [{ id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' }]),
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
