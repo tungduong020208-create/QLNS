@@ -319,7 +319,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
     <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-5">
-        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Peer Review</h2>
+        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đánh giá</h2>
         <p className="text-xs text-[#7A829A] mt-0.5">
           {isManager
             ? 'Xem bảng xếp hạng và lịch sử đánh giá chéo'

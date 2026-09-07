@@ -31,19 +31,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeTab = tabFromPath(location.pathname);
 
   const tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'home', label: 'My Shift', icon: 'home' },
+    { id: 'home', label: 'Lịch & Công', icon: 'home' },
     ...(currentUser.role === 'manager'
       ? [
           { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
           { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
         ]
       : []),
-    { id: 'review', label: 'Handover', icon: 'handshake' },
-    { id: 'peer_review', label: 'Peer Review', icon: 'rate_review' },
+    { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
+    { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
     ...(currentUser.role === 'manager'
       ? [{ id: 'shift_registration', label: 'Duyệt lịch', icon: 'event_available' }]
       : [{ id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' }]),
-    { id: 'profile', label: 'Profile', icon: 'person' },
+    { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
   return (

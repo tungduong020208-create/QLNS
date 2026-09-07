@@ -30,13 +30,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const activeTab = tabFromPath(location.pathname);
 
   const allTabs: { id: string; label: string; icon: string }[] = [
-    { id: 'home', label: 'My Shift', icon: 'home' },
+    { id: 'home', label: 'Lịch & Công', icon: 'home' },
     { id: 'approval', label: 'Pending', icon: 'how_to_reg' },
     { id: 'manager_schedule', label: 'Schedule', icon: 'calendar_month' },
-    { id: 'review', label: 'Handover', icon: 'handshake' },
-    { id: 'peer_review', label: 'Peer Review', icon: 'rate_review' },
+    { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
+    { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
     { id: 'shift_registration', label: 'Lịch tuần', icon: 'event_available' },
-    { id: 'profile', label: 'Profile', icon: 'person' },
+    { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
   // Filter tabs based on role

@@ -330,7 +330,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       <section className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Bàn giao ca</h2>
+            <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Bảng Tin</h2>
             <p className="text-xs text-[#7A829A] mt-0.5">Minh chứng theo ngày và lịch phân công</p>
           </div>
           {!showSubmitForm && onSubmitEvidence && (
