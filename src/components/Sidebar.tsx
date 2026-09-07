@@ -20,6 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
     if (pathname.includes('/schedule')) return 'manager_schedule';
+    if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
     if (pathname.includes('/shift-registration')) return 'shift_registration';
@@ -32,7 +33,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const tabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: currentUser.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
     ...(currentUser.role === 'manager'
-      ? [{ id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' }]
+      ? [
+        { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
+        { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' }
+      ]
       : []),
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },

@@ -20,6 +20,7 @@ export const ROUTES = {
   MANAGER_HANDOVER: '/admin/handover',
   MANAGER_PEER_REVIEW: '/admin/peer-review',
   MANAGER_PROFILE: '/admin/profile',
+  MANAGER_EXPORT: '/admin/export',
 } as const;
 
 /**

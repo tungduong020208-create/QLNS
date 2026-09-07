@@ -19,6 +19,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
     if (pathname.includes('/schedule')) return 'manager_schedule';
+    if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
     if (pathname.includes('/shift-registration')) return 'shift_registration';
@@ -33,6 +34,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
+    { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
     { id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' },
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
@@ -40,7 +42,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // Filter tabs based on role
   const tabs = currentUser?.role === 'manager'
     ? allTabs
-    : allTabs.filter(t => t.id !== "manager_schedule");
+    : allTabs.filter(t => t.id !== "manager_schedule" && t.id !== "export_report");
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#0F1E44] border-t border-[#1A2D5A] rounded-t-xl shadow-lg md:hidden">

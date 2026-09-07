@@ -26,6 +26,7 @@ import { ApprovalScreen } from './components/screens/ApprovalScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
 import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
 import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
+import { ExportReportScreen } from './components/screens/ExportReportScreen';
 import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 
@@ -505,7 +506,8 @@ export default function App() {
                         }}
                       />
                     } />
-                    <Route path="handover" element={
+
+                                        <Route path="handover" element={
                       <ReviewScreen
                         currentUser={currentUser}
                         evidences={evidences}
@@ -587,6 +589,17 @@ export default function App() {
                         onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
+
+                    <Route path="export" element={
+                      <ExportReportScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        shifts={shifts}
+                        peerReviews={peerReviews}
+                        shiftRegistrations={shiftRegistrations}
+                      />
+                    } />
+
                     <Route path="handover" element={
                       <ReviewScreen
                         currentUser={currentUser}
