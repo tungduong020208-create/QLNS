@@ -383,6 +383,7 @@ export default function App() {
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
+        export_report: ROUTES.MANAGER_EXPORT,
         profile: ROUTES.MANAGER_PROFILE,
       },
       employee: {
