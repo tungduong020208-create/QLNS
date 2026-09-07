@@ -607,7 +607,19 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
     const s = diff % 60;
-    return `${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const formatElapsedVerbose = (startTimestamp: number, nowMs: number): string => {
+    const diff = Math.floor((nowMs - startTimestamp) / 1000);
+    const h = Math.floor(diff / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+    const parts: string[] = [];
+    if (h > 0) parts.push(`${h} giờ`);
+    if (m > 0) parts.push(`${m} phút`);
+    if (s > 0 || parts.length === 0) parts.push(`${s} giây`);
+    return parts.join(' ');
   };
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -682,24 +694,36 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </>
           ) : (
             <>
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-green-600 text-xl">check_circle</span>
+              {/* Active session card */}
+              <div className="bg-gradient-to-br from-[#4CAF72]/10 to-[#2E7D52]/5 border border-[#4CAF72]/30 rounded-2xl p-4 mb-3">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-[#4CAF72]/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-[#4CAF72] text-xl">check_circle</span>
+                  </div>
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-green-700">Đã check-in lúc {checkInTime}</p>
-                    <p className="text-xs text-green-600 flex items-center gap-1">
+                    <p className="text-sm font-bold text-[#2E7D52]">Đã check-in lúc {checkInTime}</p>
+                    <p className="text-[11px] text-[#4CAF72] flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">verified</span>
                       {getCheckInMethodLabel(checkInMethod || 'photo')}
                     </p>
                   </div>
-                  {checkInTimestamp && (
-                    <div className="text-right">
-                      <p className="text-xs font-bold text-green-700 tabular-nums">
-                        {formatElapsed(checkInTimestamp, now.getTime())}
-                      </p>
-                      <p className="text-[10px] text-green-600">đang làm</p>
-                    </div>
-                  )}
                 </div>
+                {checkInTimestamp && (
+                  <div className="bg-white rounded-xl p-3 border border-[#4CAF72]/20">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold mb-0.5">Thời gian đang làm</p>
+                        <p className="text-2xl font-heading font-bold text-[#2E7D52] tabular-nums tracking-tight">
+                          {formatElapsed(checkInTimestamp, now.getTime())}
+                        </p>
+                      </div>
+                      <div className="w-10 h-10 bg-[#4CAF72]/10 rounded-full flex items-center justify-center">
+                        <div className="w-3 h-3 bg-[#4CAF72] rounded-full animate-pulse" />
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-[#4CAF72] mt-1 text-center">Đang trong ca làm việc</p>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => handleCaptureClick('checkout')}
@@ -1040,7 +1064,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
             <div className="bg-[#FDF8EE] rounded-xl p-4 text-left space-y-2 mb-5">
               <div className="flex justify-between">
-                <span className="text-xs text-[#7A829A]">Thời gian</span>
+                <span className="text-xs text-[#7A829A]">Thời gian {actionType === 'checkin' ? 'vào' : 'ra'} ca</span>
                 <span className="text-xs font-bold text-[#0F1E44]">{record.time}</span>
               </div>
               <div className="flex justify-between">
@@ -1056,13 +1080,30 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 </div>
               )}
               {actionType === 'checkout' && workHoursSummary && (
-                <div className="flex justify-between items-center pt-2 border-t border-[#E8DFD0]">
-                  <span className="text-xs text-[#7A829A]">Tổng giờ làm</span>
-                  <div className="text-right">
-                    <span className="text-sm font-bold text-[#4CAF72]">{workHoursSummary.duration}</span>
-                    <span className="text-[10px] text-[#7A829A] ml-1">({workHoursSummary.hours}h)</span>
+                <>
+                  {checkInTime && (
+                    <div className="flex justify-between">
+                      <span className="text-xs text-[#7A829A]">Giờ vào</span>
+                      <span className="text-xs font-bold text-[#0F1E44]">{checkInTime}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-xs text-[#7A829A]">Giờ ra</span>
+                    <span className="text-xs font-bold text-[#0F1E44]">{record.time}</span>
                   </div>
-                </div>
+                  <div className="bg-[#4CAF72]/10 border border-[#4CAF72]/30 rounded-lg p-3 mt-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[#4CAF72] text-lg">timer</span>
+                        <span className="text-xs font-bold text-[#2E7D52]">Tổng giờ làm</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-heading font-bold text-[#2E7D52]">{workHoursSummary.duration}</span>
+                        <span className="text-[10px] text-[#4CAF72] ml-1">({workHoursSummary.hours}h)</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
 
