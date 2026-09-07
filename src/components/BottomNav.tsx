@@ -28,7 +28,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const activeTab = tabFromPath(location.pathname);
 
   const allTabs: { id: string; label: string; icon: string }[] = [
-    { id: 'home', label: 'Lịch & Công', icon: 'home' },
+    { id: 'home', label: currentUser?.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },

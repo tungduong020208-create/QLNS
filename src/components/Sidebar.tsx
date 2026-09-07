@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const activeTab = tabFromPath(location.pathname);
 
   const tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'home', label: 'Lịch & Công', icon: 'home' },
+    { id: 'home', label: currentUser.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
     ...(currentUser.role === 'manager'
       ? [{ id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' }]
       : []),
