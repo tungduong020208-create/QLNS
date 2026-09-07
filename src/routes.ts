@@ -15,6 +15,8 @@ export const ROUTES = {
   MANAGER_DASHBOARD: '/admin/dashboard',
   MANAGER_APPROVAL: '/admin/approval',
   MANAGER_SCHEDULE: '/admin/schedule',
+  MANAGER_SHIFT_REGISTRATION: '/admin/shift-registration',
+  EMPLOYEE_SHIFT_REGISTRATION: '/employee/shift-registration',
   MANAGER_HANDOVER: '/admin/handover',
   MANAGER_PEER_REVIEW: '/admin/peer-review',
   MANAGER_PROFILE: '/admin/profile',

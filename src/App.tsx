@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, ApprovalRequest, QRReview, PeerReviewSubmission } from './types';
+import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, ApprovalRequest, QRReview, PeerReviewSubmission, WeeklyShiftRegistration } from './types';
 import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_APPROVAL_REQUESTS, INITIAL_QR_REVIEWS } from './data/initialData';
 import { INITIAL_PEER_REVIEWS } from './data/peerReviewData';
 import { ROUTES, getDefaultHomeRoute } from './routes';
@@ -25,6 +25,7 @@ import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
 import { ApprovalScreen } from './components/screens/ApprovalScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
 import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
+import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 
 export default function App() {
@@ -131,6 +132,12 @@ export default function App() {
     return defaultShifts;
   });
 
+  // ─── Shift Registrations (Weekly Schedule) ───
+  const [shiftRegistrations, setShiftRegistrations] = useState<WeeklyShiftRegistration[]>(() => {
+    const saved = localStorage.getItem('aiicafe_shift_registrations');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // ─── UI State ───
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
@@ -148,6 +155,7 @@ export default function App() {
   useEffect(() => { localStorage.setItem('coffeehouse_qr_reviews', JSON.stringify(qrReviews)); }, [qrReviews]);
   useEffect(() => { localStorage.setItem('coffeehouse_peer_reviews', JSON.stringify(peerReviews)); }, [peerReviews]);
   useEffect(() => { localStorage.setItem('coffeehouse_shifts', JSON.stringify(shifts)); }, [shifts]);
+  useEffect(() => { localStorage.setItem('aiicafe_shift_registrations', JSON.stringify(shiftRegistrations)); }, [shiftRegistrations]);
   useEffect(() => { localStorage.setItem('enterprise_hr_auth', JSON.stringify(isLoggedIn)); }, [isLoggedIn]);
 
   // Persist current user
@@ -322,6 +330,35 @@ export default function App() {
     addToast('success', 'Đã đổi ca', 'Ca làm việc đã được đổi thành công');
   };
 
+  // ─── Shift Registration Handlers ───
+  const handleSubmitRegistration = (reg: WeeklyShiftRegistration) => {
+    setShiftRegistrations(prev => [...prev, reg]);
+    addToast('success', 'Đăng ký thành công', `Đã gửi lịch tuần ${reg.weekNumber} cho quản lý duyệt`);
+  };
+
+  const handleUpdateRegistration = (reg: WeeklyShiftRegistration) => {
+    setShiftRegistrations(prev => prev.map(r => r.id === reg.id ? reg : r));
+    addToast('success', 'Đã cập nhật', 'Lịch làm việc đã được cập nhật');
+  };
+
+  const handleApproveRegistration = (regId: string, approved: boolean, note?: string) => {
+    setShiftRegistrations(prev => prev.map(r => {
+      if (r.id !== regId) return r;
+      return {
+        ...r,
+        status: approved ? 'approved' : 'rejected',
+        approvedAt: new Date().toISOString(),
+        approvedBy: currentUser?.id,
+        managerNote: note,
+      };
+    }));
+    addToast(
+      approved ? 'success' : 'info',
+      approved ? 'Đã duyệt lịch' : 'Đã từ chối lịch',
+      note || ''
+    );
+  };
+
   // ─── Notifications ───
   const handleMarkNotificationRead = (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
@@ -345,12 +382,14 @@ export default function App() {
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
+        shift_registration: ROUTES.MANAGER_SHIFT_REGISTRATION,
         profile: ROUTES.MANAGER_PROFILE,
       },
       employee: {
         home: ROUTES.EMPLOYEE_HOME,
         review: ROUTES.EMPLOYEE_HANDOVER,
         peer_review: ROUTES.EMPLOYEE_PEER_REVIEW,
+        shift_registration: ROUTES.EMPLOYEE_SHIFT_REGISTRATION,
         profile: ROUTES.EMPLOYEE_PROFILE,
       },
     };
@@ -485,6 +524,17 @@ export default function App() {
                         onSubmitReview={handleSubmitPeerReview}
                       />
                     } />
+                    <Route path="shift-registration" element={
+                      <ShiftRegistrationScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        registrations={shiftRegistrations}
+                        onSubmitRegistration={handleSubmitRegistration}
+                        onUpdateRegistration={handleUpdateRegistration}
+                        onApproveRegistration={handleApproveRegistration}
+                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
+                      />
+                    } />
                     <Route path="profile" element={
                       <ProfileScreen
                         currentUser={currentUser}
@@ -539,6 +589,17 @@ export default function App() {
                         onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
+                    <Route path="shift-registration" element={
+                      <ShiftRegistrationScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        registrations={shiftRegistrations}
+                        onSubmitRegistration={handleSubmitRegistration}
+                        onUpdateRegistration={handleUpdateRegistration}
+                        onApproveRegistration={handleApproveRegistration}
+                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
+                      />
+                    } />
                     <Route path="handover" element={
                       <ReviewScreen
                         currentUser={currentUser}
@@ -555,6 +616,17 @@ export default function App() {
                         allUsers={users}
                         peerReviews={peerReviews}
                         onSubmitReview={handleSubmitPeerReview}
+                      />
+                    } />
+                    <Route path="shift-registration" element={
+                      <ShiftRegistrationScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        registrations={shiftRegistrations}
+                        onSubmitRegistration={handleSubmitRegistration}
+                        onUpdateRegistration={handleUpdateRegistration}
+                        onApproveRegistration={handleApproveRegistration}
+                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
                     <Route path="profile" element={

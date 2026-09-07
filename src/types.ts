@@ -208,3 +208,30 @@ export interface LeaderboardEntry {
   reviewCount: number;       // Number of reviews received
   rank: number;              // Position on leaderboard
 }
+
+// ─── Shift Registration (Weekly Schedule) ───
+export type ShiftSlot = 'morning' | 'afternoon' | 'evening' | 'off';
+
+export interface DayShiftRegistration {
+  date: string;              // YYYY-MM-DD
+  dayLabel: string;           // 'Thứ 2', 'Thứ 3', ...
+  shift: ShiftSlot;
+}
+
+export interface WeeklyShiftRegistration {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  weekStart: string;          // YYYY-MM-DD (Monday of target week)
+  year: number;
+  weekNumber: number;         // ISO week number
+  days: DayShiftRegistration[];
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  submittedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  managerNote?: string;
+  createdAt: string;
+  updatedAt: string;
+}
