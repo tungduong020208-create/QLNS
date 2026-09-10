@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, EvidenceItem, CheckInRecord } from '../types';
+import { STORAGE_KEY_ATTENDANCE_RECORDS } from '../utils/constants';
 
 interface ManagerDashboardProps {
   currentUser: User;
@@ -37,8 +38,9 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, []);
 
   useEffect(() => {
-    // Load check-in records from localStorage
-    const storedRecords = localStorage.getItem('coffeehouse_checkin_records');
+    // CRITICAL FIX: Use unified storage key (previously 'coffeehouse_checkin_records'
+    // which didn't match what CheckInCheckOut.tsx was writing to)
+    const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
     const allCheckInRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
     
     const employees = allUsers.filter(u => u.role === 'employee');

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, PeerReviewSubmission, LeaderboardEntry } from '../../types';
 import { PEER_REVIEW_CRITERIA } from '../../data/peerReviewData';
+import { MIN_REVIEWS_FOR_LEADERBOARD } from '../../utils/constants';
 
 interface PeerReviewScreenProps {
   currentUser: User;
@@ -40,13 +41,14 @@ function computeLeaderboard(
       reviewCount: data ? data.count : 0,
       rank: 0,
     };
-  });
-
-  // Sort: avgScore DESC → reviewCount DESC (tie-breaking)
-  entries.sort((a, b) => {
-    if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
-    return b.reviewCount - a.reviewCount;
-  });
+  });    // SORT ALGORITHM: avgScore DESC first, then reviewCount DESC for tie-breaking
+    // This ensures employees with more reviews rank higher when scores are equal
+    entries.sort((a, b) => {
+      // Primary sort: average score (higher is better)
+      if (b.avgScore !== a.avgScore) return b.avgScore - a.avgScore;
+      // Tie-breaker: number of reviews received (more = more reliable)
+      return b.reviewCount - a.reviewCount;
+    });
 
   // Assign ranks
   entries.forEach((entry, idx) => {
@@ -179,9 +181,10 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
     return computeLeaderboard(peerReviews, allUsers, effectiveMonthKey);
   }, [peerReviews, allUsers, effectiveMonthKey]);
 
-  // Filtered leaderboard (only those with reviews)
+  // FILTERED LEADERBOARD: Only show employees with >= MIN_REVIEWS_FOR_LEADERBOARD reviews
+  // This prevents someone with 1 five-star review from topping the leaderboard
   const leaderboardWithReviews = useMemo(() => {
-    return leaderboard.filter((e) => e.reviewCount > 0);
+    return leaderboard.filter((e) => e.reviewCount >= MIN_REVIEWS_FOR_LEADERBOARD);
   }, [leaderboard]);
 
   // Top 3

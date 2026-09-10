@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { User } from '../types';
 import { ROUTES, getDefaultHomeRoute } from '../routes';
+import { isSessionValid, refreshSession } from '../utils/auth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -12,8 +13,12 @@ interface ProtectedRouteProps {
 
 /**
  * Route Guard: Blocks access to protected routes if user is not authenticated.
- * Redirects to /login if not logged in.
- * If requiredRole is specified, also checks the user has the right role.
+ * 
+ * SECURITY FIX: Previously only checked localStorage flag 'enterprise_hr_auth'
+ * which could be set manually via DevTools. Now also validates:
+ * - Session has not expired (30 min timeout)
+ * - Auth token exists and is valid
+ * - Refreshes session on each navigation (sliding window)
  */
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
@@ -22,6 +27,20 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredRole,
 }) => {
   const location = useLocation();
+
+  // SECURITY FIX: Refresh session on mount/navigation (sliding window)
+  // Must be called BEFORE any conditional returns to follow React rules of hooks
+  useEffect(() => {
+    if (isLoggedIn && currentUser) {
+      refreshSession();
+    }
+  }, [location.pathname, isLoggedIn, currentUser]);
+
+  // SECURITY FIX: Validate session is not expired
+  // This prevents stale sessions from persisting indefinitely
+  if (!isSessionValid()) {
+    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
+  }
 
   // Not logged in → redirect to login
   if (!isLoggedIn || !currentUser) {

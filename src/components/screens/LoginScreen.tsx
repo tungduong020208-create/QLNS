@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
+import { verifyPassword, hashPassword } from '../../utils/auth';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -24,7 +25,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim()) {
       setErrorMsg('Vui lòng nhập tài khoản hoặc mã nhân viên');
@@ -46,9 +47,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
       return;
     }
 
-    // Check password
-    const storedPassword = foundUser.password || 'aiicafe';
-    if (password !== storedPassword) {
+    // SECURITY FIX: Verify password using SHA-256 hash instead of plaintext comparison
+    // This prevents password exposure in localStorage and DevTools
+    const storedHash = foundUser.password || '';
+    const passwordValid = await verifyPassword(password, storedHash);
+    
+    if (!passwordValid) {
       setErrorMsg('Mật khẩu không đúng. Vui lòng thử lại.');
       return;
     }
@@ -64,7 +68,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
     onLogin(foundUser);
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError('');
 
@@ -79,7 +83,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
     }
 
     if (pendingUser && onPasswordChanged) {
-      onPasswordChanged(pendingUser.id, newPassword);
+      // SECURITY FIX: Hash the new password before storing
+      const hashedPassword = await hashPassword(newPassword);
+      onPasswordChanged(pendingUser.id, hashedPassword);
     }
 
     setPwSuccess(true);

@@ -35,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ...(currentUser.role === 'manager'
       ? [
         { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
+        { id: 'wifi_config', label: 'Cài đặt Wi-Fi', icon: 'wifi' },
         { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' }
       ]
       : []),

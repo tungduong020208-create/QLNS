@@ -1,5 +1,15 @@
 import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating, ApprovalRequest, QRReview } from '../types';
 
+/**
+ * SECURITY FIX: Passwords are now stored as SHA-256 hashes.
+ * The hash of default password 'aiicafe' is:
+ * 4628e4d3eccca87a91cdfb56de245fb30dac77c0db373d8bfbfc626c370e0739
+ * 
+ * In production, passwords should be hashed server-side with bcrypt/argon2.
+ * This client-side hash is a transitional improvement over plaintext.
+ */
+const HASHED_DEFAULT_PASSWORD = '4628e4d3eccca87a91cdfb56de245fb30dac77c0db373d8bfbfc626c370e0739';
+
 export const INITIAL_USERS: User[] = [
   {
     id: 'usr-1',
@@ -9,7 +19,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
     email: 'an.nguyen@coffeehouse.vn',
     phone: '0912 345 678',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -20,7 +30,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCTZm94XPugvSJ8tyw5QSSjxQFcMX31EVCkRsrrXlRcB4qihB12c2w4ZmPct956-VEA4trgGFnrCGJXz87RUOQAxvJVmHj4K7sa5EoI4-oueSKUcczxwan8ew63rD4tumTT2J5Uy9yRjNGhaM4Tp8lLpzj750mfOpUmnmNRHkLKZ9w6GCICX-nrrhbTD0R4UTL60wI0dUQ55jl9lBmbXV5_lg6WPSys1wE1KRrE4SQHR-ib9RfTlaXT',
     email: 'hung.tran@coffeehouse.vn',
     phone: '0988 765 432',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -31,7 +41,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
     email: 'mai.nguyen@coffeehouse.vn',
     phone: '0903 112 233',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -42,7 +52,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDMGc0qdI6jsnRkAdviGDc3ViHqQe9QYOtjfWck9WHBklIGHxr1DtQKlX-q58uzWaPxG9hxhIGu3UHhH4UasDlR5VfoM5gtVSlswC_dkKwu44ZcuIMXZ6ncaRud3-cDdBGwhhn4-8Gqo7MSi3q_tCVKQzfE1Z1pvQrzzhYJg58LN6MLie8WhJnOSJ6goBG021mWkr6oSjlRbUtrAucgHrYJs5HyTP2UGlvkWjGYUscJha4qG7j8c-Qj',
     email: 'nam.le@coffeehouse.vn',
     phone: '0934 556 778',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -53,7 +63,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
     email: 'huong.pham@coffeehouse.vn',
     phone: '0912 345 679',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -64,7 +74,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
     email: 'tuan.hoang@coffeehouse.vn',
     phone: '0923 456 789',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -75,7 +85,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBocglPiPB7ft1oYV0nh9wm0z7A9YvMdWIwmnakEZzEbx5LYefJ076mJhQj8VbprouBiaTd0rH8t-OQU1Ed6jKnVNTcmWE1HZ2oDjG38KVn6MunNnfot5YzdLWQzELof-Vsab8JcxqQjG7e2CmJem0e-grcqp_AV9p4hi6N59b0uuAK0Ho0SsCGub71ba2RuMoZXUQJidLOO2H_yEK4t_AtJqPrxFSZGHJmSF71raeuvW_oZJ90fgmv',
     email: 'lich.ngo@coffeehouse.vn',
     phone: '0945 678 901',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -86,7 +96,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
     email: 'bich.vu@coffeehouse.vn',
     phone: '0956 789 012',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -97,7 +107,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDMGc0qdI6jsnRkAdviGDc3ViHqQe9QYOtjfWck9WHBklIGHxr1DtQKlX-q58uzWaPxG9hxhIGu3UHhH4UasDlR5VfoM5gtVSlswC_dkKwu44ZcuIMXZ6ncaRud3-cDdBGwhhn4-8Gqo7MSi3q_tCVKQzfE1Z1pvQrzzhYJg58LN6MLie8WhJnOSJ6goBG021mWkr6oSjlRbUtrAucgHrYJs5HyTP2UGlvkWjGYUscJha4qG7j8c-Qj',
     email: 'huy.dang@coffeehouse.vn',
     phone: '0967 890 123',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   },
   {
@@ -108,7 +118,7 @@ export const INITIAL_USERS: User[] = [
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
     email: 'phuong.bui@coffeehouse.vn',
     phone: '0978 901 234',
-    password: 'aiicafe',
+    password: HASHED_DEFAULT_PASSWORD,
     isAccountActive: true,
   }
 ];

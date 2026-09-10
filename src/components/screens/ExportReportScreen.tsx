@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { User, CheckInRecord, PeerReviewSubmission, WeeklyShiftRegistration } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import * as XLSX from 'xlsx';
+import { STORAGE_KEY_ATTENDANCE_RECORDS } from '../../utils/constants';
 
 interface ExportReportScreenProps {
   currentUser: User;
@@ -47,7 +48,8 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
   };
 
   const exportAttendance = () => {
-    const stored = localStorage.getItem('coffeehouse_checkin_records');
+    // FIX: Use unified storage key to read attendance data
+    const stored = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
     const allRecords: Record<string, CheckInRecord[]> = stored ? JSON.parse(stored) : {};
     const rows: any[][] = [['Mã NV', 'Tên nhân viên', 'Ngày', 'Giờ vào', 'Giờ ra', 'Tổng giờ', 'Phương thức', 'Đúng giờ']];
 

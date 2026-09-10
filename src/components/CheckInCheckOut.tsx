@@ -4,13 +4,18 @@ import { CheckInRecord, CheckInMethod } from '../types';
 import {
   getCurrentPosition,
   isWithinStoreRadius,
-  generateShiftPin,
-  validateShiftPin,
-  getCurrentShiftType,
   getLocationErrorMessage,
   getCheckInMethodLabel,
   getCheckInMethodColor,
 } from '../utils/checkin';
+import { loadFaceApiModels } from '../utils/faceApiModel';
+import { compressImage, generatePhotoHash } from '../utils/imageCompress';
+import { generateShiftPin, validateShiftPin, getCurrentShiftType } from '../utils/auth';
+import { validateWifiConnection, IpCheckResult } from '../utils/ipCheck';
+import {
+  STORAGE_KEY_CHECKIN_SESSION,
+  STORAGE_KEY_ATTENDANCE_RECORDS,
+} from '../utils/constants';
 
 interface CheckInCheckOutProps {
   employeeId: string;
@@ -39,10 +44,12 @@ const SmileDetector: React.FC<{
     let mounted = true;
     const start = async () => {
       try {
-        await Promise.all([
-          faceapi.loadSsdMobilenetv1Model('/models'),
-          faceapi.loadFaceExpressionModel('/models'),
-        ]);
+        // FIX: Use singleton model loader instead of loading 6MB models every mount
+        // This ensures models are loaded only once and cached in memory
+        const modelsLoaded = await loadFaceApiModels();
+        if (!modelsLoaded) {
+          throw new Error('Không thể tải model nhận diện khuôn mặt');
+        }
 
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
@@ -239,7 +246,7 @@ const SmileDetector: React.FC<{
   );
 };
 
-const STORAGE_KEY_CHECKIN = 'aiicafe_checkin_session';
+const STORAGE_KEY_CHECKIN = STORAGE_KEY_CHECKIN_SESSION;
 
 interface CheckInSession {
   employeeId: string;
@@ -315,6 +322,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   const [pinAttempts, setPinAttempts] = useState(0);
   const [pinLocked, setPinLocked] = useState(false);
   const [pinLockTimer, setPinLockTimer] = useState(0);
+
+  // WiFi IP Check state
+  const [wifiCheckResult, setWifiCheckResult] = useState<IpCheckResult | null>(null);
+  const [wifiCheckLoading, setWifiCheckLoading] = useState(false);
 
   // Real-time clock
   useEffect(() => {
@@ -416,15 +427,34 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setCameraRetryCount((prev) => prev + 1);
   }, []);
 
-  const createRecord = (method: CheckInMethod, photo: string = '', location?: any, pinAttempt?: number, fallbackReason?: string) => {
+  // CRITICAL FIX: Unified createRecord that:
+  // 1. Compresses images to <30KB to prevent localStorage overflow
+  // 2. Writes to BOTH session store AND attendance records store
+  //    (previously ManagerDashboard read from a different key than CheckInCheckOut wrote to)
+  // 3. Generates photo hash for deduplication (anti-fraud)
+  const createRecord = async (method: CheckInMethod, photo: string = '', location?: any, pinAttempt?: number, fallbackReason?: string) => {
     const now = new Date();
     const timestamp = now.getTime();
+
+    // FIX: Compress image before storing to prevent localStorage overflow
+    // Original ~500KB per image → compressed to <30KB
+    let compressedPhoto = photo;
+    let photoHash = '';
+    if (photo && method === 'photo') {
+      try {
+        compressedPhoto = await compressImage(photo);
+        photoHash = await generatePhotoHash(photo);
+      } catch (err) {
+        console.warn('Image compression failed, using original:', err);
+      }
+    }
+
     const newRecord: CheckInRecord = {
       id: `checkin-${Date.now()}`,
       type: actionType,
       time: formatTime(now),
       address,
-      photo,
+      photo: compressedPhoto,  // COMPRESSED image (<30KB)
       smileDetected: method === 'photo',
       timestamp,
       checkInMethod: method,
@@ -437,11 +467,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setView('success');
     onCheckIn(newRecord);
 
+    // Persist check-in session to localStorage (for current employee UI state)
     if (actionType === 'checkin') {
       setHasCheckedIn(true);
       setCheckInTime(formatTime(now));
       setCheckInTimestamp(timestamp);
-      // Persist check-in session to localStorage
       const session: CheckInSession = {
         employeeId,
         hasCheckedIn: true,
@@ -466,20 +496,68 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       setHasCheckedIn(false);
       setCheckInTime(null);
       setCheckInTimestamp(null);
-      // Clear persisted session
       localStorage.removeItem(STORAGE_KEY_CHECKIN);
+    }
+
+    // CRITICAL FIX: Also write to attendance records store
+    // This is what ManagerDashboard reads from — previously this was MISSING
+    // causing Manager Dashboard to never show check-in data
+    try {
+      const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
+      const allRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
+      if (!allRecords[employeeId]) {
+        allRecords[employeeId] = [];
+      }
+      allRecords[employeeId].push(newRecord);
+      localStorage.setItem(STORAGE_KEY_ATTENDANCE_RECORDS, JSON.stringify(allRecords));
+    } catch (err) {
+      console.error('Failed to save attendance record:', err);
     }
   };
 
-  const handleConfirm = () => {
-    createRecord('photo', capturedPhoto || '');
+  const handleConfirm = async () => {
+    await createRecord('photo', capturedPhoto || '');
   };
 
-  const handleCaptureClick = (type: ActionType) => {
+  // WiFi IP validation before check-in/out
+  const handleCaptureClick = async (type: ActionType) => {
     setActionType(type);
     setCameraRetryCount(0);
     setCameraError('');
-    setView('permission');
+
+    // Validate WiFi connection first
+    setWifiCheckLoading(true);
+    try {
+      const result = await validateWifiConnection();
+      setWifiCheckResult(result);
+
+      if (!result.isValid && !result.useFallback) {
+        // IP not valid and no fallback — block check-in
+        setWifiCheckLoading(false);
+        return; // Don't proceed to permission/camera
+      }
+
+      if (!result.isValid && result.useFallback) {
+        // IP not valid but fallback enabled — show fallback selection
+        setWifiCheckLoading(false);
+        setView('fallback-select');
+        return;
+      }
+
+      // IP valid — proceed normally
+      setWifiCheckLoading(false);
+      setView('permission');
+    } catch (err) {
+      // Error checking IP — allow fallback if enabled
+      setWifiCheckLoading(false);
+      setWifiCheckResult({
+        isValid: false,
+        currentIP: null,
+        error: 'Lỗi kiểm tra kết nối Wi-Fi',
+        useFallback: true,
+      });
+      setView('fallback-select');
+    }
   };
 
   const handlePermissionAllow = async () => {
@@ -529,8 +607,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       if (within) {
         setGpsStatus('success');
-        setTimeout(() => {
-          createRecord(
+        setTimeout(async () => {
+          await createRecord(
             'gps',
             '',
             {
@@ -560,7 +638,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setPinError('');
   };
 
-  const handlePinSubmit = () => {
+  const handlePinSubmit = async () => {
     if (pinLocked) return;
 
     const today = new Date().toISOString().split('T')[0];
@@ -568,7 +646,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     const isValid = validateShiftPin(pinInput, today, shiftType);
 
     if (isValid) {
-      createRecord('pin', '', undefined, pinAttempts + 1, cameraError || 'user_choice');
+      await createRecord('pin', '', undefined, pinAttempts + 1, cameraError || 'user_choice');
     } else {
       const newAttempts = pinAttempts + 1;
       setPinAttempts(newAttempts);
@@ -600,6 +678,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setPinError('');
     setWorkHoursSummary(null);
     setPermissionDeniedMsg(null);
+    setWifiCheckResult(null);
   };
 
   const formatElapsed = (startTimestamp: number, nowMs: number): string => {
@@ -740,6 +819,89 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
           )}
         </div>
       </div>
+
+      {/* WiFi IP Check Error (shown when IP is invalid and no fallback) */}
+      {wifiCheckResult && !wifiCheckResult.isValid && !wifiCheckResult.useFallback && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="w-16 h-16 bg-[#FF3131]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-[#FF3131] text-3xl">wifi_off</span>
+            </div>
+            <h3 className="font-heading text-xl font-bold text-[#0F1E44] text-center mb-2">
+              Chưa kết nối Wi-Fi quán
+            </h3>
+            <p className="text-sm text-[#7A829A] text-center mb-4">
+              {wifiCheckResult.error || 'Bạn chưa kết nối với mạng Wi-Fi hợp lệ của quán.'}
+            </p>
+            
+            {/* Show both IP types */}
+            <div className="bg-[#F9F8FC] rounded-xl p-3 mb-4 space-y-2">
+              {wifiCheckResult.publicIP && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Public IP</p>
+                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{wifiCheckResult.publicIP}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    wifiCheckResult.details?.publicIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
+                  }`}>
+                    {wifiCheckResult.details?.publicIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
+                  </span>
+                </div>
+              )}
+              {wifiCheckResult.localIP && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Local IP</p>
+                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{wifiCheckResult.localIP}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    wifiCheckResult.details?.localIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
+                  }`}>
+                    {wifiCheckResult.details?.localIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-[#EFC14B]/10 border border-[#EFC14B]/30 rounded-xl p-3 mb-4">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-[#EFC14B] text-lg mt-0.5">info</span>
+                <p className="text-xs text-[#7A829A]">
+                  Vui lòng kết nối Wi-Fi tại cửa hàng để điểm danh. Nếu quán mất mạng, liên hệ Quản lý để bật chế độ dự phòng.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setWifiCheckResult(null);
+                setView('idle');
+              }}
+              className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* WiFi Check Loading Overlay */}
+      {wifiCheckLoading && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
+            <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
+              <span className="inline-block w-8 h-8 border-3 border-[#EFC14B]/30 border-t-[#EFC14B] rounded-full animate-spin" />
+            </div>
+            <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-2">
+              Kiểm tra kết nối Wi-Fi...
+            </h3>
+            <p className="text-sm text-[#7A829A]">
+              Đang xác minh địa chỉ IP mạng của bạn
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Permission Dialog */}
       {view === 'permission' && (

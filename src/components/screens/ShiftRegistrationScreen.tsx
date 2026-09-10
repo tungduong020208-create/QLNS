@@ -74,6 +74,57 @@ const isFormOpen = (): { open: boolean; message: string } => {
   };
 };
 
+/**
+ * NEW: Check for shift overlap within a registration.
+ * An employee cannot register two non-'off' shifts on the same day.
+ * Returns an array of conflicting dates.
+ */
+const checkShiftOverlap = (days: DayShiftRegistration[]): string[] => {
+  const conflicts: string[] = [];
+  // Each day should only have one shift — if somehow there are duplicates
+  // or if the data structure allows multiple shifts per day, this catches it
+  const seen = new Map<string, ShiftSlot>();
+  for (const day of days) {
+    if (day.shift === 'off') continue;
+    if (seen.has(day.date)) {
+      conflicts.push(day.date);
+    } else {
+      seen.set(day.date, day.shift);
+    }
+  }
+  return conflicts;
+};
+
+/**
+ * NEW: Check if registering a shift would conflict with existing approved registrations.
+ * Returns conflict details if overlap detected.
+ */
+const checkExistingOverlap = (
+  userId: string,
+  weekStart: string,
+  newDays: DayShiftRegistration[],
+  existingRegistrations: WeeklyShiftRegistration[]): { hasConflict: boolean; conflictDates: string[] } => {
+  const conflictDates: string[] = [];
+  
+  // Find existing approved/submitted registrations for the same user and week
+  const existing = existingRegistrations.find(
+    r => r.userId === userId && r.weekStart === weekStart && (r.status === 'approved' || r.status === 'submitted')
+  );
+  
+  if (!existing) return { hasConflict: false, conflictDates: [] };
+  
+  // Check each day for overlap
+  for (const newDay of newDays) {
+    if (newDay.shift === 'off') continue;
+    const existingDay = existing.days.find(d => d.date === newDay.date);
+    if (existingDay && existingDay.shift !== 'off') {
+      conflictDates.push(newDay.date);
+    }
+  }
+  
+  return { hasConflict: conflictDates.length > 0, conflictDates };
+};
+
 const getShiftInfo = (slot: ShiftSlot) =>
   SHIFT_OPTIONS.find((o) => o.value === slot) || SHIFT_OPTIONS[3];
 
@@ -137,6 +188,7 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
 
   // ─── Manager state ───
   const [managerWeekOffset, setManagerWeekOffset] = useState(0);
@@ -166,10 +218,37 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
     setDaySelections((prev) =>
       prev.map((d) => (d.date === date ? { ...d, shift } : d))
     );
+    // Clear overlap warning when user makes changes
+    setOverlapWarning(null);
   }, []);
 
   const handleSubmit = () => {
     if (!formCheck.open && !isManager) return;
+
+    // NEW: Check for shift overlaps before submitting
+    const internalOverlaps = checkShiftOverlap(daySelections);
+    if (internalOverlaps.length > 0) {
+      setOverlapWarning('Bạn đã đăng ký nhiều ca trong cùng ngày. Vui lòng kiểm tra lại.');
+      return;
+    }
+
+    // NEW: Check for conflicts with existing registrations
+    const { hasConflict, conflictDates } = checkExistingOverlap(
+      currentUser.id,
+      targetWeekStr,
+      daySelections,
+      registrations
+    );
+    if (hasConflict) {
+      const formattedDates = conflictDates.map(d => {
+        const date = new Date(d + 'T00:00:00');
+        return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
+      }).join(', ');
+      setOverlapWarning(`Trùng lịch với đăng ký đã có: ${formattedDates}. Vui lòng chọn ca khác.`);
+      return;
+    }
+
+    setOverlapWarning(null);
     setIsSaving(true);
 
     const now = new Date().toISOString();
@@ -273,6 +352,14 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
           <div className="mb-4 p-3 bg-[#4CAF72]/15 text-[#4CAF72] text-sm font-semibold rounded-xl flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">check_circle</span>
             Đã lưu lịch đăng ký thành công!
+          </div>
+        )}
+
+        {/* NEW: Overlap warning */}
+        {overlapWarning && (
+          <div className="mb-4 p-3 bg-[#FF3131]/10 border border-[#FF3131]/30 text-[#FF3131] text-sm font-semibold rounded-xl flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">warning</span>
+            {overlapWarning}
           </div>
         )}
 

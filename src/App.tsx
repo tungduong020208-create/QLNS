@@ -28,6 +28,7 @@ import { ManagerScheduleScreen, Shift } from './components/screens/ManagerSchedu
 import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
 import { ExportReportScreen } from './components/screens/ExportReportScreen';
 import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
+import { WifiConfigScreen } from './components/screens/WifiConfigScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 
 export default function App() {
@@ -381,6 +382,7 @@ export default function App() {
       manager: {
         home: ROUTES.MANAGER_DASHBOARD,
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
+        wifi_config: ROUTES.MANAGER_WIFI_CONFIG,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
         export_report: ROUTES.MANAGER_EXPORT,
@@ -599,6 +601,10 @@ export default function App() {
                         peerReviews={peerReviews}
                         shiftRegistrations={shiftRegistrations}
                       />
+                    } />
+
+                    <Route path="wifi-config" element={
+                      <WifiConfigScreen currentUser={currentUser} />
                     } />
 
                     <Route path="handover" element={

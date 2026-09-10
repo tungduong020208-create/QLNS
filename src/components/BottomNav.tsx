@@ -40,9 +40,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   // Filter tabs based on role
+  // Manager: sees dashboard, reviews, peer review, export, profile (NOT shift registration)
+  // Employee: sees home, reviews, peer review, shift registration, profile (NOT manager tools)
   const tabs = currentUser?.role === 'manager'
-    ? allTabs
-    : allTabs.filter(t => t.id !== "manager_schedule" && t.id !== "export_report");
+    ? allTabs.filter(t => t.id !== 'shift_registration')  // Manager approves schedules, doesn't register
+    : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report');
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#0F1E44] border-t border-[#1A2D5A] rounded-t-xl shadow-lg md:hidden">
