@@ -19,6 +19,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
+    if (pathname.includes('/wifi-config')) return 'wifi_config';
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
