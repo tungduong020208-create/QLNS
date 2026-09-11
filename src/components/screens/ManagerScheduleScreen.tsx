@@ -22,7 +22,6 @@ interface ManagerScheduleScreenProps {
   onAddShift: (shift: Shift) => void;
   onUpdateShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
-  onSwapShifts: (shift1Id: string, shift2Id: string) => void;
   onAddNotification: (notification: NotificationItem) => void;
 }
 
@@ -69,7 +68,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   onAddShift,
   onUpdateShift,
   onDeleteShift,
-  onSwapShifts,
   onAddNotification,
 }) => {
   // View state
@@ -85,7 +83,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Shift | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Shift | null>(null);
-  const [showSwapModal, setShowSwapModal] = useState<Shift | null>(null);
 
   // Form state for add/edit
   const [formEmployee, setFormEmployee] = useState('');
@@ -95,8 +92,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const [formEndTime, setFormEndTime] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
-  // Swap state
-  const [swapTargetEmployee, setSwapTargetEmployee] = useState('');
+
 
   // Current Monday for week view
   const currentMonday = useMemo(() => {
@@ -264,34 +260,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     });
 
     setShowDeleteConfirm(null);
-  };
-
-  // Handle swap shift
-  const handleSwapShift = () => {
-    if (!showSwapModal || !swapTargetEmployee) return;
-
-    // Find a shift for the target employee on the same date
-    const targetShift = filteredShifts.find(
-      (s) => s.employeeId === swapTargetEmployee && s.date === showSwapModal.date && s.id !== showSwapModal.id
-    );
-
-    if (targetShift) {
-      onSwapShifts(showSwapModal.id, targetShift.id);
-
-      // Notify both employees
-      onAddNotification({
-        id: `notif-${Date.now()}`,
-        title: 'Đổi ca thành công',
-        message: `Ca ${showSwapModal.shiftName} ngày ${showSwapModal.date} đã được đổi với ${targetShift.employeeName}`,
-        time: 'Vừa xong',
-        read: false,
-        type: 'system',
-        category: 'management',
-      });
-    }
-
-    setShowSwapModal(null);
-    setSwapTargetEmployee('');
   };
 
   // Vietnamese day names
@@ -560,9 +528,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                                   <button onClick={() => openEditModal(shift)} className="p-1 hover:bg-[#FDF8EE] rounded">
                                     <span className="material-symbols-outlined text-[14px] text-[#7A829A]">edit</span>
                                   </button>
-                                  <button onClick={() => setShowSwapModal(shift)} className="p-1 hover:bg-[#FDF8EE] rounded">
-                                    <span className="material-symbols-outlined text-[14px] text-[#7A829A]">swap_horiz</span>
-                                  </button>
                                   <button onClick={() => setShowDeleteConfirm(shift)} className="p-1 hover:bg-[#FF3131]/10 rounded">
                                     <span className="material-symbols-outlined text-[14px] text-[#FF3131]">delete</span>
                                   </button>
@@ -793,60 +758,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
         </div>
       )}
 
-      {/* Swap Shift Modal */}
-      {showSwapModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-lg border border-[#E8DFD0]">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Đổi ca làm việc</h3>
-              <button onClick={() => setShowSwapModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="bg-[#FDF8EE] rounded-xl p-4 mb-4">
-              <p className="text-xs text-[#7A829A] mb-1">Ca hiện tại:</p>
-              <div className="flex items-center gap-3">
-                <img src={showSwapModal.employeeAvatar} alt={showSwapModal.employeeName} className="w-10 h-10 rounded-full object-cover" />
-                <div>
-                  <p className="text-sm font-semibold text-[#0F1E44]">{showSwapModal.employeeName}</p>
-                  <p className="text-xs text-[#7A829A]">
-                    {showSwapModal.shiftName} • {showSwapModal.startTime} - {showSwapModal.endTime}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-[#7A829A] mb-1">Đổi với nhân viên:</label>
-              <select
-                value={swapTargetEmployee}
-                onChange={(e) => setSwapTargetEmployee(e.target.value)}
-                className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none"
-              >
-                <option value="">Chọn nhân viên</option>
-                {allUsers
-                  .filter((u) => u.id !== showSwapModal.employeeId && u.role !== 'manager')
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} - {u.role === 'manager' ? 'Quản lý' : 'Nhân viên'}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="flex gap-2 mt-4">
-              <button onClick={() => setShowSwapModal(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]">
-                Hủy
-              </button>
-              <button
-                onClick={handleSwapShift}
-                disabled={!swapTargetEmployee}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A] disabled:opacity-50"
-              >
-                Xác nhận đổi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

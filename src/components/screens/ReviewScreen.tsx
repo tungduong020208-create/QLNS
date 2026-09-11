@@ -160,11 +160,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
       });
   }, [evidences, selectedDate, isWeekendSelected, searchTerm]);
 
-  // Filter handover notifications by selected date
-  const handoverNotifications = useMemo(() => {
-    return notifications.filter((n) => n.category === 'handover');
-  }, [notifications]);
-
   const getCounts = (item: EvidenceItem) => {
     const r = item.reactions || [];
     return { good: r.filter((x) => x.type === 'good').length, bad: r.filter((x) => x.type === 'bad').length };
@@ -283,46 +278,6 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               )}
             </button>
           </form>
-        </section>
-      )}
-
-      {/* Handover Notifications Section */}
-      {handoverNotifications.length > 0 && (
-        <section className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="material-symbols-outlined text-[20px] text-[#0F1E44]">notifications</span>
-            <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Thông báo bàn giao ca</h3>
-            <span className="bg-[rgba(239,193,75,0.15)] text-[#0F1E44] text-xs font-semibold px-2 py-0.5 rounded-full">
-              {handoverNotifications.filter((n) => !n.read).length} mới
-            </span>
-          </div>
-          <div className="bg-white border border-[#E8DFD0]/70 rounded-2xl overflow-hidden shadow-sm">
-            {handoverNotifications.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => onMarkNotificationRead && onMarkNotificationRead(item.id)}
-                className={`p-4 border-b border-[#F5EDDF] last:border-b-0 hover:bg-[#FDF8EE] transition-colors cursor-pointer ${
-                  !item.read ? 'bg-[#EFC14B]/5' : ''
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 bg-[rgba(239,193,75,0.15)] text-[#0F1E44]">
-                    <span className="material-symbols-outlined text-[18px]">
-                      {item.type === 'reward' ? 'military_tech' : item.type === 'penalty' ? 'warning' : 'info'}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-sm font-semibold text-[#0F1E44]">{item.title}</span>
-                      <span className="text-[11px] text-[#7A829A]">{item.time}</span>
-                    </div>
-                    <p className="text-xs text-[#7A829A] leading-relaxed">{item.message}</p>
-                  </div>
-                  {!item.read && <div className="w-2 h-2 rounded-full bg-[#EFC14B] self-center flex-shrink-0"></div>}
-                </div>
-              </div>
-            ))}
-          </div>
         </section>
       )}
 

@@ -75,14 +75,12 @@ const isFormOpen = (): { open: boolean; message: string } => {
 };
 
 /**
- * NEW: Check for shift overlap within a registration.
+ * Check for shift overlap within a registration.
  * An employee cannot register two non-'off' shifts on the same day.
  * Returns an array of conflicting dates.
  */
 const checkShiftOverlap = (days: DayShiftRegistration[]): string[] => {
   const conflicts: string[] = [];
-  // Each day should only have one shift — if somehow there are duplicates
-  // or if the data structure allows multiple shifts per day, this catches it
   const seen = new Map<string, ShiftSlot>();
   for (const day of days) {
     if (day.shift === 'off') continue;
@@ -93,36 +91,6 @@ const checkShiftOverlap = (days: DayShiftRegistration[]): string[] => {
     }
   }
   return conflicts;
-};
-
-/**
- * NEW: Check if registering a shift would conflict with existing approved registrations.
- * Returns conflict details if overlap detected.
- */
-const checkExistingOverlap = (
-  userId: string,
-  weekStart: string,
-  newDays: DayShiftRegistration[],
-  existingRegistrations: WeeklyShiftRegistration[]): { hasConflict: boolean; conflictDates: string[] } => {
-  const conflictDates: string[] = [];
-  
-  // Find existing approved/submitted registrations for the same user and week
-  const existing = existingRegistrations.find(
-    r => r.userId === userId && r.weekStart === weekStart && (r.status === 'approved' || r.status === 'submitted')
-  );
-  
-  if (!existing) return { hasConflict: false, conflictDates: [] };
-  
-  // Check each day for overlap
-  for (const newDay of newDays) {
-    if (newDay.shift === 'off') continue;
-    const existingDay = existing.days.find(d => d.date === newDay.date);
-    if (existingDay && existingDay.shift !== 'off') {
-      conflictDates.push(newDay.date);
-    }
-  }
-  
-  return { hasConflict: conflictDates.length > 0, conflictDates };
 };
 
 const getShiftInfo = (slot: ShiftSlot) =>
@@ -143,7 +111,6 @@ interface ShiftRegistrationScreenProps {
   registrations: WeeklyShiftRegistration[];
   onSubmitRegistration: (reg: WeeklyShiftRegistration) => void;
   onUpdateRegistration: (reg: WeeklyShiftRegistration) => void;
-  onApproveRegistration: (regId: string, approved: boolean, note?: string) => void;
   onAddNotification: (notification: NotificationItem) => void;
 }
 
@@ -156,7 +123,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   registrations,
   onSubmitRegistration,
   onUpdateRegistration,
-  onApproveRegistration,
   onAddNotification,
 }) => {
   const isManager = currentUser.role === 'manager';
@@ -195,7 +161,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [selectedReg, setSelectedReg] = useState<WeeklyShiftRegistration | null>(null);
   const [editDaySelections, setEditDaySelections] = useState<DayShiftRegistration[]>([]);
-  const [approveNote, setApproveNote] = useState('');
 
   // Manager's target week
   const managerTargetMonday = useMemo(() => {
@@ -225,26 +190,10 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   const handleSubmit = () => {
     if (!formCheck.open && !isManager) return;
 
-    // NEW: Check for shift overlaps before submitting
+    // Check for shift overlaps before submitting
     const internalOverlaps = checkShiftOverlap(daySelections);
     if (internalOverlaps.length > 0) {
       setOverlapWarning('Bạn đã đăng ký nhiều ca trong cùng ngày. Vui lòng kiểm tra lại.');
-      return;
-    }
-
-    // NEW: Check for conflicts with existing registrations
-    const { hasConflict, conflictDates } = checkExistingOverlap(
-      currentUser.id,
-      targetWeekStr,
-      daySelections,
-      registrations
-    );
-    if (hasConflict) {
-      const formattedDates = conflictDates.map(d => {
-        const date = new Date(d + 'T00:00:00');
-        return date.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
-      }).join(', ');
-      setOverlapWarning(`Trùng lịch với đăng ký đã có: ${formattedDates}. Vui lòng chọn ca khác.`);
       return;
     }
 
@@ -283,7 +232,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   const handleManagerEdit = (reg: WeeklyShiftRegistration) => {
     setSelectedReg(reg);
     setEditDaySelections([...reg.days]);
-    setApproveNote('');
   };
 
   const handleManagerSave = () => {
@@ -297,28 +245,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
     setSelectedReg(null);
   };
 
-  const handleManagerApprove = (regId: string, approved: boolean) => {
-    onApproveRegistration(regId, approved, approveNote || undefined);
-    setSelectedReg(null);
-    setApproveNote('');
-
-    const reg = registrations.find((r) => r.id === regId);
-    if (reg) {
-      onAddNotification({
-        id: `notif-schedule-${Date.now()}`,
-        title: approved ? 'Lịch làm việc đã được duyệt' : 'Lịch làm việc bị từ chối',
-        message: approved
-          ? `Lịch tuần ${reg.weekNumber}/${reg.year} của ${reg.userName} đã được phê duyệt`
-          : `Lịch tuần ${reg.weekNumber}/${reg.year} của ${reg.userName} chưa được duyệt`,
-        time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-        read: false,
-        type: approved ? 'reward' : 'penalty',
-        category: 'management',
-        userId: reg.userId,
-      });
-    }
-  };
-
   const handleManagerDayChange = (date: string, shift: ShiftSlot) => {
     setEditDaySelections((prev) =>
       prev.map((d) => (d.date === date ? { ...d, shift } : d))
@@ -328,9 +254,8 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   // ─── Stats for manager ───
   const stats = useMemo(() => {
     const total = managerRegistrations.length;
-    const approved = managerRegistrations.filter((r) => r.status === 'approved').length;
-    const pending = managerRegistrations.filter((r) => r.status === 'submitted').length;
-    return { total, approved, pending };
+    const submitted = managerRegistrations.filter((r) => r.status === 'submitted').length;
+    return { total, submitted };
   }, [managerRegistrations]);
 
   // ═══════════════════════════════════════════════════
@@ -355,7 +280,7 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
           </div>
         )}
 
-        {/* NEW: Overlap warning */}
+        {/* Overlap warning */}
         {overlapWarning && (
           <div className="mb-4 p-3 bg-[#FF3131]/10 border border-[#FF3131]/30 text-[#FF3131] text-sm font-semibold rounded-xl flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">warning</span>
@@ -433,10 +358,10 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                   : 'text-[#0F1E44]'
               }`}>
                 {existingReg.status === 'approved'
-                  ? 'Lịch đã được duyệt'
+                  ? 'Lịch đã được lưu'
                   : existingReg.status === 'rejected'
                   ? 'Lịch chưa được duyệt'
-                  : 'Đã gửi — chờ quản lý duyệt'}
+                  : 'Đã gửi — chờ quản lý xác nhận'}
               </p>
               {existingReg.managerNote && (
                 <p className="text-[10px] text-[#7A829A] mt-0.5">
@@ -546,9 +471,9 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
     <div className="pb-28 pt-20 px-4 max-w-4xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-5">
-        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Duyệt lịch làm việc</h2>
+        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Quản lý lịch làm việc</h2>
         <p className="text-xs text-[#7A829A] mt-0.5">
-          Quản lý và phê duyệt lịch đăng ký ca làm của nhân viên
+          Xem và chỉnh sửa lịch đăng ký ca làm của nhân viên
         </p>
       </div>
 
@@ -579,18 +504,14 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
           <p className="text-xl font-heading font-bold text-[#0F1E44]">{stats.total}</p>
           <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Tổng đăng ký</p>
         </div>
         <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
-          <p className="text-xl font-heading font-bold text-[#4CAF72]">{stats.approved}</p>
-          <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Đã duyệt</p>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-[#E8DFD0] text-center">
-          <p className="text-xl font-heading font-bold text-[#EFC14B]">{stats.pending}</p>
-          <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Chờ duyệt</p>
+          <p className="text-xl font-heading font-bold text-[#EFC14B]">{stats.submitted}</p>
+          <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Đang chờ</p>
         </div>
       </div>
 
@@ -598,9 +519,8 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {[
           { value: 'all', label: 'Tất cả' },
-          { value: 'submitted', label: 'Chờ duyệt' },
-          { value: 'approved', label: 'Đã duyệt' },
-          { value: 'rejected', label: 'Từ chối' },
+          { value: 'submitted', label: 'Đang chờ' },
+          { value: 'approved', label: 'Đã xác nhận' },
         ].map((f) => (
           <button
             key={f.value}
@@ -658,10 +578,10 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                       : 'bg-[#EFC14B]/15 text-[#0F1E44]'
                   }`}>
                     {reg.status === 'approved'
-                      ? 'Đã duyệt'
+                      ? 'Đã xác nhận'
                       : reg.status === 'rejected'
                       ? 'Từ chối'
-                      : 'Chờ duyệt'}
+                      : 'Đang chờ'}
                   </span>
                 </div>
               </div>
@@ -700,23 +620,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                   <span className="material-symbols-outlined text-[14px]">edit</span>
                   Chỉnh sửa
                 </button>
-                {reg.status !== 'approved' && (
-                  <button
-                    onClick={() => handleManagerApprove(reg.id, true)}
-                    className="flex-1 h-9 bg-[#4CAF72] text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#3D9B63]"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">check</span>
-                    Duyệt
-                  </button>
-                )}
-                {reg.status !== 'rejected' && (
-                  <button
-                    onClick={() => handleManagerApprove(reg.id, false)}
-                    className="h-9 px-3 border border-[#FF3131]/30 text-[#FF3131] rounded-lg text-xs font-bold flex items-center justify-center gap-1 hover:bg-[#FF3131]/10"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">close</span>
-                  </button>
-                )}
               </div>
             </div>
           ))}
@@ -775,18 +678,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                   </div>
                 );
               })}
-
-              {/* Manager note */}
-              <div className="mt-4">
-                <label className="block text-xs font-bold text-[#0F1E44] mb-1">Ghi chú (tùy chọn)</label>
-                <textarea
-                  value={approveNote}
-                  onChange={(e) => setApproveNote(e.target.value)}
-                  placeholder="Thêm ghi chú cho nhân viên..."
-                  rows={2}
-                  className="w-full rounded-xl border border-[#E8DFD0] bg-white px-3 py-2.5 text-sm text-[#0F1E44] placeholder:text-[#7A829A] focus:border-[#EFC14B] outline-none resize-none"
-                />
-              </div>
             </div>
 
             {/* Modal footer */}
@@ -802,12 +693,6 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                 className="flex-1 h-10 bg-[#0F1E44] text-white rounded-xl text-xs font-bold hover:bg-[#1A2D5A]"
               >
                 Lưu thay đổi
-              </button>
-              <button
-                onClick={() => handleManagerApprove(selectedReg.id, true)}
-                className="flex-1 h-10 bg-[#4CAF72] text-white rounded-xl text-xs font-bold hover:bg-[#3D9B63]"
-              >
-                Lưu & Duyệt
               </button>
             </div>
           </div>

@@ -40,7 +40,7 @@ export interface EvidenceItem {
   reactions?: EvidenceReaction[];
 }
 
-export type NotificationCategory = 'management' | 'handover';
+export type NotificationCategory = 'management';
 
 export interface NotificationItem {
   id: string;
@@ -101,26 +101,9 @@ export interface CustomerRating {
   dateString: string;
 }
 
-export type ApprovalType = 'shift_swap' | 'time_off' | 'overtime' | 'other';
 
-export interface ApprovalRequest {
-  id: string;
-  type: ApprovalType;
-  title: string;
-  description: string;
-  employeeId: string;
-  employeeName: string;
-  employeeAvatar: string;
-  date: string;
-  dateString: string;
-  status: 'pending' | 'approved' | 'rejected';
-  targetEmployee?: string;
-  targetEmployeeId?: string;
-  managerNote?: string;
-  reviewedAt?: string;
-  reviewedBy?: string;
-  createdAt: string;
-}
+
+
 
 export interface QRReview {
   id: string;
@@ -223,7 +206,7 @@ export interface WeeklyShiftRegistration {
   userId: string;
   userName: string;
   userAvatar: string;
-  weekStart: string;          // YYYY-MM-DD (Monday of target week)
+  weekStart: string;          // YYYY-MM-DD (Monday of target year)
   year: number;
   weekNumber: number;         // ISO week number
   days: DayShiftRegistration[];
@@ -234,4 +217,83 @@ export interface WeeklyShiftRegistration {
   managerNote?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Work Hours Tracking ───
+export interface CheckInOutRecord {
+  id: string;
+  userId: string;
+  date: string;              // YYYY-MM-DD
+  checkInTime: string;       // ISO timestamp
+  checkOutTime?: string;     // ISO timestamp (null if still working)
+  hoursWorked?: number;      // Calculated hours
+  shiftName?: string;        // 'Ca sáng', 'Ca chiều', etc.
+}
+
+export interface WorkHoursSummary {
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  employeeCode: string;
+  month: string;             // YYYY-MM
+  totalHours: number;        // Total hours worked in month
+  checkInCount: number;      // Number of check-in/out pairs
+  records: CheckInOutRecord[];
+}
+
+// ─── Weekly Review Tracking ───
+export interface WeeklyReviewCount {
+  userId: string;
+  weekStart: string;         // YYYY-MM-DD (Monday)
+  reviewCount: number;       // Number of reviews submitted this week
+  lastReviewAt?: string;     // ISO timestamp of last review
+}
+
+// ─── Study Schedule ───
+export type DayOfWeek = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export interface StudyTimeSlot {
+  startTime: string;         // HH:mm
+  endTime: string;           // HH:mm
+  subject?: string;          // Optional subject name
+}
+
+export interface DayStudySchedule {
+  day: DayOfWeek;
+  isBusy: boolean;
+  timeSlots: StudyTimeSlot[];
+  note?: string;
+}
+
+export interface StudySchedule {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  weekStart: string;         // YYYY-MM-DD (Monday)
+  year: number;
+  weekNumber: number;
+  days: DayStudySchedule[];
+  submittedAt: string;
+  managerNote?: string;
+}
+
+// ─── Manual Shift Assignment ───
+export interface ManualShiftAssignment {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  weekStart: string;
+  year: number;
+  weekNumber: number;
+  shifts: {
+    date: string;            // YYYY-MM-DD
+    shiftName: string;       // 'Ca sáng', 'Ca chiều', 'Ca tối'
+    startTime: string;       // HH:mm
+    endTime: string;         // HH:mm
+  }[];
+  publishedAt?: string;
+  publishedBy?: string;
+  notes?: string;
 }

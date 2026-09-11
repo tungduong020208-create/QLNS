@@ -5,8 +5,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
-import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, ApprovalRequest, QRReview, PeerReviewSubmission, WeeklyShiftRegistration } from './types';
-import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_APPROVAL_REQUESTS, INITIAL_QR_REVIEWS } from './data/initialData';
+import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, QRReview, PeerReviewSubmission, WeeklyShiftRegistration, CheckInOutRecord, WorkHoursSummary, StudySchedule, ManualShiftAssignment } from './types';
+import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_QR_REVIEWS } from './data/initialData';
 import { INITIAL_PEER_REVIEWS } from './data/peerReviewData';
 import { ROUTES, getDefaultHomeRoute } from './routes';
 import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
@@ -22,7 +22,9 @@ import { EvidenceDetailModal } from './components/modals/EvidenceDetailModal';
 import { ToastNotification, ToastMessage } from './components/modals/ToastNotification';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
-import { ApprovalScreen } from './components/screens/ApprovalScreen';
+import { WorkHoursScreen } from './components/screens/WorkHoursScreen';
+import { StudyScheduleScreen } from './components/screens/StudyScheduleScreen';
+import { ManagerStudySchedulesScreen } from './components/screens/ManagerStudySchedulesScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
 import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
 import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
@@ -74,11 +76,6 @@ export default function App() {
       }));
     }
     return INITIAL_NOTIFICATIONS;
-  });
-
-  const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>(() => {
-    const saved = localStorage.getItem('coffeehouse_approvals');
-    return saved ? JSON.parse(saved) : INITIAL_APPROVAL_REQUESTS;
   });
 
   const [qrReviews, setQrReviews] = useState<QRReview[]>(() => {
@@ -141,6 +138,18 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // ─── Study Schedules ───
+  const [studySchedules, setStudySchedules] = useState<StudySchedule[]>(() => {
+    const saved = localStorage.getItem('aiicafe_study_schedules');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // ─── Manual Shift Assignments ───
+  const [manualAssignments, setManualAssignments] = useState<ManualShiftAssignment[]>(() => {
+    const saved = localStorage.getItem('aiicafe_manual_assignments');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // ─── UI State ───
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
@@ -154,11 +163,13 @@ export default function App() {
   useEffect(() => { localStorage.setItem('enterprise_hr_evidences', JSON.stringify(evidences)); }, [evidences]);
   useEffect(() => { localStorage.setItem('enterprise_hr_notifications', JSON.stringify(notifications)); }, [notifications]);
   useEffect(() => { localStorage.setItem('enterprise_hr_users', JSON.stringify(users)); }, [users]);
-  useEffect(() => { localStorage.setItem('coffeehouse_approvals', JSON.stringify(approvalRequests)); }, [approvalRequests]);
+
   useEffect(() => { localStorage.setItem('coffeehouse_qr_reviews', JSON.stringify(qrReviews)); }, [qrReviews]);
   useEffect(() => { localStorage.setItem('coffeehouse_peer_reviews', JSON.stringify(peerReviews)); }, [peerReviews]);
   useEffect(() => { localStorage.setItem('coffeehouse_shifts', JSON.stringify(shifts)); }, [shifts]);
   useEffect(() => { localStorage.setItem('aiicafe_shift_registrations', JSON.stringify(shiftRegistrations)); }, [shiftRegistrations]);
+  useEffect(() => { localStorage.setItem('aiicafe_study_schedules', JSON.stringify(studySchedules)); }, [studySchedules]);
+  useEffect(() => { localStorage.setItem('aiicafe_manual_assignments', JSON.stringify(manualAssignments)); }, [manualAssignments]);
   useEffect(() => { localStorage.setItem('enterprise_hr_auth', JSON.stringify(isLoggedIn)); }, [isLoggedIn]);
 
   // Persist current user
@@ -233,7 +244,7 @@ export default function App() {
       time: 'Vừa xong',
       read: false,
       type: 'pending',
-      category: 'handover'
+      category: 'management'
     };
     setNotifications(prev => [newNotif, ...prev]);
     addToast('success', 'Nộp minh chứng thành công', 'Minh chứng đã được gửi đến bộ phận quản lý');
@@ -282,19 +293,75 @@ export default function App() {
     addToast(status === 'good' ? 'success' : 'error', status === 'good' ? 'Đã duyệt TỐT' : 'Đã đánh giá CHƯA TỐT', `Đã cập nhật ${status === 'good' ? `+${points}` : `${points}`} điểm cho nhân viên`);
   };
 
-  // ─── Approval handlers ───
-  const handleApproveRequest = (id: string, note: string) => {
-    setApprovalRequests(prev =>
-      prev.map(r => r.id === id ? { ...r, status: 'approved' as const, managerNote: note, reviewedAt: new Date().toLocaleString('vi-VN'), reviewedBy: currentUser?.name || '' } : r)
-    );
-    addToast('success', 'Đã duyệt yêu cầu', 'Yêu cầu đã được phê duyệt thành công');
+  // ─── Work Hours Tracking ───
+  const [checkInOutRecords, setCheckInOutRecords] = useState<CheckInOutRecord[]>(() => {
+    const saved = localStorage.getItem('aiicafe_checkinout_records');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  useEffect(() => { localStorage.setItem('aiicafe_checkinout_records', JSON.stringify(checkInOutRecords)); }, [checkInOutRecords]);
+
+  // Handle check-in
+  const handleCheckIn = (record: CheckInRecord) => {
+    setCheckInRecord(record);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const newCheckIn: CheckInOutRecord = {
+      id: `ci-${Date.now()}`,
+      userId: currentUser?.id || '',
+      date: todayStr,
+      checkInTime: new Date().toISOString(),
+    };
+    setCheckInOutRecords(prev => [...prev, newCheckIn]);
+    addToast('success', 'Điểm danh thành công', `Check-in lúc ${record.time} đã được ghi nhận`);
   };
 
-  const handleRejectRequest = (id: string, note: string) => {
-    setApprovalRequests(prev =>
-      prev.map(r => r.id === id ? { ...r, status: 'rejected' as const, managerNote: note, reviewedAt: new Date().toLocaleString('vi-VN'), reviewedBy: currentUser?.name || '' } : r)
-    );
-    addToast('error', 'Đã từ chối', 'Yêu cầu đã bị từ chối');
+  // Handle check-out
+  const handleCheckOut = (record: CheckInRecord) => {
+    setCheckInRecord(record);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    
+    setCheckInOutRecords(prev => {
+      // Find the most recent check-in for today without checkout
+      const lastCheckInIndex = prev.findLastIndex(
+        r => r.userId === currentUser?.id && r.date === todayStr && !r.checkOutTime
+      );
+      
+      if (lastCheckInIndex === -1) return prev;
+      
+      const updated = [...prev];
+      const checkInTime = new Date(updated[lastCheckInIndex].checkInTime);
+      const hoursWorked = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
+      
+      updated[lastCheckInIndex] = {
+        ...updated[lastCheckInIndex],
+        checkOutTime: now.toISOString(),
+        hoursWorked: Math.round(hoursWorked * 100) / 100,
+      };
+      return updated;
+    });
+    addToast('success', 'Điểm danh thành công', `Check-out lúc ${record.time} đã được ghi nhận`);
+  };
+
+  // Calculate work hours summary for a given month
+  const getWorkHoursSummary = (yearMonth: string): WorkHoursSummary[] => {
+    const employees = users.filter(u => u.role !== 'manager');
+    return employees.map(emp => {
+      const empRecords = checkInOutRecords.filter(
+        r => r.userId === emp.id && r.date.startsWith(yearMonth)
+      );
+      const totalHours = empRecords.reduce((sum, r) => sum + (r.hoursWorked || 0), 0);
+      return {
+        userId: emp.id,
+        userName: emp.name,
+        userAvatar: emp.avatar,
+        employeeCode: emp.employeeCode,
+        month: yearMonth,
+        totalHours: Math.round(totalHours * 100) / 100,
+        checkInCount: empRecords.filter(r => r.checkOutTime).length,
+        records: empRecords,
+      };
+    });
   };
 
   // ─── Peer review ───
@@ -319,20 +386,6 @@ export default function App() {
     addToast('info', 'Đã xóa ca', 'Ca làm việc đã bị xóa');
   };
 
-  const handleSwapShifts = (shift1Id: string, shift2Id: string) => {
-    setShifts(prev => {
-      const shift1 = prev.find(s => s.id === shift1Id);
-      const shift2 = prev.find(s => s.id === shift2Id);
-      if (!shift1 || !shift2) return prev;
-      return prev.map(s => {
-        if (s.id === shift1Id) return { ...s, employeeId: shift2.employeeId, employeeName: shift2.employeeName, employeeAvatar: shift2.employeeAvatar, swappedWith: shift2.employeeId };
-        if (s.id === shift2Id) return { ...s, employeeId: shift1.employeeId, employeeName: shift1.employeeName, employeeAvatar: shift1.employeeAvatar, swappedWith: shift1.employeeId };
-        return s;
-      });
-    });
-    addToast('success', 'Đã đổi ca', 'Ca làm việc đã được đổi thành công');
-  };
-
   // ─── Shift Registration Handlers ───
   const handleSubmitRegistration = (reg: WeeklyShiftRegistration) => {
     setShiftRegistrations(prev => [...prev, reg]);
@@ -344,22 +397,27 @@ export default function App() {
     addToast('success', 'Đã cập nhật', 'Lịch làm việc đã được cập nhật');
   };
 
-  const handleApproveRegistration = (regId: string, approved: boolean, note?: string) => {
-    setShiftRegistrations(prev => prev.map(r => {
-      if (r.id !== regId) return r;
-      return {
-        ...r,
-        status: approved ? 'approved' : 'rejected',
-        approvedAt: new Date().toISOString(),
-        approvedBy: currentUser?.id,
-        managerNote: note,
-      };
-    }));
-    addToast(
-      approved ? 'success' : 'info',
-      approved ? 'Đã duyệt lịch' : 'Đã từ chối lịch',
-      note || ''
-    );
+  // ─── Study Schedule Handlers ───
+  const handleSubmitStudySchedule = (schedule: StudySchedule) => {
+    setStudySchedules(prev => {
+      const existing = prev.find(s => s.userId === schedule.userId && s.weekStart === schedule.weekStart);
+      if (existing) {
+        return prev.map(s => s.id === existing.id ? schedule : s);
+      }
+      return [...prev, schedule];
+    });
+  };
+
+  // ─── Manual Assignment Handlers ───
+  const handlePublishSchedule = (assignment: ManualShiftAssignment) => {
+    setManualAssignments(prev => {
+      const existing = prev.find(a => a.userId === assignment.userId && a.weekStart === assignment.weekStart);
+      if (existing) {
+        return prev.map(a => a.id === existing.id ? assignment : a);
+      }
+      return [...prev, assignment];
+    });
+    addToast('success', 'Đã xuất bản lịch', `Lịch làm việc đã được cập nhật cho ${assignment.userName}`);
   };
 
   // ─── Notifications ───
@@ -382,6 +440,8 @@ export default function App() {
       manager: {
         home: ROUTES.MANAGER_DASHBOARD,
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
+        work_hours: ROUTES.MANAGER_WORK_HOURS,
+        study_schedules: ROUTES.MANAGER_STUDY_SCHEDULES,
         wifi_config: ROUTES.MANAGER_WIFI_CONFIG,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
@@ -392,7 +452,7 @@ export default function App() {
         home: ROUTES.EMPLOYEE_HOME,
         review: ROUTES.EMPLOYEE_HANDOVER,
         peer_review: ROUTES.EMPLOYEE_PEER_REVIEW,
-        shift_registration: ROUTES.EMPLOYEE_SHIFT_REGISTRATION,
+        study_schedule: ROUTES.EMPLOYEE_SHIFT_REGISTRATION,
         profile: ROUTES.EMPLOYEE_PROFILE,
       },
     };
@@ -468,13 +528,17 @@ export default function App() {
                           currentUser={currentUser}
                           evidences={evidences}
                           customerRatings={customerRatings}
+                          peerReviews={peerReviews}
                           onNavigateSubmit={() => navigate(currentUser.role === 'manager' ? ROUTES.MANAGER_DASHBOARD : ROUTES.EMPLOYEE_HOME)}
                           onSelectEvidence={(e) => setSelectedEvidence(e)}
                           onNavigateReview={() => goTo('review')}
                           checkInRecord={checkInRecord}
                           onCheckIn={(record) => {
-                            setCheckInRecord(record);
-                            addToast('success', 'Điểm danh thành công', `${record.type === 'checkin' ? 'Check-in' : 'Check-out'} lúc ${record.time} đã được ghi nhận`);
+                            if (record.type === 'checkin') {
+                              handleCheckIn(record);
+                            } else {
+                              handleCheckOut(record);
+                            }
                           }}
                         />
                       } />
@@ -499,13 +563,17 @@ export default function App() {
                         currentUser={currentUser}
                         evidences={evidences}
                         customerRatings={customerRatings}
+                        peerReviews={peerReviews}
                         onNavigateSubmit={() => {}}
                         onSelectEvidence={(e) => setSelectedEvidence(e)}
                         onNavigateReview={() => goTo('review')}
                         checkInRecord={checkInRecord}
                         onCheckIn={(record) => {
-                          setCheckInRecord(record);
-                          addToast('success', 'Điểm danh thành công', `${record.type === 'checkin' ? 'Check-in' : 'Check-out'} lúc ${record.time} đã được ghi nhận`);
+                          if (record.type === 'checkin') {
+                            handleCheckIn(record);
+                          } else {
+                            handleCheckOut(record);
+                          }
                         }}
                       />
                     } />
@@ -529,14 +597,13 @@ export default function App() {
                       />
                     } />
                     <Route path="shift-registration" element={
-                      <ShiftRegistrationScreen
+                      <StudyScheduleScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        studySchedules={studySchedules}
                         registrations={shiftRegistrations}
+                        onSubmitStudySchedule={handleSubmitStudySchedule}
                         onSubmitRegistration={handleSubmitRegistration}
                         onUpdateRegistration={handleUpdateRegistration}
-                        onApproveRegistration={handleApproveRegistration}
-                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
                     <Route path="profile" element={
@@ -577,18 +644,32 @@ export default function App() {
                       <ManagerScheduleTab
                         currentUser={currentUser}
                         allUsers={users}
-                        approvalRequests={approvalRequests}
-                        onApproveRequest={handleApproveRequest}
-                        onRejectRequest={handleRejectRequest}
                         shifts={shifts}
                         onAddShift={handleAddShift}
                         onUpdateShift={handleUpdateShift}
                         onDeleteShift={handleDeleteShift}
-                        onSwapShifts={handleSwapShifts}
                         registrations={shiftRegistrations}
                         onSubmitRegistration={handleSubmitRegistration}
                         onUpdateRegistration={handleUpdateRegistration}
-                        onApproveRegistration={handleApproveRegistration}
+                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
+                      />
+                    } />
+                    <Route path="work-hours" element={
+                      <WorkHoursScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        getWorkHoursSummary={getWorkHoursSummary}
+                        checkInOutRecords={checkInOutRecords}
+                      />
+                    } />
+                    <Route path="study-schedules" element={
+                      <ManagerStudySchedulesScreen
+                        currentUser={currentUser}
+                        allUsers={users}
+                        studySchedules={studySchedules}
+                        registrations={shiftRegistrations}
+                        manualAssignments={manualAssignments}
+                        onPublishSchedule={handlePublishSchedule}
                         onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
@@ -611,7 +692,7 @@ export default function App() {
                       <ReviewScreen
                         currentUser={currentUser}
                         evidences={evidences}
-                        notifications={notifications}
+                        notifications={notifications.filter(n => n.category !== 'handover')}
                         onReactEvidence={handleReactEvidence}
                         onMarkNotificationRead={handleMarkNotificationRead}
                         onSubmitEvidence={handleSubmitEvidence}
@@ -623,17 +704,6 @@ export default function App() {
                         allUsers={users}
                         peerReviews={peerReviews}
                         onSubmitReview={handleSubmitPeerReview}
-                      />
-                    } />
-                    <Route path="shift-registration" element={
-                      <ShiftRegistrationScreen
-                        currentUser={currentUser}
-                        allUsers={users}
-                        registrations={shiftRegistrations}
-                        onSubmitRegistration={handleSubmitRegistration}
-                        onUpdateRegistration={handleUpdateRegistration}
-                        onApproveRegistration={handleApproveRegistration}
-                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
                       />
                     } />
                     <Route path="profile" element={

@@ -19,10 +19,12 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
     if (pathname.includes('/schedule')) return 'manager_schedule';
+    if (pathname.includes('/work-hours')) return 'work_hours';
+    if (pathname.includes('/study-schedules')) return 'study_schedules';
     if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
-    if (pathname.includes('/shift-registration')) return 'shift_registration';
+    if (pathname.includes('/shift-registration')) return 'study_schedule';
     if (pathname.includes('/profile')) return 'profile';
     return 'home';
   };
@@ -32,19 +34,21 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   const allTabs: { id: string; label: string; icon: string }[] = [
     { id: 'home', label: currentUser?.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
+    { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
+    { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
     { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
-    { id: 'shift_registration', label: 'Đăng ký lịch', icon: 'event_available' },
+    { id: 'study_schedule', label: 'Đăng ký lịch', icon: 'event_available' },
     { id: 'profile', label: 'Trang cá nhân', icon: 'person' },
   ];
 
   // Filter tabs based on role
-  // Manager: sees dashboard, reviews, peer review, export, profile (NOT shift registration)
-  // Employee: sees home, reviews, peer review, shift registration, profile (NOT manager tools)
+  // Manager: sees dashboard, reviews, peer review, export, profile (NOT employee shift registration)
+  // Employee: sees home, reviews, peer review, study schedule, profile (NOT manager tools)
   const tabs = currentUser?.role === 'manager'
-    ? allTabs.filter(t => t.id !== 'shift_registration')  // Manager approves schedules, doesn't register
-    : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report');
+    ? allTabs.filter(t => t.id !== 'study_schedule')  // Manager uses study_schedules instead
+    : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report' && t.id !== 'work_hours' && t.id !== 'study_schedules');
 
   return (
     <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#0F1E44] border-t border-[#1A2D5A] rounded-t-xl shadow-lg md:hidden">

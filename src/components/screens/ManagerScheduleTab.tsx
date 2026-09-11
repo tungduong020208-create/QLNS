@@ -1,57 +1,43 @@
 import React, { useState } from 'react';
-import { User, NotificationItem, ApprovalRequest, WeeklyShiftRegistration } from '../../types';
+import { User, NotificationItem, WeeklyShiftRegistration } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
-import { ApprovalScreen } from './ApprovalScreen';
 import { ManagerScheduleScreen } from './ManagerScheduleScreen';
 import { ShiftRegistrationScreen } from './ShiftRegistrationScreen';
 
 interface ManagerScheduleTabProps {
   currentUser: User;
   allUsers: User[];
-  // Approval
-  approvalRequests: ApprovalRequest[];
-  onApproveRequest: (id: string, note: string) => void;
-  onRejectRequest: (id: string, note: string) => void;
   // Shifts
   shifts: Shift[];
   onAddShift: (shift: Shift) => void;
   onUpdateShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
-  onSwapShifts: (shift1Id: string, shift2Id: string) => void;
   // Registrations
   registrations: WeeklyShiftRegistration[];
   onSubmitRegistration: (reg: WeeklyShiftRegistration) => void;
   onUpdateRegistration: (reg: WeeklyShiftRegistration) => void;
-  onApproveRegistration: (regId: string, approved: boolean, note?: string) => void;
   onAddNotification: (notification: NotificationItem) => void;
 }
 
-type SubTab = 'pending' | 'shifts' | 'weekly';
+type SubTab = 'shifts' | 'weekly';
 
 export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   currentUser,
   allUsers,
-  approvalRequests,
-  onApproveRequest,
-  onRejectRequest,
   shifts,
   onAddShift,
   onUpdateShift,
   onDeleteShift,
-  onSwapShifts,
   registrations,
   onSubmitRegistration,
   onUpdateRegistration,
-  onApproveRegistration,
   onAddNotification,
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('pending');
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('shifts');
 
-  const pendingCount = approvalRequests.filter((r) => r.status === 'pending').length;
   const pendingRegCount = registrations.filter((r) => r.status === 'submitted').length;
 
   const subTabs: { id: SubTab; label: string; icon: string; badge?: number }[] = [
-    { id: 'pending', label: 'Phê duyệt', icon: 'how_to_reg', badge: pendingCount },
     { id: 'shifts', label: 'Ca làm', icon: 'calendar_month' },
     { id: 'weekly', label: 'Đăng ký tuần', icon: 'event_available', badge: pendingRegCount > 0 ? pendingRegCount : undefined },
   ];
@@ -82,15 +68,6 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
       </div>
 
       {/* Sub-tab content — render inline without duplicate wrappers */}
-      {activeSubTab === 'pending' && (
-        <ApprovalScreen
-          currentUser={currentUser}
-          requests={approvalRequests}
-          onApprove={onApproveRequest}
-          onReject={onRejectRequest}
-        />
-      )}
-
       {activeSubTab === 'shifts' && (
         <ManagerScheduleScreen
           currentUser={currentUser}
@@ -99,7 +76,6 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           onAddShift={onAddShift}
           onUpdateShift={onUpdateShift}
           onDeleteShift={onDeleteShift}
-          onSwapShifts={onSwapShifts}
           onAddNotification={onAddNotification}
         />
       )}
@@ -111,7 +87,6 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           registrations={registrations}
           onSubmitRegistration={onSubmitRegistration}
           onUpdateRegistration={onUpdateRegistration}
-          onApproveRegistration={onApproveRegistration}
           onAddNotification={onAddNotification}
         />
       )}

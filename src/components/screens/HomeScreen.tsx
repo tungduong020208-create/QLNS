@@ -1,12 +1,14 @@
 import React from 'react';
-import { User, EvidenceItem, CheckInRecord, CustomerRating } from '../../types';
+import { User, EvidenceItem, CheckInRecord, CustomerRating, PeerReviewSubmission } from '../../types';
 import CheckInCheckOut from '../CheckInCheckOut';
 import WorkSchedule from '../WorkSchedule';
+import { WeeklyReviewTracker } from '../WeeklyReviewTracker';
 
 interface HomeScreenProps {
   currentUser: User;
   evidences: EvidenceItem[];
   customerRatings: CustomerRating[];
+  peerReviews?: PeerReviewSubmission[];
   onNavigateSubmit: () => void;
   onSelectEvidence: (evidence: EvidenceItem) => void;
   onNavigateReview?: () => void;
@@ -18,6 +20,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   currentUser,
   evidences,
   customerRatings,
+  peerReviews = [],
   onCheckIn
 }) => {
   const myRatings = currentUser.role === 'manager'
@@ -55,6 +58,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {currentUser.role === 'employee' && (
         <WorkSchedule employeeId={currentUser.id} employeeName={currentUser.name} />
+      )}
+
+      {currentUser.role === 'employee' && (
+        <WeeklyReviewTracker userId={currentUser.id} peerReviews={peerReviews} className="mb-6" />
       )}
 
     </div>
