@@ -230,6 +230,19 @@ export interface CheckInOutRecord {
   shiftName?: string;        // 'Ca sáng', 'Ca chiều', etc.
 }
 
+// ─── Geofence Monitoring (post check-in) ───
+export interface GeofenceEvent {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  timestamp: string;          // ISO timestamp
+  latitude: number;
+  longitude: number;
+  distanceMeters: number;     // measured distance from office
+  thresholdMeters: number;    // alert radius at time of event
+  isRepeat: boolean;          // true = repeated alert while still out of range
+}
+
 export interface WorkHoursSummary {
   userId: string;
   userName: string;

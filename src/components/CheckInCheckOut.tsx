@@ -4,6 +4,7 @@ import { CheckInRecord, CheckInMethod } from '../types';
 import {
   getCurrentPosition,
   isWithinStoreRadius,
+  getDistanceToOffice,
   getLocationErrorMessage,
   getCheckInMethodLabel,
   getCheckInMethodColor,
@@ -11,10 +12,12 @@ import {
 import { loadFaceApiModels } from '../utils/faceApiModel';
 import { compressImage, generatePhotoHash } from '../utils/imageCompress';
 import { generateShiftPin, validateShiftPin, getCurrentShiftType } from '../utils/auth';
-import { validateWifiConnection, IpCheckResult } from '../utils/ipCheck';
+import { validateWifiConnection, IpCheckResult, OFFICE_WIFI_NAME } from '../utils/ipCheck';
 import {
   STORAGE_KEY_CHECKIN_SESSION,
   STORAGE_KEY_ATTENDANCE_RECORDS,
+  DEFAULT_STORE,
+  OFFICE_WIFI,
 } from '../utils/constants';
 
 interface CheckInCheckOutProps {
@@ -327,6 +330,13 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   const [wifiCheckResult, setWifiCheckResult] = useState<IpCheckResult | null>(null);
   const [wifiCheckLoading, setWifiCheckLoading] = useState(false);
 
+  // GPS gate state (blocks check-in when GPS fails or employee is out of office radius)
+  const [gpsBlockError, setGpsBlockError] = useState<{
+    kind: 'error' | 'too_far';
+    message: string;
+    distance?: number;
+  } | null>(null);
+
   // Real-time clock
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 1000);
@@ -519,45 +529,77 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     await createRecord('photo', capturedPhoto || '');
   };
 
-  // WiFi IP validation before check-in/out
+  // Wi-Fi + GPS validation before check-in/out — both checks run in PARALLEL.
+  // Wi-Fi gate: device must be on the office network (public IP / local subnet).
+  // GPS gate: device must be within the office radius — a valid Wi-Fi but a far
+  // GPS position suggests spoofed Wi-Fi / VPN and is rejected.
   const handleCaptureClick = async (type: ActionType) => {
     setActionType(type);
     setCameraRetryCount(0);
     setCameraError('');
 
-    // Validate WiFi connection first
     setWifiCheckLoading(true);
-    try {
-      const result = await validateWifiConnection();
-      setWifiCheckResult(result);
+    const [wifiSettled, gpsSettled] = await Promise.allSettled([
+      validateWifiConnection(),
+      getCurrentPosition(),
+    ]);
+    setWifiCheckLoading(false);
 
-      if (!result.isValid && !result.useFallback) {
-        // IP not valid and no fallback — block check-in
-        setWifiCheckLoading(false);
-        return; // Don't proceed to permission/camera
-      }
-
-      if (!result.isValid && result.useFallback) {
-        // IP not valid but fallback enabled — show fallback selection
-        setWifiCheckLoading(false);
-        setView('fallback-select');
-        return;
-      }
-
-      // IP valid — proceed normally
-      setWifiCheckLoading(false);
-      setView('permission');
-    } catch (err) {
-      // Error checking IP — allow fallback if enabled
-      setWifiCheckLoading(false);
-      setWifiCheckResult({
+    // ── Wi-Fi gate ──
+    let wifiResult: IpCheckResult;
+    if (wifiSettled.status === 'fulfilled') {
+      wifiResult = wifiSettled.value;
+    } else {
+      wifiResult = {
         isValid: false,
-        currentIP: null,
+        publicIP: null,
+        localIP: null,
         error: 'Lỗi kiểm tra kết nối Wi-Fi',
-        useFallback: true,
-      });
-      setView('fallback-select');
+        useFallback: OFFICE_WIFI.fallbackEnabled,
+        details: { publicIPValid: false, localIPValid: false },
+      };
     }
+    setWifiCheckResult(wifiResult);
+
+    if (!wifiResult.isValid && !wifiResult.useFallback) {
+      // Wrong Wi-Fi and no fallback — the Wi-Fi error modal is shown
+      return; // Don't proceed to permission/camera
+    }
+    if (!wifiResult.isValid && wifiResult.useFallback) {
+      // Wi-Fi invalid but fallback enabled — show fallback selection
+      setView('fallback-select');
+      return;
+    }
+
+    // ── GPS gate (parallel with Wi-Fi, mandatory) ──
+    if (gpsSettled.status === 'rejected') {
+      const reason: any = gpsSettled.reason;
+      const message = typeof reason?.code === 'number'
+        ? getLocationErrorMessage(reason as GeolocationPositionError)
+        : (reason?.message || 'Không thể xác định vị trí GPS');
+      setGpsBlockError({ kind: 'error', message });
+      return;
+    }
+    const position = gpsSettled.value;
+    setGpsCoords({ lat: position.coords.latitude, lon: position.coords.longitude });
+    const distance = Math.round(getDistanceToOffice(position.coords.latitude, position.coords.longitude));
+    if (distance > DEFAULT_STORE.radius) {
+      // Correct Wi-Fi but far away — possible spoofed Wi-Fi / VPN
+      setGpsBlockError({
+        kind: 'too_far',
+        message: `Bạn đang cách văn phòng ${distance}m (giới hạn ${DEFAULT_STORE.radius}m). Wi-Fi hợp lệ nhưng vị trí GPS lệch xa — nghi ngờ giả mạo Wi-Fi hoặc dùng VPN. Vui lòng đến văn phòng để chấm công.`,
+        distance,
+      });
+      return;
+    }
+
+    // Both gates passed — proceed to camera flow
+    setView('permission');
+  };
+
+  const handleGpsRetry = () => {
+    setGpsBlockError(null);
+    handleCaptureClick(actionType);
   };
 
   const handlePermissionAllow = async () => {
@@ -679,6 +721,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setWorkHoursSummary(null);
     setPermissionDeniedMsg(null);
     setWifiCheckResult(null);
+    setGpsBlockError(null);
   };
 
   const formatElapsed = (startTimestamp: number, nowMs: number): string => {
@@ -759,6 +802,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <p className="text-[11px] text-[#7A829A] text-center mt-2">
                 📸 Chụp ảnh nụ cười để xác nhận điểm danh
               </p>
+              <p className="text-[10px] text-[#7A829A]/80 text-center mt-1 flex items-center justify-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">shield</span>
+                Vị trí chỉ được theo dõi trong giờ làm việc (từ lúc check-in) và dừng ngay khi check-out
+              </p>
 
               {/* Show fallback button after 2 camera failures */}
               {cameraRetryCount >= 2 && (
@@ -815,6 +862,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <p className="text-[11px] text-[#7A829A] text-center mt-2">
                 📸 Chụp ảnh để xác nhận kết thúc ca làm việc
               </p>
+              <p className="text-[10px] text-[#7A829A]/80 text-center mt-1 flex items-center justify-center gap-1">
+                <span className="material-symbols-outlined text-[12px]">shield</span>
+                Vị trí chỉ được theo dõi trong giờ làm việc và dừng ngay khi check-out
+              </p>
             </>
           )}
         </div>
@@ -866,18 +917,76 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
             <div className="bg-[#EFC14B]/10 border border-[#EFC14B]/30 rounded-xl p-3 mb-4">
               <div className="flex items-start gap-2">
-                <span className="material-symbols-outlined text-[#EFC14B] text-lg mt-0.5">info</span>
+                <span className="material-symbols-outlined text-[#EFC14B] text-lg mt-0.5">wifi</span>
                 <p className="text-xs text-[#7A829A]">
-                  Vui lòng kết nối Wi-Fi tại cửa hàng để điểm danh. Nếu quán mất mạng, liên hệ Quản lý để bật chế độ dự phòng.
+                  Wifi cần kết nối: <span className="font-bold text-[#0F1E44]">{OFFICE_WIFI_NAME}</span>. Nếu quán mất mạng, liên hệ Quản lý để bật chế độ dự phòng.
                 </p>
               </div>
             </div>
             <button
               onClick={() => {
                 setWifiCheckResult(null);
-                setView('idle');
+                handleCaptureClick(actionType);
               }}
               className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">refresh</span>
+              Thử lại
+            </button>
+            <button
+              onClick={() => {
+                setWifiCheckResult(null);
+                setView('idle');
+              }}
+              className="w-full h-11 mt-2 text-[#7A829A] rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#F9F8FC] transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* GPS gate error (GPS failed or employee out of office radius while Wi-Fi is valid) */}
+      {gpsBlockError && !wifiCheckLoading && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+              gpsBlockError.kind === 'too_far' ? 'bg-[#EFC14B]/20' : 'bg-[#FF3131]/20'
+            }`}>
+              <span className={`material-symbols-outlined text-3xl ${
+                gpsBlockError.kind === 'too_far' ? 'text-[#EFC14B]' : 'text-[#FF3131]'
+              }`}>
+                {gpsBlockError.kind === 'too_far' ? 'location_off' : 'gps_off'}
+              </span>
+            </div>
+            <h3 className="font-heading text-xl font-bold text-[#0F1E44] text-center mb-2">
+              {gpsBlockError.kind === 'too_far' ? 'Ngoài phạm vi văn phòng' : 'Không xác định được vị trí'}
+            </h3>
+            <p className="text-sm text-[#7A829A] text-center mb-4">{gpsBlockError.message}</p>
+            {gpsBlockError.distance !== undefined && (
+              <div className="bg-[#F9F8FC] rounded-xl p-3 mb-4 flex items-center justify-between">
+                <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Khoảng cách tới văn phòng</p>
+                <p className="text-sm font-bold text-[#FF3131] font-mono">{gpsBlockError.distance}m</p>
+              </div>
+            )}
+            <p className="text-[11px] text-[#7A829A] text-center mb-4">
+              Wi-Fi: <span className="font-bold text-[#0F1E44]">{OFFICE_WIFI_NAME}</span> đã được xác nhận — chỉ vị trí GPS chưa hợp lệ.
+            </p>
+            <button
+              onClick={handleGpsRetry}
+              className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">refresh</span>
+              Thử lại
+            </button>
+            <button
+              onClick={() => {
+                setGpsBlockError(null);
+                setWifiCheckResult(null);
+                setView('idle');
+              }}
+              className="w-full h-11 mt-2 text-[#7A829A] rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#F9F8FC] transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">close</span>
               Đóng
@@ -913,8 +1022,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <h3 className="font-heading text-xl font-bold text-[#0F1E44] text-center mb-2">
               Cho phép truy cập Camera
             </h3>
-            <p className="text-sm text-[#7A829A] text-center mb-6">
-              Ứng dụng cần quyền truy cập camera để chụp ảnh xác nhận check-in.
+            <p className="text-sm text-[#7A829A] text-center mb-4">
+              Ứng dụng cần quyền truy cập camera để chụp ảnh xác nhận check-in. Sau khi check-in, vị trí của bạn sẽ được theo dõi định kỳ trong giờ làm việc (dừng ngay khi check-out).
             </p>
 
             <div className="bg-[#FDF8EE] rounded-xl p-4 mb-6 space-y-3">

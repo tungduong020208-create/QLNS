@@ -18,24 +18,11 @@
  * - This is client-side validation; server-side validation should be added in production
  */
 
-import { STORAGE_KEY_WIFI_CONFIG } from './constants';
+import { OFFICE_WIFI } from './constants';
 
 // ═══════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════
-
-export interface WifiConfig {
-  /** List of allowed public IP addresses */
-  allowedPublicIPs: string[];
-  /** List of allowed local IP subnets (e.g., "192.168.1.0/24") */
-  allowedLocalSubnets: string[];
-  /** Whether fallback mode is enabled (allows GPS/PIN when network is down) */
-  fallbackEnabled: boolean;
-  /** Last time the config was updated */
-  lastUpdated: string;
-  /** Who last updated the config */
-  updatedBy: string;
-}
 
 export interface IpCheckResult {
   /** Whether the IP is valid (in whitelist) */
@@ -55,17 +42,11 @@ export interface IpCheckResult {
   };
 }
 
-// ═══════════════════════════════════════════════════
-// Default Config
-// ═══════════════════════════════════════════════════
-
-const DEFAULT_WIFI_CONFIG: WifiConfig = {
-  allowedPublicIPs: [],
-  allowedLocalSubnets: [],
-  fallbackEnabled: false,
-  lastUpdated: '',
-  updatedBy: '',
-};
+/**
+ * Name of the office Wi-Fi shown in error messages, so employees know
+ * exactly which network to connect to.
+ */
+export const OFFICE_WIFI_NAME = OFFICE_WIFI.displayName;
 
 // ═══════════════════════════════════════════════════
 // IP Fetching
@@ -158,13 +139,17 @@ export async function fetchLocalIP(): Promise<string | null> {
         }
 
         const candidate = event.candidate.candidate;
-        // Extract IP from candidate string
-        // Format: "candidate:... typ host ... ip 192.168.1.52 ..."
-        const ipMatch = candidate.match(/ip (\d+\.\d+\.\d+\.\d+)/);
-        if (ipMatch) {
+        // Extract the first routable IPv4 from the candidate string.
+        // NOTE: Chrome does not guarantee an "ip X.X.X.X" segment in the
+        // candidate line, so match any IPv4 literal and skip the placeholder
+        // 0.0.0.0 (raddr of srflx candidates). mDNS candidates (obfuscated
+        // "xxxx.local" names) contain no IPv4 and are skipped by the regex.
+        const matches = candidate.match(/(\d{1,3}(?:\.\d{1,3}){3})/g) || [];
+        const ip = matches.find(m => m !== '0.0.0.0');
+        if (ip) {
           clearTimeout(timeout);
           pc.close();
-          resolve(ipMatch[1]);
+          resolve(ip);
         }
       };
 
@@ -268,10 +253,10 @@ function ipToNum(ip: string): number {
  * @returns IpCheckResult with validation status
  */
 export async function validateWifiConnection(): Promise<IpCheckResult> {
-  const config = getWifiConfig();
+  const config = OFFICE_WIFI;
 
   // If no IPs configured at all, allow check-in (first-time setup)
-  if (config.allowedPublicIPs.length === 0 && config.allowedLocalSubnets.length === 0) {
+  if (config.publicIPs.length === 0 && config.localSubnets.length === 0) {
     return {
       isValid: true,
       publicIP: null,
@@ -290,21 +275,21 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
 
   // Validate Public IP (if any are configured)
   let publicIPValid = true;
-  if (config.allowedPublicIPs.length > 0) {
+  if (config.publicIPs.length > 0) {
     if (!publicIP) {
       publicIPValid = false;
     } else {
-      publicIPValid = isIPAllowed(publicIP, config.allowedPublicIPs);
+      publicIPValid = isIPAllowed(publicIP, [...config.publicIPs]);
     }
   }
 
   // Validate Local IP (if any are configured)
   let localIPValid = true;
-  if (config.allowedLocalSubnets.length > 0) {
+  if (config.localSubnets.length > 0) {
     if (!localIP) {
       localIPValid = false;
     } else {
-      localIPValid = isLocalIPAllowed(localIP, config.allowedLocalSubnets);
+      localIPValid = isLocalIPAllowed(localIP, [...config.localSubnets]);
     }
   }
 
@@ -323,14 +308,14 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
 
   // Build error message based on what failed
   const errors: string[] = [];
-  if (config.allowedPublicIPs.length > 0 && !publicIPValid) {
+  if (config.publicIPs.length > 0 && !publicIPValid) {
     if (!publicIP) {
       errors.push('Không thể xác định Public IP');
     } else {
       errors.push(`Public IP (${publicIP}) không hợp lệ`);
     }
   }
-  if (config.allowedLocalSubnets.length > 0 && !localIPValid) {
+  if (config.localSubnets.length > 0 && !localIPValid) {
     if (!localIP) {
       errors.push('Không thể xác định Local IP');
     } else {
@@ -342,105 +327,10 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
     isValid: false,
     publicIP,
     localIP,
-    error: errors.join('. ') + '. Vui lòng kết nối Wi-Fi tại cửa hàng để điểm danh.',
+    error: `Bạn đang không kết nối Wifi nội bộ công ty. Vui lòng kết nối Wifi ${config.displayName} để chấm công. (${errors.join('. ')})`,
     useFallback: config.fallbackEnabled,
     details: { publicIPValid, localIPValid },
   };
 }
 
-// ═══════════════════════════════════════════════════
-// Config Management
-// ═══════════════════════════════════════════════════
 
-/**
- * Get WiFi configuration from localStorage.
- */
-export function getWifiConfig(): WifiConfig {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_WIFI_CONFIG);
-    if (saved) {
-      return { ...DEFAULT_WIFI_CONFIG, ...JSON.parse(saved) };
-    }
-  } catch {
-    // Corrupted data
-  }
-  return DEFAULT_WIFI_CONFIG;
-}
-
-/**
- * Save WiFi configuration to localStorage.
- */
-export function saveWifiConfig(config: WifiConfig): void {
-  localStorage.setItem(STORAGE_KEY_WIFI_CONFIG, JSON.stringify(config));
-}
-
-/**
- * Add a Public IP to the whitelist.
- */
-export function addAllowedPublicIP(ip: string, updatedBy: string): void {
-  const config = getWifiConfig();
-  if (!config.allowedPublicIPs.includes(ip)) {
-    config.allowedPublicIPs.push(ip);
-    config.lastUpdated = new Date().toISOString();
-    config.updatedBy = updatedBy;
-    saveWifiConfig(config);
-  }
-}
-
-/**
- * Remove a Public IP from the whitelist.
- */
-export function removeAllowedPublicIP(ip: string, updatedBy: string): void {
-  const config = getWifiConfig();
-  config.allowedPublicIPs = config.allowedPublicIPs.filter(i => i !== ip);
-  config.lastUpdated = new Date().toISOString();
-  config.updatedBy = updatedBy;
-  saveWifiConfig(config);
-}
-
-/**
- * Add a Local IP subnet to the whitelist.
- */
-export function addAllowedLocalSubnet(subnet: string, updatedBy: string): void {
-  const config = getWifiConfig();
-  if (!config.allowedLocalSubnets.includes(subnet)) {
-    config.allowedLocalSubnets.push(subnet);
-    config.lastUpdated = new Date().toISOString();
-    config.updatedBy = updatedBy;
-    saveWifiConfig(config);
-  }
-}
-
-/**
- * Remove a Local IP subnet from the whitelist.
- */
-export function removeAllowedLocalSubnet(subnet: string, updatedBy: string): void {
-  const config = getWifiConfig();
-  config.allowedLocalSubnets = config.allowedLocalSubnets.filter(i => i !== subnet);
-  config.lastUpdated = new Date().toISOString();
-  config.updatedBy = updatedBy;
-  saveWifiConfig(config);
-}
-
-/**
- * Toggle fallback mode.
- */
-export function toggleFallback(enabled: boolean, updatedBy: string): void {
-  const config = getWifiConfig();
-  config.fallbackEnabled = enabled;
-  config.lastUpdated = new Date().toISOString();
-  config.updatedBy = updatedBy;
-  saveWifiConfig(config);
-}
-
-/**
- * Clear all allowed IPs.
- */
-export function clearAllowedIPs(updatedBy: string): void {
-  const config = getWifiConfig();
-  config.allowedPublicIPs = [];
-  config.allowedLocalSubnets = [];
-  config.lastUpdated = new Date().toISOString();
-  config.updatedBy = updatedBy;
-  saveWifiConfig(config);
-}

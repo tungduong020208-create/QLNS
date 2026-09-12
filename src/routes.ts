@@ -20,7 +20,6 @@ export const ROUTES = {
   MANAGER_PEER_REVIEW: '/admin/peer-review',
   MANAGER_PROFILE: '/admin/profile',
   MANAGER_EXPORT: '/admin/export',
-  MANAGER_WIFI_CONFIG: '/admin/wifi-config',
   MANAGER_STUDY_SCHEDULES: '/admin/study-schedules',
 } as const;
 

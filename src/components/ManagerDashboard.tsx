@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, EvidenceItem, CheckInRecord } from '../types';
-import { STORAGE_KEY_ATTENDANCE_RECORDS } from '../utils/constants';
+import { STORAGE_KEY_ATTENDANCE_RECORDS, GEOFENCE } from '../utils/constants';
+import { getGeofenceStatus, GeofenceStatus } from '../hooks/useGeofenceMonitor';
 
 interface ManagerDashboardProps {
   currentUser: User;
@@ -31,10 +32,19 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeCheckInStatus[]>([]);
+  const [geoStatus, setGeoStatus] = useState<GeofenceStatus>(() => getGeofenceStatus());
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Refresh geofence panel (out-of-range employees + audit trail)
+    const refresh = () => setGeoStatus(getGeofenceStatus());
+    refresh();
+    const geoTimer = setInterval(refresh, 30 * 1000);
+    return () => clearInterval(geoTimer);
   }, []);
 
   useEffect(() => {
@@ -164,6 +174,79 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           <div className="font-headline text-2xl font-bold text-[#000666]">{avgTeamScore}</div>
           <div className="text-xs text-[#767683] mt-1">điểm/người</div>
         </div>
+      </div>
+
+      {/* Geofence — employees out of office range */}
+      <div className={`bg-white border rounded-2xl p-5 mb-6 shadow-sm ${
+        geoStatus.outOfRange.length > 0 ? 'border-[#FF3131]/40' : 'border-[#c6c5d4]/60'
+      }`}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-headline font-bold text-[#1b1b21] text-base">Ngoài phạm vi làm việc</h3>
+            <p className="text-xs text-[#767683] mt-0.5">Nhân viên cách văn phòng hơn {GEOFENCE.alertRadiusM}m sau khi check-in</p>
+          </div>
+          <span className={`material-symbols-outlined text-[22px] ${
+            geoStatus.outOfRange.length > 0 ? 'text-[#FF3131]' : 'text-[#000666]'
+          }`}>
+            location_off
+          </span>
+        </div>
+r
+        {geoStatus.outOfRange.length > 0 ? (
+          <div className="space-y-2 mb-4">
+            {geoStatus.outOfRange.map(entry => (
+              <div key={entry.employeeId} className="flex items-center gap-3 p-3 bg-[#FF3131]/5 border border-[#FF3131]/20 rounded-xl">
+                <div className="w-9 h-9 rounded-full overflow-hidden border border-[#FF3131]/30 flex-shrink-0">
+                  <img
+                    className="w-full h-full object-cover"
+                    src={allUsers.find(u => u.id === entry.employeeId)?.avatar || ''}
+                    alt={entry.employeeName}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-[#1b1b21] truncate">{entry.employeeName}</div>
+                  <div className="text-xs text-[#767683]">
+                    Từ {new Date(entry.since).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                    {entry.repeatCount > 0 && ` • nhắc lại ${entry.repeatCount} lần`}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-headline font-bold text-[#FF3131] tabular-nums">{entry.distanceMeters}m</div>
+                  <a
+                    className="text-[10px] text-[#000666] font-medium hover:underline"
+                    href={`https://www.google.com/maps?q=${entry.latitude},${entry.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Xem bản đồ →
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-[#767683] mb-4">Tất cả nhân viên đang làm việc đều trong phạm vi văn phòng.</p>
+        )}
+
+        {/* Audit trail */}
+        {geoStatus.recentEvents.length > 0 && (
+          <div className="border-t border-[#e6e4ee] pt-3">
+            <p className="text-[10px] font-semibold text-[#767683] uppercase tracking-wider mb-2">Lịch sử cảnh báo</p>
+            <div className="space-y-1.5">
+              {geoStatus.recentEvents.slice(0, 5).map(event => (
+                <div key={event.id} className="flex items-center gap-2 text-xs">
+                  <span className={`material-symbols-outlined text-[14px] ${event.isRepeat ? 'text-amber-500' : 'text-[#FF3131]'}`}>
+                    {event.isRepeat ? 'notifications_active' : 'warning'}
+                  </span>
+                  <span className="text-[#1b1b21] font-medium flex-shrink-0">{event.employeeName}</span>
+                  <span className="text-[#767683] truncate">
+                    {new Date(event.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} — cách {event.distanceMeters}m{event.isRepeat ? ' (lặp lại)' : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Employee Check-in Status */}

@@ -19,7 +19,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
-    if (pathname.includes('/wifi-config')) return 'wifi_config';
     if (pathname.includes('/schedule')) return 'manager_schedule';
     if (pathname.includes('/work-hours')) return 'work_hours';
     if (pathname.includes('/study-schedules')) return 'study_schedules';
@@ -40,7 +39,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
         { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
         { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
-        { id: 'wifi_config', label: 'Cài đặt Wi-Fi', icon: 'wifi' },
         { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' }
       ]
       : []),

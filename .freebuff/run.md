@@ -10,5 +10,6 @@
   npm run dev
   ```
   (This runs `vite --port=3000 --host=0.0.0.0`)
-- Vite auto-selects port 3004 when 3000–3003 are occupied.
-- Server logs go to `.freebuff/preview-*.log`.
+- Vite auto-selects the next free port (3004+) when 3000–3003 are occupied.
+- Server logs go to `.freebuff/preview-*.log` (stdout) and `.freebuff/preview-*.log.err` (stderr).
+- Current port: 3000 (was free this run).

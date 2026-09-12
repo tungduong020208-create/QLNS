@@ -56,8 +56,46 @@ export const STORAGE_KEY_SHIFTS = 'coffeehouse_shifts';
 /** Shift registrations */
 export const STORAGE_KEY_SHIFT_REGISTRATIONS = 'aiicafe_shift_registrations';
 
-/** WiFi IP whitelist configuration */
-export const STORAGE_KEY_WIFI_CONFIG = 'aiicafe_wifi_config';
+/** Geofence event audit trail (out-of-range alerts) */
+export const STORAGE_KEY_GEOFENCE_EVENTS = 'aiicafe_geofence_events';
+
+// ═══════════════════════════════════════════════════
+// Office Wi-Fi Configuration (Manager-managed, code-level config)
+// ═══════════════════════════════════════════════════
+// NOTE: Browsers cannot read SSID/BSSID, so the office network is
+// identified by Public IP + local subnet instead (see src/utils/ipCheck.ts).
+// Edit these values when the office network changes.
+
+/**
+ * Office Wi-Fi identity used for attendance validation.
+ * - displayName: shown to employees in error messages ("kết nối Wifi ...")
+ * - publicIPs: the office router's public IP(s) (e.g. "203.0.113.7")
+ * - localSubnets: allowed LAN ranges in CIDR (e.g. "192.168.1.0/24")
+ * - fallbackEnabled: allow GPS/PIN fallback when Wi-Fi check fails
+ *
+ * REAL OFFICE NETWORK (Aii Cafe, Wi-Fi 5 5GHz):
+ *   Public IP: 171.240.139.180 (VNPT — dynamic, may change on router reboot;
+ *   check the current Public IP shown in the check-in error modal to update)
+ *   LAN subnet: 192.168.1.0/24 (gateway 192.168.1.1)
+ */
+export const OFFICE_WIFI = {
+  displayName: 'Aii Cafe',
+  publicIPs: ['171.240.139.180'] as string[],
+  localSubnets: ['192.168.1.0/24'] as string[],
+  fallbackEnabled: false,
+} as const;
+
+/**
+ * Geofence monitoring settings (runs from check-in until check-out).
+ * - alertRadiusM: distance from office that triggers a manager alert
+ * - checkIntervalMin: how often the position is sampled (3–5 min)
+ * - repeatAlertMin: re-alert if the employee is still out of range
+ */
+export const GEOFENCE = {
+  alertRadiusM: 50,
+  checkIntervalMin: 4,
+  repeatAlertMin: 15,
+} as const;
 
 // ═══════════════════════════════════════════════════
 // Security Constants

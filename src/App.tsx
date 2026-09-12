@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, QRReview, PeerReviewSubmission, WeeklyShiftRegistration, CheckInOutRecord, WorkHoursSummary, StudySchedule, ManualShiftAssignment } from './types';
 import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_QR_REVIEWS } from './data/initialData';
 import { INITIAL_PEER_REVIEWS } from './data/peerReviewData';
@@ -30,8 +30,9 @@ import { ManagerScheduleScreen, Shift } from './components/screens/ManagerSchedu
 import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
 import { ExportReportScreen } from './components/screens/ExportReportScreen';
 import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
-import { WifiConfigScreen } from './components/screens/WifiConfigScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
+import { useGeofenceMonitor } from './hooks/useGeofenceMonitor';
+import { GeofenceEvent } from './types';
 
 export default function App() {
   const navigate = useNavigate();
@@ -301,6 +302,23 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem('aiicafe_checkinout_records', JSON.stringify(checkInOutRecords)); }, [checkInOutRecords]);
 
+  // ─── Geofence: manager alerts when an employee leaves office radius ───
+  const handleGeofenceOutOfRange = (event: GeofenceEvent) => {
+    const time = new Date(event.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const notifItem: NotificationItem = {
+      id: `notif-geo-${event.id}`,
+      title: event.isRepeat ? '⚠️ Vẫn ngoài phạm vi làm việc' : '⚠️ Nhân viên ngoài phạm vi làm việc',
+      message: `${event.employeeName} đang ở cách văn phòng ${event.distanceMeters}m (ngưỡng ${event.thresholdMeters}m) lúc ${time}. Trạng thái: đang trong ca làm việc.`,
+      time: 'Vừa xong',
+      read: false,
+      type: 'penalty',
+      category: 'management',
+    };
+    setNotifications(prev => [notifItem, ...prev]);
+  };
+
+  useGeofenceMonitor(currentUser, handleGeofenceOutOfRange);
+
   // Handle check-in
   const handleCheckIn = (record: CheckInRecord) => {
     setCheckInRecord(record);
@@ -442,7 +460,6 @@ export default function App() {
         manager_schedule: ROUTES.MANAGER_SCHEDULE,
         work_hours: ROUTES.MANAGER_WORK_HOURS,
         study_schedules: ROUTES.MANAGER_STUDY_SCHEDULES,
-        wifi_config: ROUTES.MANAGER_WIFI_CONFIG,
         review: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
         export_report: ROUTES.MANAGER_EXPORT,
@@ -684,9 +701,7 @@ export default function App() {
                       />
                     } />
 
-                    <Route path="wifi-config" element={
-                      <WifiConfigScreen currentUser={currentUser} />
-                    } />
+                    <Route path="*" element={<Navigate to={ROUTES.MANAGER_DASHBOARD} replace />} />
 
                     <Route path="handover" element={
                       <ReviewScreen

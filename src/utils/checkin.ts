@@ -40,6 +40,20 @@ export function haversineDistance(
 }
 
 /**
+ * Distance from a coordinate to the office (DEFAULT_STORE) in meters.
+ */
+export function getDistanceToOffice(lat: number, lon: number): number {
+  return haversineDistance(lat, lon, DEFAULT_STORE.latitude, DEFAULT_STORE.longitude);
+}
+
+/**
+ * Whether a coordinate is within the office check-in radius (100m).
+ */
+export function isWithinOfficeRadius(lat: number, lon: number): { within: boolean; distance: number } {
+  return isWithinStoreRadius(lat, lon);
+}
+
+/**
  * Check if current location is within store radius
  */
 export function isWithinStoreRadius(
@@ -139,12 +153,14 @@ export function getCurrentShiftType(): 'morning' | 'afternoon' | 'evening' {
  * Get location error message in Vietnamese
  */
 export function getLocationErrorMessage(error: GeolocationPositionError): string {
+  // Match on numeric codes (1/2/3) rather than error.PERMISSION_DENIED-style
+  // constants — wrapper objects may not carry the prototype constants.
   switch (error.code) {
-    case error.PERMISSION_DENIED:
+    case 1: // PERMISSION_DENIED
       return 'Bạn đã từ chối quyền truy cập vị trí. Vui lòng bật GPS trong cài đặt.';
-    case error.POSITION_UNAVAILABLE:
+    case 2: // POSITION_UNAVAILABLE
       return 'Không thể xác định vị trí. Vui lòng kiểm tra GPS.';
-    case error.TIMEOUT:
+    case 3: // TIMEOUT
       return 'Hết thời gian lấy vị trí. Vui lòng thử lại.';
     default:
       return 'Lỗi xác định vị trí. Vui lòng thử lại.';
