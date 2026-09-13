@@ -1,8 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { User, CheckInRecord, PeerReviewSubmission, WeeklyShiftRegistration } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
-import * as XLSX from 'xlsx';
+// LAZY: xlsx (~900KB, ~430KB gzipped) is only needed the moment the user
+// actually exports a file. `import('xlsx')` inside handleExport lets Vite
+// split it into its own chunk — first click pays a small fetch, every page
+// load skips it entirely.
 import { STORAGE_KEY_ATTENDANCE_RECORDS } from '../../utils/constants';
+import { safeParse } from '../../hooks/usePersistentState';
+
+type XLSXModule = typeof import('xlsx');
 
 interface ExportReportScreenProps {
   currentUser: User;
@@ -37,20 +43,23 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
 
   const handleExport = () => {
     setExporting(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        if (activeExport === 'attendance') exportAttendance();
-        else if (activeExport === 'schedule') exportSchedule();
-        else exportPeerReview();
-      } catch (e) { console.error('Export error:', e); }
+        // Fetch the library on demand, right before use (code-split chunk)
+        const XLSX = await import('xlsx');
+        if (activeExport === 'attendance') exportAttendance(XLSX);
+        else if (activeExport === 'schedule') exportSchedule(XLSX);
+        else exportPeerReview(XLSX);
+      } catch (e) {
+        console.error('Export error:', e);
+      }
       setExporting(false);
     }, 300);
   };
 
-  const exportAttendance = () => {
-    // FIX: Use unified storage key to read attendance data
-    const stored = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
-    const allRecords: Record<string, CheckInRecord[]> = stored ? JSON.parse(stored) : {};
+  const exportAttendance = (XLSX: XLSXModule) => {
+    // FIX: Use unified storage key to read attendance data (parse-safe)
+    const allRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
     const rows: any[][] = [['Mã NV', 'Tên nhân viên', 'Ngày', 'Giờ vào', 'Giờ ra', 'Tổng giờ', 'Phương thức', 'Đúng giờ']];
 
     employees.forEach(emp => {
@@ -89,7 +98,7 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
     XLSX.writeFile(wb, 'AiiCafe_DiemDanh_' + dateFrom + '_' + dateTo + '.xlsx');
   };
 
-  const exportSchedule = () => {
+  const exportSchedule = (XLSX: XLSXModule) => {
     const rows: any[][] = [['Mã NV', 'Tên nhân viên', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật']];
     const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -116,7 +125,7 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
     XLSX.writeFile(wb, 'AiiCafe_LichLamViec_' + selectedMonth + '.xlsx');
   };
 
-  const exportPeerReview = () => {
+  const exportPeerReview = (XLSX: XLSXModule) => {
     const monthReviews = peerReviews.filter(r => r.monthKey === selectedMonth);
     const rows: any[][] = [['Người đánh giá', 'Người được đánh giá', 'TB Làm việc nhóm', 'TB Trách nhiệm', 'TB Chuyên môn', 'Điểm TB', 'Nhận xét', 'Ngày']];
 

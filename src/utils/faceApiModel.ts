@@ -10,7 +10,11 @@
  * This module ensures models are loaded ONCE and cached in memory.
  */
 
-import * as faceapi from 'face-api.js';
+// LAZY: face-api.js (~1.3MB + 6MB models) must NOT be in the main bundle.
+// The static import below is INSIDE this module's code path only — the whole
+// module is loaded on demand via `await import('./faceApiModel')` from
+// CheckInCheckOut, so Vite splits it into its own chunk fetched on first use.
+import type * as FaceApiNamespace from 'face-api.js';
 
 // ═══════════════════════════════════════════════════
 // Singleton Model Manager
@@ -99,7 +103,9 @@ class FaceApiModelManager {
    */
   private async doLoad(): Promise<boolean> {
     try {
-      // Load both models in parallel for faster initialization
+      // The library itself is fetched on first use (code-split by Vite),
+      // then both models load in parallel for faster initialization.
+      const faceapi = await import('face-api.js');
       await Promise.all([
         faceapi.loadSsdMobilenetv1Model('/models'),
         faceapi.loadFaceExpressionModel('/models'),
@@ -107,7 +113,6 @@ class FaceApiModelManager {
 
       this.state = 'loaded';
       this.errorMessage = '';
-      console.log('[FaceAPI] Models loaded successfully (singleton)');
       return true;
     } catch (err: any) {
       this.state = 'error';

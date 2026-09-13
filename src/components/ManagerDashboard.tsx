@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { User, EvidenceItem, CheckInRecord } from '../types';
 import { STORAGE_KEY_ATTENDANCE_RECORDS, STORAGE_KEY_DASHBOARD_COLLAPSED, GEOFENCE } from '../utils/constants';
 import { getGeofenceStatus, GeofenceStatus } from '../hooks/useGeofenceMonitor';
+import { safeParse } from '../hooks/usePersistentState';
 import { ManagerCheckInToggle } from './ManagerCheckInToggle';
 
 interface ManagerDashboardProps {
   currentUser: User;
   evidences: EvidenceItem[];
   allUsers: User[];
-  onSelectEvidence: (evidence: EvidenceItem) => void;
   onSelectEmployee: (user: User) => void;
   onNavigateReview: () => void;
   onCheckIn?: (record: CheckInRecord) => void;
@@ -19,16 +19,12 @@ interface EmployeeCheckInStatus {
   checkInRecord: CheckInRecord | null;
   hasCheckedIn: boolean;
   hasCheckedOut: boolean;
-  pendingEvidenceCount: number;
-  totalEvidenceCount: number;
-  avgScore: number;
 }
 
 export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   currentUser,
   evidences,
   allUsers,
-  onSelectEvidence,
   onSelectEmployee,
   onNavigateReview,
   onCheckIn
@@ -66,43 +62,54 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   }, []);
 
   useEffect(() => {
-    // CRITICAL FIX: Use unified storage key (previously 'coffeehouse_checkin_records'
-    // which didn't match what CheckInCheckOut.tsx was writing to)
-    const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
-    const allCheckInRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
-    
-    const employees = allUsers.filter(u => u.role === 'employee');
-    const statuses: EmployeeCheckInStatus[] = employees.map(emp => {
-      const empEvidences = evidences.filter(e => e.employeeId === emp.id);
-      const pendingCount = empEvidences.filter(e => e.status === 'pending').length;
-      const avgScore = empEvidences.length > 0 
-        ? empEvidences.reduce((acc, e) => acc + e.points, 0) / empEvidences.length 
-        : 0;
+    const readAttendance = () => {
+      // CRITICAL FIX: Use unified storage key (previously 'coffeehouse_checkin_records'
+      // which didn't match what CheckInCheckOut.tsx was writing to)
+      const allCheckInRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
 
-      // Get actual check-in records for this employee
-      const empRecords = allCheckInRecords[emp.id] || [];
-      const today = new Date().toISOString().split('T')[0];
-      const todayRecords = empRecords.filter(r => {
-        const recordDate = new Date(r.timestamp).toISOString().split('T')[0];
-        return recordDate === today;
+      const employees = allUsers.filter(u => u.role === 'employee');
+      const statuses: EmployeeCheckInStatus[] = employees.map(emp => {
+
+        // Get actual check-in records for this employee
+        const empRecords = allCheckInRecords[emp.id] || [];
+        const today = new Date().toISOString().split('T')[0];
+        const todayRecords = empRecords.filter(r => {
+          const recordDate = new Date(r.timestamp).toISOString().split('T')[0];
+          return recordDate === today;
+        });
+
+        const lastCheckIn = todayRecords.find(r => r.type === 'checkin');
+        const lastCheckOut = todayRecords.find(r => r.type === 'checkout');
+        const hasCheckedIn = !!lastCheckIn;
+        const hasCheckedOut = !!lastCheckOut;
+
+        return {
+          user: emp,
+          checkInRecord: lastCheckIn || null,
+          hasCheckedIn,
+          hasCheckedOut,
+        };
       });
-      
-      const lastCheckIn = todayRecords.find(r => r.type === 'checkin');
-      const lastCheckOut = todayRecords.find(r => r.type === 'checkout');
-      const hasCheckedIn = !!lastCheckIn;
-      const hasCheckedOut = !!lastCheckOut;
+      setEmployeeStatuses(statuses);
+    };
 
-      return {
-        user: emp,
-        checkInRecord: lastCheckIn || null,
-        hasCheckedIn,
-        hasCheckedOut,
-        pendingEvidenceCount: pendingCount,
-        totalEvidenceCount: empEvidences.length,
-        avgScore
-      };
-    });
-    setEmployeeStatuses(statuses);
+    readAttendance();
+
+    // Same-device sync: the browser `storage` event fires in every OTHER tab
+    // when a tab writes localStorage — so an employee checking in on another
+    // tab updates this dashboard instantly. The 30s poll covers tabs that
+    // opened before the listener existed, edge cases, and safety net.
+    // (Cross-DEVICE sync still requires a shared backend — see docs/backend-plan.md)
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === null || e.key === STORAGE_KEY_ATTENDANCE_RECORDS) readAttendance();
+    };
+    window.addEventListener('storage', onStorage);
+    const pollTimer = setInterval(readAttendance, 30 * 1000);
+
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      clearInterval(pollTimer);
+    };
   }, [allUsers, evidences]);
 
   const totalEmployees = allUsers.filter(u => u.role === 'employee').length;
@@ -111,10 +118,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
   const totalPoints = evidences.reduce((acc, e) => acc + e.points, 0);
   const avgTeamScore = totalEmployees > 0 ? Math.round(totalPoints / totalEmployees) : 0;
-
-  const recentEvidences = [...evidences]
-    .sort((a, b) => new Date(b.dateString).getTime() - new Date(a.dateString).getTime())
-    .slice(0, 5);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -226,7 +229,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
             location_off
           </span>
         </div>
-r
+
         {geoStatus.outOfRange.length > 0 ? (
           <div className="space-y-2 mb-4">
             {geoStatus.outOfRange.map(entry => (
@@ -335,58 +338,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
                   </span>
                 )}
               </div>
-              {false && status.pendingEvidenceCount > 0 && (
-                <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                  
-                </span>
-              )}
             </div>
           ))}
         </div>
       </div>
-
-      {/* Evidence section removed */}
-      {false && (
-      <div className="bg-white border border-[#c6c5d4]/60 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="font-headline font-bold text-[#1b1b21] text-base">Minh chứng gần đây</h3>
-            <p className="text-xs text-[#767683] mt-0.5">Các minh chứng mới nhất từ nhân viên</p>
-          </div>
-          <button onClick={onNavigateReview} className="text-xs text-[#000666] font-medium hover:underline">Xem bàn giao ca →</button>
-        </div>
-        <div className="space-y-3">
-          {recentEvidences.map(item => (
-            <div key={item.id} className="flex items-center gap-3 p-3 bg-[#f9f8fc] rounded-xl hover:bg-[#f0eef5] transition-colors cursor-pointer" onClick={() => onSelectEvidence(item)}>
-              <div className="w-12 h-12 rounded-lg overflow-hidden border border-[#c6c5d4] flex-shrink-0">
-                <img className="w-full h-full object-cover" src={item.imageUrl} alt={item.title} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="font-semibold text-sm text-[#1b1b21] truncate">{item.title}</div>
-                <div className="flex items-center gap-2 text-xs text-[#767683]">
-                  <span>{item.employeeName}</span><span>•</span><span>{item.timestamp}</span>
-                </div>
-              </div>
-              <div className="flex-shrink-0">
-                {item.status === 'good' ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                    <span className="material-symbols-outlined text-[14px]">thumb_up</span>Tốt
-                  </span>
-                ) : item.status === 'bad' ? (
-                  <span className="flex items-center gap-1 text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded-full">
-                    <span className="material-symbols-outlined text-[14px]">thumb_down</span>Chưa tốt
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                    <span className="material-symbols-outlined text-[14px]">pending</span>Chờ duyệt
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-      )}
       </>
       )}
     </div>

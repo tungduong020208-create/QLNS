@@ -3,255 +3,121 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/**
+ * App — routing + composition ONLY.
+ *
+ * All data domains live in custom hooks under src/hooks, each owning its
+ * slice of localStorage via usePersistentState:
+ *   useAuth          → users + session
+ *   useEvidences     → evidence submissions & reviews
+ *   useNotifications → notification center
+ *   useAttendance    → check-in/out work-hours records
+ *   useShifts        → published shift rows
+ *   useScheduling    → registrations, study schedules, manual assignments
+ *   useSocial        → news feed reactions & comments
+ *   useReviews       → peer reviews
+ *   useToasts        → transient toast queue (UI only)
+ *
+ * What remains here is exactly what a root component should own: which
+ * routes exist, which screens get which slice of state, and the small
+ * orchestration handlers that span multiple domains (e.g. reviewing an
+ * evidence also creates a notification and a toast).
+ */
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, QRReview, PeerReviewSubmission, WeeklyShiftRegistration, CheckInOutRecord, WorkHoursSummary, StudySchedule, ManualShiftAssignment, PostReaction, PostComment, PostReactionType } from './types';
-import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_QR_REVIEWS } from './data/initialData';
-import { INITIAL_PEER_REVIEWS } from './data/peerReviewData';
+import { User, EvidenceItem, CheckInRecord, NotificationItem, GeofenceEvent } from './types';
 import { ROUTES, getDefaultHomeRoute } from './routes';
-import { STORAGE_KEY_POST_REACTIONS, STORAGE_KEY_POST_COMMENTS } from './utils/constants';
 import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
 import { Sidebar } from './components/Sidebar';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
-import { SubmitEvidenceScreen } from './components/screens/SubmitEvidenceScreen';
 import { ReviewScreen } from './components/screens/ReviewScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
 import { EvidenceDetailModal } from './components/modals/EvidenceDetailModal';
-import { ToastNotification, ToastMessage } from './components/modals/ToastNotification';
+import { ToastNotification } from './components/modals/ToastNotification';
 import { ManagerDashboard } from './components/ManagerDashboard';
 import { EmployeeDetailModal } from './components/modals/EmployeeDetailModal';
 import { WorkHoursScreen } from './components/screens/WorkHoursScreen';
 import { StudyScheduleScreen } from './components/screens/StudyScheduleScreen';
 import { ManagerStudySchedulesScreen } from './components/screens/ManagerStudySchedulesScreen';
 import { PeerReviewScreen } from './components/screens/PeerReviewScreen';
-import { ManagerScheduleScreen, Shift } from './components/screens/ManagerScheduleScreen';
 import { ManagerScheduleTab } from './components/screens/ManagerScheduleTab';
 import { ExportReportScreen } from './components/screens/ExportReportScreen';
-import { ShiftRegistrationScreen } from './components/screens/ShiftRegistrationScreen';
 import { AddEmployeeModal } from './components/modals/AddEmployeeModal';
 import { useGeofenceMonitor } from './hooks/useGeofenceMonitor';
-import { GeofenceEvent } from './types';
+import { useToasts } from './hooks/useToasts';
+import { useAuth } from './hooks/useAuth';
+import { useNotifications } from './hooks/useNotifications';
+import { useEvidences } from './hooks/useEvidences';
+import { useAttendance } from './hooks/useAttendance';
+import { useShifts } from './hooks/useShifts';
+import { useScheduling } from './hooks/useScheduling';
+import { useSocial } from './hooks/useSocial';
+import { useReviews } from './hooks/useReviews';
+import { WorkHoursSummary } from './types';
 
 export default function App() {
   const navigate = useNavigate();
 
-  // ─── Core Auth State ───
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('enterprise_hr_users');
-    return saved ? JSON.parse(saved) : INITIAL_USERS;
-  });
+  // ─── Domain state (each hook owns its localStorage slice) ───
+  const auth = useAuth();
+  const { currentUser } = auth;
+  const { notifications, pushNotification, markRead, markAllRead } = useNotifications();
+  const { evidences, submitEvidence: submitEvidenceRaw, reviewEvidence } = useEvidences();
+  const { checkInOutRecords, addCheckIn, addCheckOut } = useAttendance();
+  const { shifts, addShift, updateShift, deleteShift } = useShifts();
+  const {
+    shiftRegistrations, submitRegistration, updateRegistration,
+    studySchedules, submitStudySchedule,
+    manualAssignments, publishSchedule,
+  } = useScheduling();
+  const { peerReviews, submitPeerReview } = useReviews();
+  const { postReactions, postComments, toggleReaction, addComment, deleteComment } = useSocial(currentUser);
+  const { toasts, addToast, dismissToast } = useToasts();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const savedId = localStorage.getItem('enterprise_hr_current_user_id');
-    if (savedId) {
-      const found = users.find(u => u.id === savedId);
-      if (found) return found;
-    }
-    return null;
-  });
-
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    return localStorage.getItem('enterprise_hr_auth') === 'true';
-  });
-
-  // ─── Data State ───
-  const [evidences, setEvidences] = useState<EvidenceItem[]>(() => {
-    const saved = localStorage.getItem('enterprise_hr_evidences');
-    return saved ? JSON.parse(saved) : INITIAL_EVIDENCES;
-  });
-
-  const [customerRatings] = useState<CustomerRating[]>(() => {
-    const saved = localStorage.getItem('customerRatings');
-    return saved ? JSON.parse(saved) : INITIAL_CUSTOMER_RATINGS;
-  });
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem('enterprise_hr_notifications');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      return parsed.map((n: any) => ({
-        ...n,
-        category: n.category || (n.type === 'reward' || n.type === 'penalty' ? 'management' : 'handover')
-      }));
-    }
-    return INITIAL_NOTIFICATIONS;
-  });
-
-  const [qrReviews, setQrReviews] = useState<QRReview[]>(() => {
-    const saved = localStorage.getItem('coffeehouse_qr_reviews');
-    return saved ? JSON.parse(saved) : INITIAL_QR_REVIEWS;
-  });
-
-  const [peerReviews, setPeerReviews] = useState<PeerReviewSubmission[]>(() => {
-    const saved = localStorage.getItem('coffeehouse_peer_reviews');
-    return saved ? JSON.parse(saved) : INITIAL_PEER_REVIEWS;
-  });
-
-  const [shifts, setShifts] = useState<Shift[]>(() => {
-    const saved = localStorage.getItem('coffeehouse_shifts');
-    if (saved) return JSON.parse(saved);
-    const today = new Date();
-    const monday = new Date(today);
-    const day = monday.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    monday.setDate(monday.getDate() + diff);
-    const defaultShifts: Shift[] = [];
-    const employees = INITIAL_USERS.filter(u => u.role !== 'manager');
-    for (let i = 0; i < 5; i++) {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + i);
-      const dateStr = date.toISOString().split('T')[0];
-      employees.forEach((emp, idx) => {
-        defaultShifts.push({
-          id: `shift-default-m-${dateStr}-${emp.id}`,
-          employeeId: emp.id,
-          employeeName: emp.name,
-          employeeAvatar: emp.avatar,
-          date: dateStr,
-          shiftName: 'Ca sáng',
-          startTime: '07:00',
-          endTime: '12:00',
-          status: i < 3 ? 'completed' : 'scheduled',
-        });
-        if (idx % 2 === 0) {
-          defaultShifts.push({
-            id: `shift-default-a-${dateStr}-${emp.id}`,
-            employeeId: emp.id,
-            employeeName: emp.name,
-            employeeAvatar: emp.avatar,
-            date: dateStr,
-            shiftName: 'Ca chiều',
-            startTime: '13:00',
-            endTime: '18:00',
-            status: i < 3 ? 'completed' : 'scheduled',
-          });
-        }
-      });
-    }
-    return defaultShifts;
-  });
-
-  // ─── Shift Registrations (Weekly Schedule) ───
-  const [shiftRegistrations, setShiftRegistrations] = useState<WeeklyShiftRegistration[]>(() => {
-    const saved = localStorage.getItem('aiicafe_shift_registrations');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // ─── Study Schedules ───
-  const [studySchedules, setStudySchedules] = useState<StudySchedule[]>(() => {
-    const saved = localStorage.getItem('aiicafe_study_schedules');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // ─── Manual Shift Assignments ───
-  const [manualAssignments, setManualAssignments] = useState<ManualShiftAssignment[]>(() => {
-    const saved = localStorage.getItem('aiicafe_manual_assignments');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // ─── News Feed: reactions & comments (per-post social data) ───
-  const [postReactions, setPostReactions] = useState<PostReaction[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_POST_REACTIONS);
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [postComments, setPostComments] = useState<PostComment[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_POST_COMMENTS);
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // ─── UI State ───
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  // ─── UI state (composition-level: modals + last check-in/out record) ───
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
   const [selectedEmployee, setSelectedEmployee] = useState<User | null>(null);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
-
-  // ─── Check-in state (persists across routes) ───
   const [checkInRecord, setCheckInRecord] = useState<CheckInRecord | null>(null);
 
-  // ─── Persist to localStorage ───
-  useEffect(() => { localStorage.setItem('enterprise_hr_evidences', JSON.stringify(evidences)); }, [evidences]);
-  useEffect(() => { localStorage.setItem('enterprise_hr_notifications', JSON.stringify(notifications)); }, [notifications]);
-  useEffect(() => { localStorage.setItem('enterprise_hr_users', JSON.stringify(users)); }, [users]);
+  // ─── Orchestration handlers (cross-domain, kept here) ───
 
-  useEffect(() => { localStorage.setItem('coffeehouse_qr_reviews', JSON.stringify(qrReviews)); }, [qrReviews]);
-  useEffect(() => { localStorage.setItem('coffeehouse_peer_reviews', JSON.stringify(peerReviews)); }, [peerReviews]);
-  useEffect(() => { localStorage.setItem('coffeehouse_shifts', JSON.stringify(shifts)); }, [shifts]);
-  useEffect(() => { localStorage.setItem('aiicafe_shift_registrations', JSON.stringify(shiftRegistrations)); }, [shiftRegistrations]);
-  useEffect(() => { localStorage.setItem('aiicafe_study_schedules', JSON.stringify(studySchedules)); }, [studySchedules]);
-  useEffect(() => { localStorage.setItem('aiicafe_manual_assignments', JSON.stringify(manualAssignments)); }, [manualAssignments]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEY_POST_REACTIONS, JSON.stringify(postReactions)); }, [postReactions]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEY_POST_COMMENTS, JSON.stringify(postComments)); }, [postComments]);
-  useEffect(() => { localStorage.setItem('enterprise_hr_auth', JSON.stringify(isLoggedIn)); }, [isLoggedIn]);
-
-  // Persist current user
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('enterprise_hr_current_user_id', currentUser.id);
-    } else {
-      localStorage.removeItem('enterprise_hr_current_user_id');
-    }
-  }, [currentUser]);
-
-  // ─── Toast helpers ───
-  const addToast = (type: 'success' | 'error' | 'info', title: string, message: string) => {
-    const id = `toast-${Date.now()}`;
-    setToasts(prev => [...prev, { id, type, title, message }]);
-    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
-  };
-
-  const handleDismissToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  // ─── Auth handlers ───
   const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    setIsLoggedIn(true);
+    auth.login(user);
     addToast('success', 'Đăng nhập thành công', `Chào mừng ${user.name} trở lại hệ thống`);
     navigate(getDefaultHomeRoute(user.role), { replace: true });
   };
 
   const handleLogout = () => {
-    // Clear session/auth data from localStorage (keep persistent data like notifications, evidences)
-    localStorage.removeItem('enterprise_hr_current_user_id');
-    localStorage.removeItem('enterprise_hr_auth');
-    setIsLoggedIn(false);
-    setCurrentUser(null);
+    // Auth/session keys are cleared by the hook; persistent data like
+    // notifications and evidences are intentionally kept.
+    auth.logout();
     addToast('info', 'Đã đăng xuất', 'Phiên làm việc đã kết thúc an toàn');
     navigate(ROUTES.LOGIN, { replace: true });
   };
 
-  // ─── User management ───
   const handleAddEmployee = (newEmployee: User) => {
-    setUsers(prev => [...prev, newEmployee]);
+    auth.addUser(newEmployee);
     addToast('success', 'Tạo tài khoản thành công', `Tài khoản ${newEmployee.name} (${newEmployee.employeeCode}) đã được tạo`);
     setShowAddEmployeeModal(false);
   };
 
   const handlePasswordChanged = (userId: string, newPassword: string) => {
-    setUsers(prev => prev.map(u =>
-      u.id === userId ? { ...u, password: newPassword, mustChangePassword: false } : u
-    ));
-    if (currentUser?.id === userId) {
-      setCurrentUser(prev => prev ? { ...prev, password: newPassword, mustChangePassword: false } : null);
-    }
+    auth.changePassword(userId, newPassword);
   };
 
   const handleUpdateUser = (updatedFields: Partial<User>) => {
     if (!currentUser) return;
-    const updatedUser = { ...currentUser, ...updatedFields };
-    setCurrentUser(updatedUser);
-    setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    auth.updateUser(updatedFields);
     addToast('success', 'Đã lưu thông tin', 'Hồ sơ cá nhân đã được cập nhật thành công');
   };
 
-  // ─── Evidence handlers ───
   const handleSubmitEvidence = (newEvidence: EvidenceItem) => {
-    setEvidences(prev => [newEvidence, ...prev]);
+    submitEvidenceRaw(newEvidence);
     const newNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       title: 'Đã gửi minh chứng',
@@ -261,19 +127,15 @@ export default function App() {
       type: 'pending',
       category: 'management'
     };
-    setNotifications(prev => [newNotif, ...prev]);
+    pushNotification(newNotif);
     addToast('success', 'Nộp minh chứng thành công', 'Minh chứng đã được gửi đến bộ phận quản lý');
     navigate(currentUser?.role === 'manager' ? ROUTES.MANAGER_DASHBOARD : ROUTES.EMPLOYEE_HOME, { replace: true });
-  };  const handleReviewEvidence = (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => {
+  };
+
+  const handleReviewEvidence = (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => {
     if (!currentUser) return;
     const target = evidences.find(e => e.id === evidenceId);
-    const now = new Date();
-    const reviewTime = `Hôm nay, ${now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
-    setEvidences(prev =>
-      prev.map(item =>
-        item.id === evidenceId ? { ...item, status, points, managerNote: note, reviewedAt: reviewTime, reviewedBy: currentUser.name } : item
-      )
-    );
+    reviewEvidence({ evidenceId, status, points, note, reviewerName: currentUser.name });
     if (target) {
       const notifItem: NotificationItem = {
         id: `notif-${Date.now()}`,
@@ -284,81 +146,38 @@ export default function App() {
         type: status === 'good' ? 'reward' : 'penalty',
         category: 'management'
       };
-      setNotifications(prev => [notifItem, ...prev]);
+      pushNotification(notifItem);
     }
     addToast(status === 'good' ? 'success' : 'error', status === 'good' ? 'Đã duyệt TỐT' : 'Đã đánh giá CHƯA TỐT', `Đã cập nhật ${status === 'good' ? `+${points}` : `${points}`} điểm cho nhân viên`);
   };
 
-  // ─── Work Hours Tracking ───
-  const [checkInOutRecords, setCheckInOutRecords] = useState<CheckInOutRecord[]>(() => {
-    const saved = localStorage.getItem('aiicafe_checkinout_records');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // ─── Check-in / check-out orchestration ───
 
-  useEffect(() => { localStorage.setItem('aiicafe_checkinout_records', JSON.stringify(checkInOutRecords)); }, [checkInOutRecords]);
-
-  // ─── Geofence: manager alerts when an employee leaves office radius ───
-  const handleGeofenceOutOfRange = (event: GeofenceEvent) => {
-    const time = new Date(event.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    const notifItem: NotificationItem = {
-      id: `notif-geo-${event.id}`,
-      title: event.isRepeat ? '⚠️ Vẫn ngoài phạm vi làm việc' : '⚠️ Nhân viên ngoài phạm vi làm việc',
-      message: `${event.employeeName} đang ở cách văn phòng ${event.distanceMeters}m (ngưỡng ${event.thresholdMeters}m) lúc ${time}. Trạng thái: đang trong ca làm việc.`,
-      time: 'Vừa xong',
-      read: false,
-      type: 'penalty',
-      category: 'management',
-    };
-    setNotifications(prev => [notifItem, ...prev]);
-  };
-
-  useGeofenceMonitor(currentUser, handleGeofenceOutOfRange);
-
-  // Handle check-in
   const handleCheckIn = (record: CheckInRecord) => {
     setCheckInRecord(record);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const newCheckIn: CheckInOutRecord = {
-      id: `ci-${Date.now()}`,
-      userId: currentUser?.id || '',
-      date: todayStr,
-      checkInTime: new Date().toISOString(),
-    };
-    setCheckInOutRecords(prev => [...prev, newCheckIn]);
+    addCheckIn(currentUser?.id || '');
     addToast('success', 'Điểm danh thành công', `Check-in lúc ${record.time} đã được ghi nhận`);
   };
 
-  // Handle check-out
   const handleCheckOut = (record: CheckInRecord) => {
     setCheckInRecord(record);
-    const todayStr = new Date().toISOString().split('T')[0];
-    const now = new Date();
-    
-    setCheckInOutRecords(prev => {
-      // Find the most recent check-in for today without checkout
-      const lastCheckInIndex = prev.findLastIndex(
-        r => r.userId === currentUser?.id && r.date === todayStr && !r.checkOutTime
-      );
-      
-      if (lastCheckInIndex === -1) return prev;
-      
-      const updated = [...prev];
-      const checkInTime = new Date(updated[lastCheckInIndex].checkInTime);
-      const hoursWorked = (now.getTime() - checkInTime.getTime()) / (1000 * 60 * 60);
-      
-      updated[lastCheckInIndex] = {
-        ...updated[lastCheckInIndex],
-        checkOutTime: now.toISOString(),
-        hoursWorked: Math.round(hoursWorked * 100) / 100,
-      };
-      return updated;
-    });
+    addCheckOut(currentUser?.id || '');
     addToast('success', 'Điểm danh thành công', `Check-out lúc ${record.time} đã được ghi nhận`);
   };
 
-  // Calculate work hours summary for a given month
+  /** Shared by employee camera flow and manager toggle. */
+  const handleCheckInOutRecord = (record: CheckInRecord) => {
+    if (record.type === 'checkin') {
+      handleCheckIn(record);
+    } else {
+      handleCheckOut(record);
+    }
+  };
+
+  // ─── Work hours summary (derived data across users + attendance) ───
+
   const getWorkHoursSummary = (yearMonth: string): WorkHoursSummary[] => {
-    const employees = users.filter(u => u.role !== 'manager');
+    const employees = auth.users.filter(u => u.role !== 'manager');
     return employees.map(emp => {
       const empRecords = checkInOutRecords.filter(
         r => r.userId === emp.id && r.date.startsWith(yearMonth)
@@ -377,120 +196,58 @@ export default function App() {
     });
   };
 
-  // ─── News Feed: reaction & comment handlers ───
-  // Toggle: tap the same emoji again to remove, tap another to switch.
-  // One reaction per user per post (re-tapping a different type replaces).
-  const handleTogglePostReaction = (postId: string, type: PostReactionType) => {
-    if (!currentUser) return;
-    setPostReactions(prev => {
-      const existing = prev.find(r => r.postId === postId && r.userId === currentUser.id);
-      if (existing && existing.type === type) {
-        return prev.filter(r => !(r.postId === postId && r.userId === currentUser.id));
-      }
-      if (existing) {
-        return prev.map(r => (r.postId === postId && r.userId === currentUser.id) ? { ...r, type } : r);
-      }
-      const reaction: PostReaction = {
-        id: `pr-${Date.now()}`,
-        postId,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        type,
-        createdAt: new Date().toISOString(),
-      };
-      return [reaction, ...prev];
-    });
-  };
+  // ─── Geofence: manager alerts when an employee leaves office radius ───
 
-  const handleAddPostComment = (postId: string, content: string) => {
-    if (!currentUser || !content.trim()) return;
-    const comment: PostComment = {
-      id: `pc-${Date.now()}`,
-      postId,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      content: content.trim(),
-      createdAt: new Date().toISOString(),
+  const handleGeofenceOutOfRange = (event: GeofenceEvent) => {
+    const time = new Date(event.timestamp).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const notifItem: NotificationItem = {
+      id: `notif-geo-${event.id}`,
+      title: event.isRepeat ? '⚠️ Vẫn ngoài phạm vi làm việc' : '⚠️ Nhân viên ngoài phạm vi làm việc',
+      message: `${event.employeeName} đang ở cách văn phòng ${event.distanceMeters}m (ngưỡng ${event.thresholdMeters}m) lúc ${time}. Trạng thái: đang trong ca làm việc.`,
+      time: 'Vừa xong',
+      read: false,
+      type: 'penalty',
+      category: 'management',
     };
-    setPostComments(prev => [...prev, comment]);
+    pushNotification(notifItem);
   };
 
-  // A user may delete only their own comment
-  const handleDeletePostComment = (commentId: string) => {
-    if (!currentUser) return;
-    setPostComments(prev => prev.filter(c => !(c.id === commentId && c.userId === currentUser.id)));
-  };
+  useGeofenceMonitor(currentUser, handleGeofenceOutOfRange);
 
-  // ─── Peer review ───
-  const handleSubmitPeerReview = (submission: PeerReviewSubmission) => {
-    setPeerReviews(prev => [submission, ...prev]);
-    // Toast handled by PeerReviewScreen itself
-  };
+  // ─── Shift & schedule handlers ───
 
-  // ─── Shift management ───
-  const handleAddShift = (shift: Shift) => {
-    setShifts(prev => [...prev, shift]);
+  const handleAddShift = (shift: Parameters<typeof addShift>[0]) => {
+    addShift(shift);
     addToast('success', 'Đã thêm ca mới', `Ca ${shift.shiftName} cho ${shift.employeeName}`);
   };
 
-  const handleUpdateShift = (updatedShift: Shift) => {
-    setShifts(prev => prev.map(s => s.id === updatedShift.id ? updatedShift : s));
+  const handleUpdateShift = (updatedShift: Parameters<typeof updateShift>[0]) => {
+    updateShift(updatedShift);
     addToast('success', 'Đã cập nhật ca', `Ca ${updatedShift.shiftName} đã được chỉnh sửa`);
   };
 
   const handleDeleteShift = (shiftId: string) => {
-    setShifts(prev => prev.filter(s => s.id !== shiftId));
+    deleteShift(shiftId);
     addToast('info', 'Đã xóa ca', 'Ca làm việc đã bị xóa');
   };
 
-  // ─── Shift Registration Handlers ───
-  const handleSubmitRegistration = (reg: WeeklyShiftRegistration) => {
-    setShiftRegistrations(prev => [...prev, reg]);
+  const handleSubmitRegistration = (reg: Parameters<typeof submitRegistration>[0]) => {
+    submitRegistration(reg);
     addToast('success', 'Đăng ký thành công', `Đã gửi lịch tuần ${reg.weekNumber} cho quản lý duyệt`);
   };
 
-  const handleUpdateRegistration = (reg: WeeklyShiftRegistration) => {
-    setShiftRegistrations(prev => prev.map(r => r.id === reg.id ? reg : r));
+  const handleUpdateRegistration = (reg: Parameters<typeof updateRegistration>[0]) => {
+    updateRegistration(reg);
     addToast('success', 'Đã cập nhật', 'Lịch làm việc đã được cập nhật');
   };
 
-  // ─── Study Schedule Handlers ───
-  const handleSubmitStudySchedule = (schedule: StudySchedule) => {
-    setStudySchedules(prev => {
-      const existing = prev.find(s => s.userId === schedule.userId && s.weekStart === schedule.weekStart);
-      if (existing) {
-        return prev.map(s => s.id === existing.id ? schedule : s);
-      }
-      return [...prev, schedule];
-    });
-  };
-
-  // ─── Manual Assignment Handlers ───
-  const handlePublishSchedule = (assignment: ManualShiftAssignment) => {
-    setManualAssignments(prev => {
-      const existing = prev.find(a => a.userId === assignment.userId && a.weekStart === assignment.weekStart);
-      if (existing) {
-        return prev.map(a => a.id === existing.id ? assignment : a);
-      }
-      return [...prev, assignment];
-    });
+  const handlePublishSchedule = (assignment: Parameters<typeof publishSchedule>[0]) => {
+    publishSchedule(assignment);
     addToast('success', 'Đã xuất bản lịch', `Lịch làm việc đã được cập nhật cho ${assignment.userName}`);
   };
 
-  // ─── Notifications ───
-  const handleMarkNotificationRead = (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  };
-
-  const handleClearAllNotifications = () => {
-    // Silently mark all notifications as read (no toast — the badge disappearing is the feedback)
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-  };
-
-  const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
-
   // ─── Navigation helper (passed to child components) ───
+
   const goTo = (tab: string) => {
     if (!currentUser) return;
     const role = currentUser.role;
@@ -517,25 +274,27 @@ export default function App() {
     if (route) navigate(route);
   };
 
+  const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
+
   // ─── Layout wrapper for authenticated pages ───
   // The wrapper reads its latest values through a ref so the component's
   // identity stays STABLE across App renders. Without this, every App-level
   // state change (e.g. reacting/commenting on the news feed) re-created the
   // component type and remounted the whole page subtree, resetting local UI
   // state such as open comment sections and the feed's date filter.
-  const layoutDepsRef = useRef({ currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount });
-  layoutDepsRef.current = { currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount };
+  const layoutDepsRef = useRef({ currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount });
+  layoutDepsRef.current = { currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount };
 
   const AuthenticatedLayout = useMemo(() => ({ children }: { children: React.ReactNode }) => {
-    const { currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount } = layoutDepsRef.current;
+    const { currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount } = layoutDepsRef.current;
     if (!currentUser) return null;
     return (
       <div className="min-h-screen bg-[#FDF8EE] text-[#3D4663] flex flex-col md:flex-row">
         <Header
           currentUser={currentUser}
           notifications={notifications}
-          onMarkNotificationRead={handleMarkNotificationRead}
-          onClearAllNotifications={handleClearAllNotifications}
+          onMarkNotificationRead={markRead}
+          onClearAllNotifications={markAllRead}
           onNavigateToProfile={() => goTo('profile')}
           onLogout={handleLogout}
         />
@@ -563,8 +322,8 @@ export default function App() {
         <Route
           path={ROUTES.LOGIN}
           element={
-            <GuestRoute currentUser={currentUser} isLoggedIn={isLoggedIn}>
-              <LoginScreen onLogin={handleLogin} allUsers={users} onPasswordChanged={handlePasswordChanged} />
+            <GuestRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn}>
+              <LoginScreen onLogin={handleLogin} allUsers={auth.users} onPasswordChanged={handlePasswordChanged} />
             </GuestRoute>
           }
         />
@@ -573,7 +332,7 @@ export default function App() {
         <Route
           path={ROUTES.HOME}
           element={
-            <ProtectedRoute currentUser={currentUser} isLoggedIn={isLoggedIn}>
+            <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn}>
               {currentUser ? (
                 <AuthenticatedLayout>
                   <Routes>
@@ -582,37 +341,18 @@ export default function App() {
                         <ManagerDashboard
                           currentUser={currentUser}
                           evidences={evidences}
-                          allUsers={users}
-                          onSelectEvidence={(e) => setSelectedEvidence(e)}
-                          onSelectEmployee={(e) => setSelectedEmployee(e)}
+                          allUsers={auth.users}
+                          onSelectEmployee={setSelectedEmployee}
                           onNavigateReview={() => goTo('review')}
-                          onCheckIn={(record) => {
-                            if (record.type === 'checkin') {
-                              handleCheckIn(record);
-                            } else {
-                              handleCheckOut(record);
-                            }
-                          }}
+                          onCheckIn={handleCheckInOutRecord}
                         />
                       } />
                     ) : (
                       <Route index element={
                         <HomeScreen
                           currentUser={currentUser}
-                          evidences={evidences}
-                          customerRatings={customerRatings}
                           peerReviews={peerReviews}
-                          onNavigateSubmit={() => navigate(currentUser.role === 'manager' ? ROUTES.MANAGER_DASHBOARD : ROUTES.EMPLOYEE_HOME)}
-                          onSelectEvidence={(e) => setSelectedEvidence(e)}
-                          onNavigateReview={() => goTo('review')}
-                          checkInRecord={checkInRecord}
-                          onCheckIn={(record) => {
-                            if (record.type === 'checkin') {
-                              handleCheckIn(record);
-                            } else {
-                              handleCheckOut(record);
-                            }
-                          }}
+                          onCheckIn={handleCheckInOutRecord}
                         />
                       } />
                     )}
@@ -627,50 +367,37 @@ export default function App() {
         <Route
           path="/employee/*"
           element={
-            <ProtectedRoute currentUser={currentUser} isLoggedIn={isLoggedIn} requiredRole="employee">
+            <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn} requiredRole="employee">
               {currentUser && (
                 <AuthenticatedLayout>
                   <Routes>
                     <Route path="home" element={
                       <HomeScreen
                         currentUser={currentUser}
-                        evidences={evidences}
-                        customerRatings={customerRatings}
                         peerReviews={peerReviews}
-                        onNavigateSubmit={() => {}}
-                        onSelectEvidence={(e) => setSelectedEvidence(e)}
-                        onNavigateReview={() => goTo('review')}
-                        checkInRecord={checkInRecord}
-                        onCheckIn={(record) => {
-                          if (record.type === 'checkin') {
-                            handleCheckIn(record);
-                          } else {
-                            handleCheckOut(record);
-                          }
-                        }}
+                        onCheckIn={handleCheckInOutRecord}
                       />
                     } />
-
-                                        <Route path="handover" element={
+                    <Route path="handover" element={
                       <ReviewScreen
                         currentUser={currentUser}
                         evidences={evidences}
                         notifications={notifications}
-                        onMarkNotificationRead={handleMarkNotificationRead}
+                        onMarkNotificationRead={markRead}
                         onSubmitEvidence={handleSubmitEvidence}
                         postReactions={postReactions}
                         postComments={postComments}
-                        onTogglePostReaction={handleTogglePostReaction}
-                        onAddPostComment={handleAddPostComment}
-                        onDeletePostComment={handleDeletePostComment}
+                        onTogglePostReaction={toggleReaction}
+                        onAddPostComment={addComment}
+                        onDeletePostComment={deleteComment}
                       />
                     } />
                     <Route path="peer-review" element={
                       <PeerReviewScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         peerReviews={peerReviews}
-                        onSubmitReview={handleSubmitPeerReview}
+                        onSubmitReview={submitPeerReview}
                       />
                     } />
                     <Route path="shift-registration" element={
@@ -678,7 +405,7 @@ export default function App() {
                         currentUser={currentUser}
                         studySchedules={studySchedules}
                         registrations={shiftRegistrations}
-                        onSubmitStudySchedule={handleSubmitStudySchedule}
+                        onSubmitStudySchedule={submitStudySchedule}
                         onSubmitRegistration={handleSubmitRegistration}
                         onUpdateRegistration={handleUpdateRegistration}
                       />
@@ -703,7 +430,7 @@ export default function App() {
         <Route
           path="/admin/*"
           element={
-            <ProtectedRoute currentUser={currentUser} isLoggedIn={isLoggedIn} requiredRole="manager">
+            <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn} requiredRole="manager">
               {currentUser && (
                 <AuthenticatedLayout>
                   <Routes>
@@ -711,16 +438,15 @@ export default function App() {
                       <ManagerDashboard
                         currentUser={currentUser}
                         evidences={evidences}
-                        allUsers={users}
-                        onSelectEvidence={(e) => setSelectedEvidence(e)}
-                        onSelectEmployee={(e) => setSelectedEmployee(e)}
+                        allUsers={auth.users}
+                        onSelectEmployee={setSelectedEmployee}
                         onNavigateReview={() => goTo('review')}
                       />
                     } />
                     <Route path="schedule" element={
                       <ManagerScheduleTab
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         shifts={shifts}
                         onAddShift={handleAddShift}
                         onUpdateShift={handleUpdateShift}
@@ -728,13 +454,13 @@ export default function App() {
                         registrations={shiftRegistrations}
                         onSubmitRegistration={handleSubmitRegistration}
                         onUpdateRegistration={handleUpdateRegistration}
-                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
+                        onAddNotification={pushNotification}
                       />
                     } />
                     <Route path="work-hours" element={
                       <WorkHoursScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         getWorkHoursSummary={getWorkHoursSummary}
                         checkInOutRecords={checkInOutRecords}
                       />
@@ -742,47 +468,43 @@ export default function App() {
                     <Route path="study-schedules" element={
                       <ManagerStudySchedulesScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         studySchedules={studySchedules}
                         registrations={shiftRegistrations}
                         manualAssignments={manualAssignments}
                         onPublishSchedule={handlePublishSchedule}
-                        onAddNotification={(notif) => setNotifications(prev => [notif, ...prev])}
+                        onAddNotification={pushNotification}
                       />
                     } />
-
                     <Route path="export" element={
                       <ExportReportScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         shifts={shifts}
                         peerReviews={peerReviews}
                         shiftRegistrations={shiftRegistrations}
                       />
                     } />
-
-                    <Route path="*" element={<Navigate to={ROUTES.MANAGER_DASHBOARD} replace />} />
-
                     <Route path="handover" element={
                       <ReviewScreen
                         currentUser={currentUser}
                         evidences={evidences}
                         notifications={notifications.filter(n => n.category !== 'handover')}
-                        onMarkNotificationRead={handleMarkNotificationRead}
+                        onMarkNotificationRead={markRead}
                         onSubmitEvidence={handleSubmitEvidence}
                         postReactions={postReactions}
                         postComments={postComments}
-                        onTogglePostReaction={handleTogglePostReaction}
-                        onAddPostComment={handleAddPostComment}
-                        onDeletePostComment={handleDeletePostComment}
+                        onTogglePostReaction={toggleReaction}
+                        onAddPostComment={addComment}
+                        onDeletePostComment={deleteComment}
                       />
                     } />
                     <Route path="peer-review" element={
                       <PeerReviewScreen
                         currentUser={currentUser}
-                        allUsers={users}
+                        allUsers={auth.users}
                         peerReviews={peerReviews}
-                        onSubmitReview={handleSubmitPeerReview}
+                        onSubmitReview={submitPeerReview}
                       />
                     } />
                     <Route path="profile" element={
@@ -794,6 +516,7 @@ export default function App() {
                         onOpenAddEmployee={() => setShowAddEmployeeModal(true)}
                       />
                     } />
+                    <Route path="*" element={<Navigate to={ROUTES.MANAGER_DASHBOARD} replace />} />
                   </Routes>
                 </AuthenticatedLayout>
               )}
@@ -822,13 +545,13 @@ export default function App() {
               isOpen={showAddEmployeeModal}
               onClose={() => setShowAddEmployeeModal(false)}
               onAddEmployee={handleAddEmployee}
-              existingUsers={users}
+              existingUsers={auth.users}
             />
           )}
         </>
       )}
 
-      <ToastNotification toasts={toasts} onDismiss={handleDismissToast} />
+      <ToastNotification toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

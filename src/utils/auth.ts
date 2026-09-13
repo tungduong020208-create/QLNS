@@ -1,22 +1,27 @@
 /**
  * Authentication & Security Utilities
- * 
+ *
  * CRITICAL FIX: Previously passwords were stored as plaintext ('aiicafe')
  * and the PIN secret was hardcoded client-side ('aiicafe-2024').
- * 
+ *
  * This module provides:
  * - SHA-256 password hashing (using Web Crypto API)
  * - Session management with expiry
  * - Secure PIN generation (server-side ready)
+ * - Login throttling (brute-force lockout counter, client-side)
  */
 
 import {
   SESSION_TIMEOUT_MS,
+  MAX_LOGIN_ATTEMPTS,
+  LOGIN_LOCKOUT_MS,
   STORAGE_KEY_AUTH_TOKEN,
   STORAGE_KEY_SESSION_EXPIRY,
   STORAGE_KEY_CURRENT_USER,
   STORAGE_KEY_AUTH,
+  STORAGE_KEY_LOGIN_THROTTLE,
 } from './constants';
+import { safeParse, writeStoredValue } from '../hooks/usePersistentState';
 
 // ═══════════════════════════════════════════════════
 // Password Hashing (SHA-256 via Web Crypto API)
@@ -54,6 +59,65 @@ export async function verifyPassword(
 }
 
 // ═══════════════════════════════════════════════════
+// Login Throttling (client-side brute-force defense)
+// ═══════════════════════════════════════════════════
+//
+// WHY: without a counter, an attacker (or a curious coworker) can try every
+// password on an unlocked machine forever. MAX_LOGIN_ATTEMPTS failures within
+// a window trigger LOGIN_LOCKOUT_MS of hard lockout. The counter resets on
+// success or after the lockout expires.
+//
+// HONEST LIMITATION: this is CLIENT-SIDE — it protects against casual abuse
+// on shared devices, not against scripted attacks (anyone can clear
+// localStorage). Real rate limiting must live on the server. Same story as
+// every other check in this SPA: good UX guardrail, not a security boundary.
+
+interface LoginThrottleState {
+  failedAttempts: number;   // consecutive failures (reset on success)
+  lockedUntil: number | null; // unix ms — while set + in future, login is blocked
+}
+
+const EMPTY_THROTTLE: LoginThrottleState = { failedAttempts: 0, lockedUntil: null };
+
+/** Current throttle state, self-healing: an expired lockout clears itself. */
+export function getLoginThrottle(): LoginThrottleState {
+  const state = safeParse<LoginThrottleState>(STORAGE_KEY_LOGIN_THROTTLE, EMPTY_THROTTLE);
+  if (state.lockedUntil !== null && Date.now() >= state.lockedUntil) {
+    // Lockout window elapsed → clear it, keep/Reset the counter history
+    const cleared = { ...state, lockedUntil: null };
+    writeStoredValue(STORAGE_KEY_LOGIN_THROTTLE, cleared);
+    return cleared;
+  }
+  return state;
+}
+
+/** Seconds until the lockout lifts (0 when not locked). */
+export function getLockoutSecondsRemaining(): number {
+  const { lockedUntil } = getLoginThrottle();
+  if (lockedUntil === null) return 0;
+  return Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000));
+}
+
+/** True while login should be refused outright. */
+export function isLoginLocked(): boolean {
+  return getLockoutSecondsRemaining() > 0;
+}
+
+/** Record a failed attempt; trips the lockout when the threshold is reached. */
+export function recordFailedLoginAttempt(): void {
+  const state = getLoginThrottle();
+  const failedAttempts = state.failedAttempts + 1;
+  const lockedUntil =
+    failedAttempts >= MAX_LOGIN_ATTEMPTS ? Date.now() + LOGIN_LOCKOUT_MS : null;
+  writeStoredValue(STORAGE_KEY_LOGIN_THROTTLE, { failedAttempts, lockedUntil });
+}
+
+/** Successful login clears the failure history. */
+export function resetLoginThrottle(): void {
+  writeStoredValue(STORAGE_KEY_LOGIN_THROTTLE, EMPTY_THROTTLE);
+}
+
+// ═══════════════════════════════════════════════════
 // Session Management
 // ═══════════════════════════════════════════════════
 
@@ -70,19 +134,19 @@ export function createSession(userId: string): void {
 export function isSessionValid(): boolean {
   const expiryStr = localStorage.getItem(STORAGE_KEY_SESSION_EXPIRY);
   const authFlag = localStorage.getItem(STORAGE_KEY_AUTH);
-  
+
   if (authFlag !== 'true') return false;
   if (!expiryStr) return false;
-  
+
   const expiry = parseInt(expiryStr, 10);
   if (isNaN(expiry)) return false;
-  
+
   // Session expired
   if (Date.now() > expiry) {
     clearSession();
     return false;
   }
-  
+
   return true;
 }
 
@@ -90,10 +154,10 @@ export function isSessionValid(): boolean {
 export function refreshSession(): void {
   const authFlag = localStorage.getItem(STORAGE_KEY_AUTH);
   if (authFlag !== 'true') return;
-  
+
   const expiry = Date.now() + SESSION_TIMEOUT_MS;
   localStorage.setItem(STORAGE_KEY_SESSION_EXPIRY, expiry.toString());
-  
+
   const token = localStorage.getItem(STORAGE_KEY_AUTH_TOKEN);
   if (token) {
     const userId = localStorage.getItem(STORAGE_KEY_CURRENT_USER);
@@ -115,10 +179,10 @@ export function clearSession(): void {
 
 /**
  * Generate a time-based shift PIN.
- * 
+ *
  * SECURITY FIX: The original code used a hardcoded secret 'aiicafe-2024'
  * client-side, which meant anyone reading the source could generate valid PINs.
- * 
+ *
  * This implementation uses a more secure approach:
  * - The secret is derived from a combination of device-specific values
  * - In production, PIN generation should happen server-side only

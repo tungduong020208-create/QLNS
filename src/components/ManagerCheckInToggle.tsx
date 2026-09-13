@@ -15,6 +15,7 @@ import {
   STORAGE_KEY_CHECKIN_SESSION,
   STORAGE_KEY_ATTENDANCE_RECORDS,
 } from '../utils/constants';
+import { safeParse, writeStoredValue } from '../hooks/usePersistentState';
 
 interface ManagerCheckInToggleProps {
   employeeId: string;
@@ -45,17 +46,11 @@ const normalizeSessionMethod = (session: CheckInSession): CheckInSession => {
 export const ManagerCheckInToggle: React.FC<ManagerCheckInToggleProps> = ({ employeeId, onCheckIn }) => {
   const [now, setNow] = useState(new Date());
   const [session, setSession] = useState<CheckInSession | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN_SESSION);
-      if (!saved) return null;
-      const parsed: CheckInSession = JSON.parse(saved);
-      if (parsed.employeeId === employeeId && parsed.hasCheckedIn) {
-        return normalizeSessionMethod(parsed);
-      }
-      return null;
-    } catch {
-      return null;
+    const parsed = safeParse<CheckInSession | null>(STORAGE_KEY_CHECKIN_SESSION, null);
+    if (parsed && parsed.employeeId === employeeId && parsed.hasCheckedIn) {
+      return normalizeSessionMethod(parsed);
     }
+    return null;
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +65,10 @@ export const ManagerCheckInToggle: React.FC<ManagerCheckInToggleProps> = ({ empl
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key && e.key !== STORAGE_KEY_CHECKIN_SESSION) return;
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_CHECKIN_SESSION);
-        if (!saved) return;
-        const parsed: CheckInSession = JSON.parse(saved);
-        if (parsed.employeeId === employeeId && parsed.hasCheckedIn) {
-          setSession(normalizeSessionMethod(parsed));
-        }
-      } catch {}
+      const parsed = safeParse<CheckInSession | null>(STORAGE_KEY_CHECKIN_SESSION, null);
+      if (parsed && parsed.employeeId === employeeId && parsed.hasCheckedIn) {
+        setSession(normalizeSessionMethod(parsed));
+      }
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
@@ -110,18 +101,12 @@ export const ManagerCheckInToggle: React.FC<ManagerCheckInToggleProps> = ({ empl
         address: 'Điểm danh bằng nút gạt của quản lý',
       };
       localStorage.setItem(STORAGE_KEY_CHECKIN_SESSION, JSON.stringify(newSession));
-      setSession(newSession);
-
-      const record = buildRecord('checkin', nowMs);
-      try {
-        const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
-        const allRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
-        if (!allRecords[employeeId]) allRecords[employeeId] = [];
-        allRecords[employeeId].push(record);
-        localStorage.setItem(STORAGE_KEY_ATTENDANCE_RECORDS, JSON.stringify(allRecords));
-      } catch {
-        // storage full — the live state still works
-      }
+      setSession(newSession);      const record = buildRecord('checkin', nowMs);
+      const allRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
+      if (!allRecords[employeeId]) allRecords[employeeId] = [];
+      allRecords[employeeId].push(record);
+      // Storage full → live state still works, only the persisted copy is skipped
+      writeStoredValue(STORAGE_KEY_ATTENDANCE_RECORDS, allRecords);
 
       onCheckIn(record);
     } catch {
@@ -141,15 +126,11 @@ export const ManagerCheckInToggle: React.FC<ManagerCheckInToggleProps> = ({ empl
       setSession(null);
 
       const record = buildRecord('checkout', nowMs);
-      try {
-        const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
-        const allRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
-        if (!allRecords[employeeId]) allRecords[employeeId] = [];
-        allRecords[employeeId].push(record);
-        localStorage.setItem(STORAGE_KEY_ATTENDANCE_RECORDS, JSON.stringify(allRecords));
-      } catch {
-        // storage full — the live state still works
-      }
+      const allRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
+      if (!allRecords[employeeId]) allRecords[employeeId] = [];
+      allRecords[employeeId].push(record);
+      // Storage full → live state still works, only the persisted copy is skipped
+      writeStoredValue(STORAGE_KEY_ATTENDANCE_RECORDS, allRecords);
 
       onCheckIn(record);
     } catch {

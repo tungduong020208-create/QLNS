@@ -24,6 +24,7 @@ import {
   STORAGE_KEY_GEOFENCE_EVENTS,
   GEOFENCE,
 } from '../utils/constants';
+import { safeParse } from './usePersistentState';
 
 /** Shape of the check-in session persisted by CheckInCheckOut.tsx */
 interface CheckInSession {
@@ -57,13 +58,7 @@ export interface GeofenceStatus {
 }
 
 export function readGeofenceEvents(): GeofenceEvent[] {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY_GEOFENCE_EVENTS);
-    if (saved) return JSON.parse(saved) as GeofenceEvent[];
-  } catch {
-    // corrupted — fall through
-  }
-  return [];
+  return safeParse<GeofenceEvent[]>(STORAGE_KEY_GEOFENCE_EVENTS, []);
 }
 
 function appendGeofenceEvent(event: GeofenceEvent): void {
@@ -134,14 +129,8 @@ export function useGeofenceMonitor(
 
     /** True while this employee has an active check-in session */
     const hasActiveSession = (): boolean => {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY_CHECKIN_SESSION);
-        if (!saved) return false;
-        const session: CheckInSession = JSON.parse(saved);
-        return session.employeeId === currentUser.id && session.hasCheckedIn;
-      } catch {
-        return false;
-      }
+      const session = safeParse<CheckInSession | null>(STORAGE_KEY_CHECKIN_SESSION, null);
+      return !!session && session.employeeId === currentUser.id && session.hasCheckedIn;
     };
 
     const checkDistance = async () => {

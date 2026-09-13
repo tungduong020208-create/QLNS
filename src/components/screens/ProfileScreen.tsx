@@ -20,7 +20,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   mustChangePassword,
   onChangePassword,
 }) => {
-  const [activeModal, setActiveModal] = useState<'account' | 'password' | 'notifications' | 'support' | 'logout' | null>(null);
+  const [activeModal, setActiveModal] = useState<'account' | 'password' | 'notifications' | 'support' | 'logout' | 'team' | null>(null);
 
   // Account edit form state
   const [editName, setEditName] = useState(currentUser.name);

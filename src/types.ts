@@ -57,7 +57,12 @@ export interface EvidenceItem {
   reviewedBy?: string;
 }
 
-export type NotificationCategory = 'management';
+/**
+ * 'handover' no longer occurs in NEW rows, but legacy persisted notifications
+ * still carry it — the manager handover route filters those out. Do NOT
+ * narrow this back to 'management' without a data migration.
+ */
+export type NotificationCategory = 'management' | 'handover';
 
 export interface NotificationItem {
   id: string;
@@ -101,11 +106,9 @@ export interface ShiftHandover {
   checklist: HandoverTask[];
   notes: string;
   previousNotes?: string;      // Ghi chú từ ca trước
-  confirmedAt?: string;
-  handoverPhoto?: string;      // Ảnh bàn giao
+  confirmedAt?: string;  handoverPhoto?: string;      // Ảnh bàn giao
 }
 
-export type ActiveTab = 'home' | 'submit' | 'review' | 'profile' | 'approval' | 'qr_review' | 'peer_review' | 'manager_schedule';
 
 
 export interface CustomerRating {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../../types';
-import { verifyPassword, hashPassword } from '../../utils/auth';
+import { verifyPassword, hashPassword, isLoginLocked, getLockoutSecondsRemaining, recordFailedLoginAttempt, resetLoginThrottle, getLoginThrottle } from '../../utils/auth';
+import { MAX_LOGIN_ATTEMPTS } from '../../utils/constants';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -24,9 +25,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwError, setPwError] = useState('');
   const [pwSuccess, setPwSuccess] = useState(false);
+  // Countdown while locked out — re-renders each second so the message stays accurate
+  const [, setLockoutTick] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // ── Gate 0: brute-force lockout (checked BEFORE any verification) ──
+    // Non-async and first on purpose: a locked session must not touch
+    // password verification at all, and cannot fail with an exception.
+    if (isLoginLocked()) {
+      const minutes = Math.ceil(getLockoutSecondsRemaining() / 60);
+      setErrorMsg(`Đã nhập sai quá ${MAX_LOGIN_ATTEMPTS} lần. Vui lòng thử lại sau ${minutes} phút.`);
+      setLockoutTick(t => t + 1);
+      return;
+    }
+
     if (!username.trim()) {
       setErrorMsg('Vui lòng nhập tài khoản hoặc mã nhân viên');
       return;
@@ -44,6 +58,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
 
     if (!foundUser) {
       setErrorMsg('Tài khoản không tồn tại trong hệ thống');
+      recordFailedLoginAttempt();
       return;
     }
 
@@ -51,11 +66,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
     // This prevents password exposure in localStorage and DevTools
     const storedHash = foundUser.password || '';
     const passwordValid = await verifyPassword(password, storedHash);
-    
+
     if (!passwordValid) {
-      setErrorMsg('Mật khẩu không đúng. Vui lòng thử lại.');
+      recordFailedLoginAttempt();
+      const { failedAttempts, lockedUntil } = getLoginThrottle();
+      if (lockedUntil) {
+        const minutes = Math.ceil((lockedUntil - Date.now()) / 60000);
+        setErrorMsg(`Đã nhập sai quá ${MAX_LOGIN_ATTEMPTS} lần. Vui lòng thử lại sau ${minutes} phút.`);
+      } else {
+        const left = Math.max(0, MAX_LOGIN_ATTEMPTS - failedAttempts);
+        setErrorMsg(`Mật khẩu không đúng. Còn ${left} lần thử.`);
+      }
       return;
     }
+
+    // ── Account deactivated → block AFTER password verification ──
+    // Order matters: rejecting a deactivated account before the password
+    // check would leak account status to anyone guessing emails.
+    if (foundUser.isAccountActive === false) {
+      recordFailedLoginAttempt();
+      setErrorMsg('Tài khoản đã bị vô hiệu hóa. Liên hệ quản lý để được hỗ trợ.');
+      return;
+    }
+
+    resetLoginThrottle();
 
     // Check if must change password
     if (foundUser.mustChangePassword) {

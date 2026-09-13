@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import * as faceapi from 'face-api.js';
+import type * as FaceApiNamespace from 'face-api.js';
 import { CheckInRecord, CheckInMethod } from '../types';
 import {
   getCurrentPosition,
@@ -10,6 +10,7 @@ import {
   getCheckInMethodColor,
 } from '../utils/checkin';
 import { loadFaceApiModels } from '../utils/faceApiModel';
+import { safeParse, writeStoredValue } from '../hooks/usePersistentState';
 import { compressImage, generatePhotoHash } from '../utils/imageCompress';
 import { generateShiftPin, validateShiftPin, getCurrentShiftType } from '../utils/auth';
 import { validateWifiConnection, IpCheckResult, OFFICE_WIFI_NAME } from '../utils/ipCheck';
@@ -48,8 +49,11 @@ const SmileDetector: React.FC<{
     const start = async () => {
       try {
         // FIX: Use singleton model loader instead of loading 6MB models every mount
-        // This ensures models are loaded only once and cached in memory
+        // This ensures models are loaded only once and cached in memory.
+        // The faceapi namespace is typed via FaceApiNamespace (type-only import,
+        // erased at build) and fetched at runtime here — first camera open.
         const modelsLoaded = await loadFaceApiModels();
+        const faceapi: typeof FaceApiNamespace = await import('face-api.js');
         if (!modelsLoaded) {
           throw new Error('Không thể tải model nhận diện khuôn mặt');
         }
@@ -270,47 +274,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   const [record, setRecord] = useState<CheckInRecord | null>(null);
   const [actionType, setActionType] = useState<ActionType>('checkin');
 
-  // Restored from localStorage
-  const [hasCheckedIn, setHasCheckedIn] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
-      if (saved) {
-        const session: CheckInSession = JSON.parse(saved);
-        if (session.employeeId === employeeId && session.hasCheckedIn) return true;
-      }
-    } catch {}
-    return false;
-  });
-  const [checkInTime, setCheckInTime] = useState<string | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
-      if (saved) {
-        const session: CheckInSession = JSON.parse(saved);
-        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInTime;
-      }
-    } catch {}
-    return null;
-  });
-  const [checkInTimestamp, setCheckInTimestamp] = useState<number | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
-      if (saved) {
-        const session: CheckInSession = JSON.parse(saved);
-        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInTimestamp;
-      }
-    } catch {}
-    return null;
-  });
-  const [checkInMethod, setCheckInMethod] = useState<CheckInMethod | null>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_CHECKIN);
-      if (saved) {
-        const session: CheckInSession = JSON.parse(saved);
-        if (session.employeeId === employeeId && session.hasCheckedIn) return session.checkInMethod;
-      }
-    } catch {}
-    return null;
-  });
+  // Restored from localStorage (parse-safe: one corrupted key can't crash the render)
+  const readSession = (): CheckInSession | null => {
+    const session = safeParse<CheckInSession | null>(STORAGE_KEY_CHECKIN, null);
+    return session && session.employeeId === employeeId && session.hasCheckedIn ? session : null;
+  };
+  const [hasCheckedIn, setHasCheckedIn] = useState(() => readSession() !== null);
+  const [checkInTime, setCheckInTime] = useState<string | null>(() => readSession()?.checkInTime ?? null);
+  const [checkInTimestamp, setCheckInTimestamp] = useState<number | null>(() => readSession()?.checkInTimestamp ?? null);
+  const [checkInMethod, setCheckInMethod] = useState<CheckInMethod | null>(() => readSession()?.checkInMethod ?? null);
   const [workHoursSummary, setWorkHoursSummary] = useState<{ hours: string; duration: string } | null>(null);
   const [permissionDeniedMsg, setPermissionDeniedMsg] = useState<string | null>(null);
 
@@ -512,16 +484,13 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     // CRITICAL FIX: Also write to attendance records store
     // This is what ManagerDashboard reads from — previously this was MISSING
     // causing Manager Dashboard to never show check-in data
-    try {
-      const storedRecords = localStorage.getItem(STORAGE_KEY_ATTENDANCE_RECORDS);
-      const allRecords: Record<string, CheckInRecord[]> = storedRecords ? JSON.parse(storedRecords) : {};
+    {
+      const allRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
       if (!allRecords[employeeId]) {
         allRecords[employeeId] = [];
       }
       allRecords[employeeId].push(newRecord);
-      localStorage.setItem(STORAGE_KEY_ATTENDANCE_RECORDS, JSON.stringify(allRecords));
-    } catch (err) {
-      console.error('Failed to save attendance record:', err);
+      writeStoredValue(STORAGE_KEY_ATTENDANCE_RECORDS, allRecords);
     }
   };
 

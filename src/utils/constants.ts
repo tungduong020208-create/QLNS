@@ -14,6 +14,15 @@
 /** Active check-in session for the current employee (who is logged in) */
 export const STORAGE_KEY_CHECKIN_SESSION = 'aiicafe_checkin_session';
 
+/** Work-hours records written on check-in/check-out (employee camera flow & manager toggle) */
+export const STORAGE_KEY_CHECKINOUT_RECORDS = 'aiicafe_checkinout_records';
+
+/** Weekly study schedules (employee-submitted) */
+export const STORAGE_KEY_STUDY_SCHEDULES = 'aiicafe_study_schedules';
+
+/** Manager-published weekly schedules */
+export const STORAGE_KEY_MANUAL_ASSIGNMENTS = 'aiicafe_manual_assignments';
+
 /** All check-in records indexed by employeeId — used by BOTH employee and manager */
 export const STORAGE_KEY_ATTENDANCE_RECORDS = 'aiicafe_attendance_records';
 
@@ -69,11 +78,16 @@ export const STORAGE_KEY_POST_COMMENTS = 'aiicafe_post_comments';
 export const STORAGE_KEY_DASHBOARD_COLLAPSED = 'aiicafe_dashboard_collapsed';
 
 // ═══════════════════════════════════════════════════
-// Office Wi-Fi Configuration (Manager-managed, code-level config)
+// Office Wi-Fi Configuration (site-specific, from .env.local)
 // ═══════════════════════════════════════════════════
 // NOTE: Browsers cannot read SSID/BSSID, so the office network is
 // identified by Public IP + local subnet instead (see src/utils/ipCheck.ts).
-// Edit these values when the office network changes.
+//
+// REAL VALUES LIVE IN `.env.local` (gitignored — the office IP must not be
+// committed). `.env.example` is the committed template with RFC 5737
+// placeholders, so a fresh checkout still typechecks and runs.
+// Vite bakes these at STARTUP: restart the dev server after editing.
+// Typed in src/vite-env.d.ts.
 
 /**
  * Office Wi-Fi identity used for attendance validation.
@@ -82,17 +96,17 @@ export const STORAGE_KEY_DASHBOARD_COLLAPSED = 'aiicafe_dashboard_collapsed';
  * - localSubnets: allowed LAN ranges in CIDR (e.g. "192.168.1.0/24")
  * - fallbackEnabled: allow GPS/PIN fallback when Wi-Fi check fails
  *
- * REAL OFFICE NETWORK (Aii Cafe, Wi-Fi 5 5GHz):
- *   Public IP: 171.240.139.180 (VNPT — dynamic, may change on router reboot;
- *   check the current Public IP shown in the check-in error modal to update)
- *   LAN subnet: 192.168.1.0/24 (gateway 192.168.1.1)
+ * Values come from `.env.local` (gitignored) — see `.env.example` for the
+ * template. Restart the dev server after editing (Vite reads env at startup).
  */
 export const OFFICE_WIFI = {
-  displayName: 'Aii Cafe',
-  publicIPs: ['171.240.139.180'] as string[],
-  localSubnets: ['192.168.1.0/24'] as string[],
-  fallbackEnabled: false,
-} as const;
+  displayName: import.meta.env.VITE_OFFICE_WIFI_NAME || 'Office WiFi',
+  publicIPs: (import.meta.env.VITE_OFFICE_PUBLIC_IPS || '')
+    .split(',').map(s => s.trim()).filter(Boolean) as string[],
+  localSubnets: (import.meta.env.VITE_OFFICE_LOCAL_SUBNETS || '')
+    .split(',').map(s => s.trim()).filter(Boolean) as string[],
+  fallbackEnabled: import.meta.env.VITE_OFFICE_WIFI_FALLBACK === 'true',
+};
 
 /**
  * Geofence monitoring settings (runs from check-in until check-out).
@@ -118,6 +132,9 @@ export const MAX_LOGIN_ATTEMPTS = 5;
 
 /** Login lockout duration in milliseconds (15 minutes) */
 export const LOGIN_LOCKOUT_MS = 15 * 60 * 1000;
+
+/** Login throttle state: failed attempt counter + lockout deadline */
+export const STORAGE_KEY_LOGIN_THROTTLE = 'enterprise_hr_login_throttle';
 
 // ═══════════════════════════════════════════════════
 // Check-in Constants

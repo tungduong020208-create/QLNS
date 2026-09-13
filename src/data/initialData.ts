@@ -1,4 +1,4 @@
-import { User, EvidenceItem, NotificationItem, WeeklyData, CustomerRating, QRReview } from '../types';
+import { User, EvidenceItem, NotificationItem, CustomerRating, QRReview } from '../types';
 
 /**
  * SECURITY FIX: Passwords are now stored as SHA-256 hashes.
@@ -278,30 +278,6 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     read: false,
     type: 'reward',
     category: 'management'
-  }
-];
-
-export const WEEKLY_CHART_DATA: WeeklyData[] = [
-  { week: 'Tuần 1', percentage: 40, goodCount: 18, totalCount: 45, points: 650 },
-  { week: 'Tuần 2', percentage: 60, goodCount: 30, totalCount: 50, points: 920 },
-  { week: 'Tuần 3', percentage: 85, goodCount: 46, totalCount: 54, points: 1450, isCurrent: true },
-  { week: 'Tuần 4', percentage: 70, goodCount: 35, totalCount: 50, points: 1100 }
-];
-
-export const ATTENTION_EMPLOYEES = [
-  {
-    id: 'att-1',
-    name: 'Nguyễn Văn A',
-    issue: '2 lần "Chưa tốt"',
-    avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsUD-emr2_t2f7yznByylFsPaIeVErKaiY24B87xHF_Y3FPz03OKsfw4zmjKyqQrzUKBazmPO0Aka4b5hSr2DquoevW8fB4tf8CNc2O4i8GF-U5uf2hUCx5mzdTJhzGAsd5vDCjEsERzAPznQvtr_Ej395oVYxpBoVQvQxHwCmyAd7MUvKy2YYeiD5bGqrYd4dIVEPXvGNXofiaHSynPZ3_eEiDAhR-Afr-gzPv9K2naAuGuDTKwmK',
-    notes: 'Trễ hạn nộp báo cáo tuần 2 lần liên tiếp'
-  },
-  {
-    id: 'att-2',
-    name: 'Trần Thị B',
-    issue: '2 lần "Chưa tốt"',
-    initialLetter: 'T',
-    notes: 'Chưa hoàn thành dọn dẹp kho công cụ trước khi ra về'
   }
 ];
 
