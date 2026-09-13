@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, EvidenceItem } from '../../types';
+import { toLocalDateTimeStr } from '../../utils/schedule';
 
 interface SubmitEvidenceScreenProps {
   currentUser: User;
@@ -82,9 +83,8 @@ export const SubmitEvidenceScreen: React.FC<SubmitEvidenceScreenProps> = ({
       const newEvidence: EvidenceItem = {
         id: `ev-${Date.now()}`,
         title: jobTitle.trim(),
-        department: '',
         timestamp: timeString,
-        dateString: now.toISOString(),
+        dateString: toLocalDateTimeStr(now),
         imageUrl: selectedImage,
         description: description.trim() || 'Không có mô tả',
         status: 'pending',

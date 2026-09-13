@@ -380,7 +380,7 @@ export const ReportScreen: React.FC<ReportScreenProps> = ({
               )}
               <div>
                 <h3 className="font-heading font-bold text-base text-[#0F1E44]">{selectedEmployeeAlert.name}</h3>
-                <p className="text-xs text-[#7A829A]">{selectedEmployeeAlert.department}</p>
+                <p className="text-xs text-[#7A829A]">{selectedEmployeeAlert.id}</p>
               </div>
             </div>
 

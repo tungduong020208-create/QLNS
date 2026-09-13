@@ -59,6 +59,15 @@ export const STORAGE_KEY_SHIFT_REGISTRATIONS = 'aiicafe_shift_registrations';
 /** Geofence event audit trail (out-of-range alerts) */
 export const STORAGE_KEY_GEOFENCE_EVENTS = 'aiicafe_geofence_events';
 
+/** News feed post reactions (one row per (post, user)) */
+export const STORAGE_KEY_POST_REACTIONS = 'aiicafe_post_reactions';
+
+/** News feed post comments */
+export const STORAGE_KEY_POST_COMMENTS = 'aiicafe_post_comments';
+
+/** Dashboard collapse preference (persists across sessions) */
+export const STORAGE_KEY_DASHBOARD_COLLAPSED = 'aiicafe_dashboard_collapsed';
+
 // ═══════════════════════════════════════════════════
 // Office Wi-Fi Configuration (Manager-managed, code-level config)
 // ═══════════════════════════════════════════════════

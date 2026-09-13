@@ -178,6 +178,8 @@ export function getCheckInMethodLabel(method: string): string {
       return '📍 GPS';
     case 'pin':
       return '🔢 Mã PIN';
+    case 'toggle':
+      return '🔧 Nút gạt';
     default:
       return 'Không xác định';
   }
@@ -194,6 +196,8 @@ export function getCheckInMethodColor(method: string): string {
       return 'text-blue-600 bg-blue-50';
     case 'pin':
       return 'text-amber-600 bg-amber-50';
+    case 'toggle':
+      return 'text-teal-600 bg-teal-50';
     default:
       return 'text-gray-600 bg-gray-50';
   }

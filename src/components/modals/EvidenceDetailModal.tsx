@@ -42,13 +42,20 @@ export const EvidenceDetailModal: React.FC<EvidenceDetailModalProps> = ({
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {/* Photo */}
+          {/* Photo (posts may be text-only — show placeholder when there is no image) */}
           <div className="w-full rounded-xl overflow-hidden bg-black/5 border border-[#E8DFD0]/60 max-h-80 flex items-center justify-center">
-            <img
-              src={evidence.imageUrl}
-              alt={evidence.title}
-              className="w-full h-full object-contain max-h-80"
-            />
+            {evidence.imageUrl ? (
+              <img
+                src={evidence.imageUrl}
+                alt={evidence.title}
+                className="w-full h-full object-contain max-h-80"
+              />
+            ) : (
+              <div className="py-10 flex flex-col items-center gap-2 text-[#7A829A]">
+                <span className="material-symbols-outlined text-4xl">notes</span>
+                <span className="text-xs font-medium">Bài đăng chỉ có nội dung văn bản</span>
+              </div>
+            )}
           </div>
 
           {/* Title & Status */}
@@ -83,11 +90,13 @@ export const EvidenceDetailModal: React.FC<EvidenceDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Description */}
-          <div className="bg-[#FDF8EE] p-3.5 rounded-xl border border-[#E8DFD0]/40">
-            <div className="text-[11px] font-bold text-[#7A829A] uppercase mb-1">Mô tả công việc:</div>
-            <p className="text-xs md:text-sm text-[#0F1E44] leading-relaxed">{evidence.description}</p>
-          </div>
+          {/* Description (optional on free-form posts) */}
+          {evidence.description && evidence.description !== evidence.title && (
+            <div className="bg-[#FDF8EE] p-3.5 rounded-xl border border-[#E8DFD0]/40">
+              <div className="text-[11px] font-bold text-[#7A829A] uppercase mb-1">Nội dung:</div>
+              <p className="text-xs md:text-sm text-[#0F1E44] leading-relaxed">{evidence.description}</p>
+            </div>
+          )}
 
           {/* Reviewer Note */}
           {evidence.managerNote && (

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, EvidenceItem, CheckInRecord } from '../types';
-import { STORAGE_KEY_ATTENDANCE_RECORDS, GEOFENCE } from '../utils/constants';
+import { STORAGE_KEY_ATTENDANCE_RECORDS, STORAGE_KEY_DASHBOARD_COLLAPSED, GEOFENCE } from '../utils/constants';
 import { getGeofenceStatus, GeofenceStatus } from '../hooks/useGeofenceMonitor';
+import { ManagerCheckInToggle } from './ManagerCheckInToggle';
 
 interface ManagerDashboardProps {
   currentUser: User;
@@ -10,6 +11,7 @@ interface ManagerDashboardProps {
   onSelectEvidence: (evidence: EvidenceItem) => void;
   onSelectEmployee: (user: User) => void;
   onNavigateReview: () => void;
+  onCheckIn?: (record: CheckInRecord) => void;
 }
 
 interface EmployeeCheckInStatus {
@@ -28,11 +30,27 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   allUsers,
   onSelectEvidence,
   onSelectEmployee,
-  onNavigateReview
+  onNavigateReview,
+  onCheckIn
 }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeCheckInStatus[]>([]);
   const [geoStatus, setGeoStatus] = useState<GeofenceStatus>(() => getGeofenceStatus());
+
+  // ─── Dashboard collapse (persisted) ───
+  // Page state lives in React; the preference is also written to localStorage
+  // so it survives screen changes AND app restarts (app-state behavior).
+  const [dashboardCollapsed, setDashboardCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem(STORAGE_KEY_DASHBOARD_COLLAPSED) === 'true';
+  });
+
+  const toggleDashboard = () => {
+    setDashboardCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem(STORAGE_KEY_DASHBOARD_COLLAPSED, String(next)); } catch { /* storage full */ }
+      return next;
+    });
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -110,16 +128,33 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   return (
     <div className="pb-28 pt-20 px-4 max-w-5xl mx-auto w-full antialiased">
-      {/* Greeting */}
-      <div className="mb-6">
-        <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#1b1b21] tracking-tight">
-          Xin chào, {currentUser.name}
-        </h1>
-        <p className="text-sm text-[#454652] mt-1">
-          Quản lý tổng quan và theo dõi hiệu suất nhân viên
-        </p>
+      {/* Greeting + dashboard collapse toggle */}
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-headline text-2xl md:text-3xl font-bold text-[#1b1b21] tracking-tight">
+            Xin chào, {currentUser.name}
+          </h1>
+          <p className="text-sm text-[#454652] mt-1">
+            Quản lý tổng quan và theo dõi hiệu suất nhân viên
+          </p>
+        </div>
+        <button
+          onClick={toggleDashboard}
+          title={dashboardCollapsed ? 'Mở rộng dashboard' : 'Thu gọn dashboard'}
+          className="flex-shrink-0 w-10 h-10 rounded-xl bg-white border border-[#c6c5d4]/60 flex items-center justify-center text-[#454652] hover:bg-[#f0eef5] transition-colors shadow-sm"
+        >
+          <span className="material-symbols-outlined text-[22px]">
+            {dashboardCollapsed ? 'expand_more' : 'expand_less'}
+          </span>
+        </button>
       </div>
 
+      {/* Manager check-in/check-out toggle (dedicated manager attendance switch) */}
+      <ManagerCheckInToggle employeeId={currentUser.id} onCheckIn={onCheckIn || (() => {})} />
+
+      {/* Collapsible dashboard content — hidden while collapsed, only the title bar above remains */}
+      {!dashboardCollapsed && (
+      <>
       {/* Manager Time & Info Card */}
       <div className="bg-gradient-to-r from-[#000666] to-[#1a237e] text-white rounded-2xl p-6 mb-6 shadow-lg relative overflow-hidden">
         <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
@@ -227,7 +262,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
         ) : (
           <p className="text-xs text-[#767683] mb-4">Tất cả nhân viên đang làm việc đều trong phạm vi văn phòng.</p>
         )}
-
+
         {/* Audit trail */}
         {geoStatus.recentEvents.length > 0 && (
           <div className="border-t border-[#e6e4ee] pt-3">
@@ -351,6 +386,8 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           ))}
         </div>
       </div>
+      )}
+      </>
       )}
     </div>
   );

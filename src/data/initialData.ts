@@ -130,8 +130,8 @@ export const INITIAL_HANDOVERS: any[] = [
     id: 'HO-001',
     shiftName: 'Ca sáng',
     shiftTime: '07:00 - 12:00',
-    fromEmployee: { id: 'user-1', name: 'Nguyễn Văn An', employeeCode: 'NV-2023-045', department: 'Quầy pha chế', role: 'employee', avatar: '', email: '' },
-    toEmployee: { id: 'user-3', name: 'Nguyễn Thị Mai', employeeCode: 'NV-2023-078', department: 'Khu vực phục vụ', role: 'employee', avatar: '', email: '' },
+    fromEmployee: { id: 'user-1', name: 'Nguyễn Văn An', employeeCode: 'NV-2023-045', role: 'employee', avatar: '', email: '' },
+    toEmployee: { id: 'user-3', name: 'Nguyễn Thị Mai', employeeCode: 'NV-2023-078', role: 'employee', avatar: '', email: '' },
     date: '2026-08-30',
     dateString: '2026-08-30T12:00:00',
     status: 'completed',
@@ -190,7 +190,6 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   {
     id: 'ev-1',
     title: 'Sắp xếp quầy kệ',
-    department: 'Khu vực phục vụ',
     timestamp: 'Hôm nay, 10:30 AM',
     dateString: '2026-08-28T10:30:00',
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBi1b_s5yyvTQOjMbVUSb30QgRhSanL4zJfOg1nwPJgmISFNk2srl_1xXRLwSSci327felTKkZ_rArylb8Ua0M3s7CCplqdZWbL7eyO3ktIeCst5cAI_UeXeqvDiJYzbCchy45htK223PdhXiPYGL5JkND94hf2t84mRZPtA50Zmkl2QU71AJGwzqpVE_T_WFEzi6wXAPNPtsWTQ_kz60mudJfdMpNjYT2ipQNfcvv5EiLa6H9DgMRX',
@@ -207,7 +206,6 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   {
     id: 'ev-2',
     title: 'Báo cáo kiểm kho',
-    department: 'Kho nguyên liệu',
     timestamp: 'Hôm qua, 17:00 PM',
     dateString: '2026-08-27T17:00:00',
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCJ7GQ0vjWTjTnAMyBHl3kMbodRW9AkykufAorCoCC1zaGYfMgV7xoXaDy1z3f5U7X68pj3bBUFKLJlY9N9LQsmKUJQomGftyTsm37kVhkj5NS82x2cFQLLKsOyHpn9FmkKEakOSUVB_7Hv5upoGv7V7XWIiz9DRgVAL-EBCVHpJGp-V4W-aGPCobkZt4Q4mGgRQNhuOSe_LuZC5JLCRebJmVmUz4CJ4IpJg6gNqfnNnNB-ZyuSwJOy',
@@ -221,7 +219,6 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   {
     id: 'ev-3',
     title: 'Vệ sinh khu vực A',
-    department: 'Khu vực phục vụ',
     timestamp: '12/10/2023',
     dateString: '2023-10-12T16:00:00',
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCm28U3XdZYpg0NNx8U9_qZ7tPrPKlDKnevFsygE_Gmea3qLX4ib0idFUWgbgTgZa5W5kvamgqs5YhKQGUAZbH3lHW2PN5fif6ShtiG2EHXlrkIflXWckARj8mRntA2yoCmO25OWKm_stdB-wFIH3LuceLywQ8ivtCVsHgy8sufYzdW7qv2HEnUDxtcHbKjd_H2BKsJrnNJdJtdpEbNCIqfi3wNP1Yt-RhiXaGRjaJUZU9FOmXZJIHq',
@@ -238,7 +235,6 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   {
     id: 'ev-4',
     title: 'Sắp xếp quầy kệ khu vực thời trang nam',
-    department: 'Khu vực phục vụ',
     timestamp: 'Hôm nay, 08:30 AM',
     dateString: '2026-08-28T08:30:00',
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBpB7scRZnte0G7E7-Q93CRPbIrgFh07H33rh094uq_sxfAn16SN8cfjmtHw6RRH8JTP9azwKG2RtQu8soPqt3q5p1rmcNkIIrAtmY8XVAUHUzAPBY-15bWKauVDCC47lxzvCFzWqbrWHdn3bJT3LFj3aOlY_WLbpATZFv_sOpzZtgFmXgcP89y7-VKVqrVIPrb9AcohBjBjRC5X4pMafE__Qdg6pz0lL_OxqYZDiifJwEXgTGItmYB',
@@ -252,7 +248,6 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   {
     id: 'ev-5',
     title: 'Báo cáo vệ sinh khu vực cuối ngày',
-    department: 'Khu vực phục vụ',
     timestamp: 'Hôm qua, 17:45 PM',
     dateString: '2026-08-27T17:45:00',
     imageUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD_59L-uzGVUrGJA7VYkMPgn-KSZ4alh_5rBpsFXwPMfzwPxncV04ew18FZeWcrNENiz5Kes53cixxJVWE7ZihWVv0Xedjvus1OtAws1eBeyK2IWQEe2Y3sRHJ7Pb5ZpVTANtBFh9RsHLN1HquQpqXHr7mFMitZu4-HBBA6QbhQ8oXz6wHsfkm3a_BN5EGWyC_90arsquRvqHvfwtFhC9V0100B32UqHgxQLnlV-XcC5CzGMYUfjjZe',
@@ -297,7 +292,6 @@ export const ATTENTION_EMPLOYEES = [
   {
     id: 'att-1',
     name: 'Nguyễn Văn A',
-    department: 'Khu vực kinh doanh',
     issue: '2 lần "Chưa tốt"',
     avatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAsUD-emr2_t2f7yznByylFsPaIeVErKaiY24B87xHF_Y3FPz03OKsfw4zmjKyqQrzUKBazmPO0Aka4b5hSr2DquoevW8fB4tf8CNc2O4i8GF-U5uf2hUCx5mzdTJhzGAsd5vDCjEsERzAPznQvtr_Ej395oVYxpBoVQvQxHwCmyAd7MUvKy2YYeiD5bGqrYd4dIVEPXvGNXofiaHSynPZ3_eEiDAhR-Afr-gzPv9K2naAuGuDTKwmK',
     notes: 'Trễ hạn nộp báo cáo tuần 2 lần liên tiếp'
@@ -305,7 +299,6 @@ export const ATTENTION_EMPLOYEES = [
   {
     id: 'att-2',
     name: 'Trần Thị B',
-    department: 'Khu vực kỹ thuật',
     issue: '2 lần "Chưa tốt"',
     initialLetter: 'T',
     notes: 'Chưa hoàn thành dọn dẹp kho công cụ trước khi ra về'

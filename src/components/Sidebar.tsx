@@ -32,18 +32,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const activeTab = tabFromPath(location.pathname);
 
-  const tabs: { id: string; label: string; icon: string }[] = [
-    { id: 'home', label: currentUser.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
+  // ─── Navigation grouping (UI-only) ───
+  // Manager tools + "Đánh giá" collapse into one "Công vụ" group.
+  // Pure navigation grouping: every tab keeps its own id, route, screen and
+  // handler — only how they are reached from the menu changes.
+  const groupTabs: { id: string; label: string; icon: string }[] = [
     ...(currentUser.role === 'manager'
       ? [
-        { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
-        { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
-        { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
-        { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' }
-      ]
+          { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
+          { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
+          { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
+          { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
+        ]
       : []),
-    { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
+  ];
+  const groupTabIds = groupTabs.map(t => t.id);
+  const groupActive = groupTabIds.includes(activeTab);
+  // Start open when the user is on one of the grouped pages so the active
+  // sub-tab is visible (the layout remounts on navigation, so this also
+  // re-expands the group after moving between grouped pages).
+  const [groupOpen, setGroupOpen] = React.useState(groupActive);
+
+  const tabs: { id: string; label: string; icon: string }[] = [
+    { id: 'home', label: currentUser.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
+    ...groupTabs,
+    { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     ...(currentUser.role !== 'manager'
       ? [{ id: 'study_schedule', label: 'Đăng ký lịch', icon: 'event_available' }]
       : []),
@@ -69,6 +83,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="flex flex-col gap-1.5 flex-1">
         {tabs.map((tab) => {
+          // Render grouped tabs as one collapsible section at the position
+          // of the first group member; skip the remaining members.
+          const groupIndex = groupTabIds.indexOf(tab.id);
+          // Skip non-first members (they render inside the group section)
+          if (groupIndex > 0) return null;
+          // Collapse the group only when it has 2+ tabs; a single-member group
+          // (e.g. employee view: just "Đánh giá") renders as a normal tab.
+          if (groupIndex === 0 && groupTabs.length >= 2) {
+            if (groupOpen) {
+              return (
+                <React.Fragment key="nav-group">
+                  {groupTabs.map((sub) => {
+                    const isSubActive = activeTab === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        onClick={() => onNavigate(sub.id)}
+                        className={`flex items-center justify-between p-3 pl-6 rounded-xl transition-all text-left group ${
+                          isSubActive
+                            ? 'bg-[#EFC14B] text-[#0F1E44] font-bold shadow-golden'
+                            : 'text-white/70 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`material-symbols-outlined text-[22px] ${isSubActive ? 'fill' : ''}`}>
+                            {sub.icon}
+                          </span>
+                          <span className="text-sm font-medium">{sub.label}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </React.Fragment>
+              );
+            }
+            return (
+              <button
+                key="nav-group"
+                onClick={() => setGroupOpen(true)}
+                className={`flex items-center justify-between p-3 rounded-xl transition-all text-left group ${
+                  groupActive
+                    ? 'bg-[#EFC14B] text-[#0F1E44] font-bold shadow-golden'
+                    : 'text-white/70 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`material-symbols-outlined text-[22px] ${groupActive ? 'fill' : ''}`}>
+                    {groupActive ? 'dashboard' : 'grid_view'}
+                  </span>
+                  <span className="text-sm font-medium">Công vụ</span>
+                </div>
+                <span className="material-symbols-outlined text-[20px]">expand_more</span>
+              </button>
+            );
+          }
+
           const isActive = activeTab === tab.id;
           return (
             <button

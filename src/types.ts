@@ -4,7 +4,6 @@ export interface User {
   id: string;
   name: string;
   employeeCode: string;
-  department?: string;        // Deprecated - kept for backward compat
   role: UserRole;             // Only 'manager' or 'employee'
   avatar: string;
   email: string;
@@ -16,15 +15,34 @@ export interface User {
 
 export type EvidenceStatus = 'good' | 'pending' | 'bad';
 
-export interface EvidenceReaction {
+// ─── News Feed: reactions & comments (per-post, social) ───
+// Mirrors two Firestore-style sub-collections keyed by post id:
+//   reactions: { postId, userId, type }
+//   comments:  { postId, userId, content, createdAt }
+export type PostReactionType = 'like' | 'love' | 'haha' | 'sad' | 'angry' | 'cry';
+
+export interface PostReaction {
+  id: string;
+  postId: string;
   userId: string;
-  type: 'good' | 'bad';
+  userName: string;
+  type: PostReactionType;
+  createdAt: string;          // ISO timestamp
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  content: string;
+  createdAt: string;          // ISO timestamp
 }
 
 export interface EvidenceItem {
   id: string;
   title: string;
-  department?: string;  // Deprecated
   timestamp: string;
   dateString: string;
   imageUrl: string;
@@ -37,7 +55,6 @@ export interface EvidenceItem {
   employeeAvatar: string;
   reviewedAt?: string;
   reviewedBy?: string;
-  reactions?: EvidenceReaction[];
 }
 
 export type NotificationCategory = 'management';
@@ -118,7 +135,7 @@ export interface QRReview {
   sentToGoogle: boolean;
 }
 
-export type CheckInMethod = 'photo' | 'gps' | 'pin';
+export type CheckInMethod = 'photo' | 'gps' | 'pin' | 'toggle'; // 'toggle' = manager check-in switch
 
 export interface CheckInLocation {
   latitude: number;

@@ -11,6 +11,13 @@ export const toDateStr = (date: Date): string => {
   return `${y}-${m}-${d}`;
 };
 
+// Helper: format a Date to a LOCAL 'YYYY-MM-DDTHH:mm:ss' timestamp.
+// toISOString() yields UTC, which in UTC+7 shifts posts created before 07:00
+// to the previous calendar day — breaking the feed's selected-date filter.
+export const toLocalDateTimeStr = (date: Date): string => {
+  return `${toDateStr(date)}T${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:${String(date.getSeconds()).padStart(2, '0')}`;
+};
+
 // Helper: check if a date string is a weekend
 export const isWeekend = (dateStr: string): boolean => {
   const date = new Date(dateStr + 'T00:00:00');

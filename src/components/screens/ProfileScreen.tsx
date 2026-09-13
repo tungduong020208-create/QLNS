@@ -638,7 +638,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   <img src={ev.employeeAvatar} alt={ev.employeeName} className="w-10 h-10 rounded-full object-cover border border-[#E8DFD0]" />
                   <div className="flex-1">
                     <div className="font-semibold text-sm text-[#0F1E44]">{ev.employeeName}</div>
-                    <div className="text-xs text-[#7A829A]">{ev.department}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-bold text-[#0F1E44]">

@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, QRReview, PeerReviewSubmission, WeeklyShiftRegistration, CheckInOutRecord, WorkHoursSummary, StudySchedule, ManualShiftAssignment } from './types';
+import { User, EvidenceItem, NotificationItem, CheckInRecord, CustomerRating, QRReview, PeerReviewSubmission, WeeklyShiftRegistration, CheckInOutRecord, WorkHoursSummary, StudySchedule, ManualShiftAssignment, PostReaction, PostComment, PostReactionType } from './types';
 import { INITIAL_USERS, INITIAL_EVIDENCES, INITIAL_NOTIFICATIONS, INITIAL_CUSTOMER_RATINGS, INITIAL_QR_REVIEWS } from './data/initialData';
 import { INITIAL_PEER_REVIEWS } from './data/peerReviewData';
 import { ROUTES, getDefaultHomeRoute } from './routes';
+import { STORAGE_KEY_POST_REACTIONS, STORAGE_KEY_POST_COMMENTS } from './utils/constants';
 import { ProtectedRoute, GuestRoute } from './components/ProtectedRoute';
 import { Header } from './components/Header';
 import { BottomNav } from './components/BottomNav';
@@ -151,6 +152,17 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // ─── News Feed: reactions & comments (per-post social data) ───
+  const [postReactions, setPostReactions] = useState<PostReaction[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_POST_REACTIONS);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [postComments, setPostComments] = useState<PostComment[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_POST_COMMENTS);
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // ─── UI State ───
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceItem | null>(null);
@@ -171,6 +183,8 @@ export default function App() {
   useEffect(() => { localStorage.setItem('aiicafe_shift_registrations', JSON.stringify(shiftRegistrations)); }, [shiftRegistrations]);
   useEffect(() => { localStorage.setItem('aiicafe_study_schedules', JSON.stringify(studySchedules)); }, [studySchedules]);
   useEffect(() => { localStorage.setItem('aiicafe_manual_assignments', JSON.stringify(manualAssignments)); }, [manualAssignments]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEY_POST_REACTIONS, JSON.stringify(postReactions)); }, [postReactions]);
+  useEffect(() => { localStorage.setItem(STORAGE_KEY_POST_COMMENTS, JSON.stringify(postComments)); }, [postComments]);
   useEffect(() => { localStorage.setItem('enterprise_hr_auth', JSON.stringify(isLoggedIn)); }, [isLoggedIn]);
 
   // Persist current user
@@ -250,26 +264,7 @@ export default function App() {
     setNotifications(prev => [newNotif, ...prev]);
     addToast('success', 'Nộp minh chứng thành công', 'Minh chứng đã được gửi đến bộ phận quản lý');
     navigate(currentUser?.role === 'manager' ? ROUTES.MANAGER_DASHBOARD : ROUTES.EMPLOYEE_HOME, { replace: true });
-  };
-
-  const handleReactEvidence = (evidenceId: string, reactionType: 'good' | 'bad') => {
-    if (!currentUser) return;
-    setEvidences(prev =>
-      prev.map(item => {
-        if (item.id !== evidenceId) return item;
-        const existing = (item.reactions || []).find(r => r.userId === currentUser.id);
-        if (existing) {
-          if (existing.type === reactionType) {
-            return { ...item, reactions: (item.reactions || []).filter(r => r.userId !== currentUser.id) };
-          }
-          return { ...item, reactions: (item.reactions || []).map(r => r.userId === currentUser.id ? { ...r, type: reactionType } : r) };
-        }
-        return { ...item, reactions: [...(item.reactions || []), { userId: currentUser.id, type: reactionType }] };
-      })
-    );
-  };
-
-  const handleReviewEvidence = (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => {
+  };  const handleReviewEvidence = (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => {
     if (!currentUser) return;
     const target = evidences.find(e => e.id === evidenceId);
     const now = new Date();
@@ -382,6 +377,51 @@ export default function App() {
     });
   };
 
+  // ─── News Feed: reaction & comment handlers ───
+  // Toggle: tap the same emoji again to remove, tap another to switch.
+  // One reaction per user per post (re-tapping a different type replaces).
+  const handleTogglePostReaction = (postId: string, type: PostReactionType) => {
+    if (!currentUser) return;
+    setPostReactions(prev => {
+      const existing = prev.find(r => r.postId === postId && r.userId === currentUser.id);
+      if (existing && existing.type === type) {
+        return prev.filter(r => !(r.postId === postId && r.userId === currentUser.id));
+      }
+      if (existing) {
+        return prev.map(r => (r.postId === postId && r.userId === currentUser.id) ? { ...r, type } : r);
+      }
+      const reaction: PostReaction = {
+        id: `pr-${Date.now()}`,
+        postId,
+        userId: currentUser.id,
+        userName: currentUser.name,
+        type,
+        createdAt: new Date().toISOString(),
+      };
+      return [reaction, ...prev];
+    });
+  };
+
+  const handleAddPostComment = (postId: string, content: string) => {
+    if (!currentUser || !content.trim()) return;
+    const comment: PostComment = {
+      id: `pc-${Date.now()}`,
+      postId,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      content: content.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    setPostComments(prev => [...prev, comment]);
+  };
+
+  // A user may delete only their own comment
+  const handleDeletePostComment = (commentId: string) => {
+    if (!currentUser) return;
+    setPostComments(prev => prev.filter(c => !(c.id === commentId && c.userId === currentUser.id)));
+  };
+
   // ─── Peer review ───
   const handleSubmitPeerReview = (submission: PeerReviewSubmission) => {
     setPeerReviews(prev => [submission, ...prev]);
@@ -478,7 +518,16 @@ export default function App() {
   };
 
   // ─── Layout wrapper for authenticated pages ───
-  const AuthenticatedLayout = ({ children }: { children: React.ReactNode }) => {
+  // The wrapper reads its latest values through a ref so the component's
+  // identity stays STABLE across App renders. Without this, every App-level
+  // state change (e.g. reacting/commenting on the news feed) re-created the
+  // component type and remounted the whole page subtree, resetting local UI
+  // state such as open comment sections and the feed's date filter.
+  const layoutDepsRef = useRef({ currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount });
+  layoutDepsRef.current = { currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount };
+
+  const AuthenticatedLayout = useMemo(() => ({ children }: { children: React.ReactNode }) => {
+    const { currentUser, notifications, handleMarkNotificationRead, handleClearAllNotifications, goTo, handleLogout, pendingReviewCount } = layoutDepsRef.current;
     if (!currentUser) return null;
     return (
       <div className="min-h-screen bg-[#FDF8EE] text-[#3D4663] flex flex-col md:flex-row">
@@ -505,7 +554,7 @@ export default function App() {
         />
       </div>
     );
-  };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FDF8EE]">
@@ -537,6 +586,13 @@ export default function App() {
                           onSelectEvidence={(e) => setSelectedEvidence(e)}
                           onSelectEmployee={(e) => setSelectedEmployee(e)}
                           onNavigateReview={() => goTo('review')}
+                          onCheckIn={(record) => {
+                            if (record.type === 'checkin') {
+                              handleCheckIn(record);
+                            } else {
+                              handleCheckOut(record);
+                            }
+                          }}
                         />
                       } />
                     ) : (
@@ -600,9 +656,13 @@ export default function App() {
                         currentUser={currentUser}
                         evidences={evidences}
                         notifications={notifications}
-                        onReactEvidence={handleReactEvidence}
                         onMarkNotificationRead={handleMarkNotificationRead}
                         onSubmitEvidence={handleSubmitEvidence}
+                        postReactions={postReactions}
+                        postComments={postComments}
+                        onTogglePostReaction={handleTogglePostReaction}
+                        onAddPostComment={handleAddPostComment}
+                        onDeletePostComment={handleDeletePostComment}
                       />
                     } />
                     <Route path="peer-review" element={
@@ -708,9 +768,13 @@ export default function App() {
                         currentUser={currentUser}
                         evidences={evidences}
                         notifications={notifications.filter(n => n.category !== 'handover')}
-                        onReactEvidence={handleReactEvidence}
                         onMarkNotificationRead={handleMarkNotificationRead}
                         onSubmitEvidence={handleSubmitEvidence}
+                        postReactions={postReactions}
+                        postComments={postComments}
+                        onTogglePostReaction={handleTogglePostReaction}
+                        onAddPostComment={handleAddPostComment}
+                        onDeletePostComment={handleDeletePostComment}
                       />
                     } />
                     <Route path="peer-review" element={

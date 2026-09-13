@@ -1,6 +1,7 @@
 import React from 'react';
 import { User, EvidenceItem, CheckInRecord, CustomerRating, PeerReviewSubmission } from '../../types';
 import CheckInCheckOut from '../CheckInCheckOut';
+import { ManagerCheckInToggle } from '../ManagerCheckInToggle';
 import WorkSchedule from '../WorkSchedule';
 import { WeeklyReviewTracker } from '../WeeklyReviewTracker';
 
@@ -54,6 +55,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
       {currentUser.role === 'employee' && (
         <CheckInCheckOut employeeId={currentUser.id} onCheckIn={onCheckIn || (() => {})} />
+      )}
+
+      {/* Manager gets a dedicated check-in/check-out toggle (employee flow untouched) */}
+      {currentUser.role === 'manager' && (
+        <ManagerCheckInToggle employeeId={currentUser.id} onCheckIn={onCheckIn || (() => {})} />
       )}
 
       {currentUser.role === 'employee' && (

@@ -115,15 +115,19 @@ export function getGeofenceStatus(): GeofenceStatus {
 
 /**
  * Runs the periodic geofence scan for the currently logged-in employee.
- * Mount once (in AuthenticatedLayout); it self-disables for managers,
- * logged-out state, and when there is no active check-in session.
+ * Mount once (in AuthenticatedLayout); it self-disables for logged-out state
+ * and when there is no active check-in session. Employees use the camera
+ * flow, managers use their dedicated toggle — both write the same session
+ * store, so monitoring behaves identically for both roles.
  */
 export function useGeofenceMonitor(
   currentUser: { id: string; name: string; role: string } | null,
   onOutOfRange: (event: GeofenceEvent) => void
 ): void {
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'employee') return;
+    // Employees (camera flow) and managers (check-in toggle) are both monitored
+    // while a check-in session is active — same session store, same rules.
+    if (!currentUser || (currentUser.role !== 'employee' && currentUser.role !== 'manager')) return;
 
     let cancelled = false;
     const onOutOfRangeRef = onOutOfRange;
