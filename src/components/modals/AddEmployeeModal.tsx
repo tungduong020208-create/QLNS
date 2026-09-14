@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, UserRole } from '../../types';
+import { User, UserRole, EmploymentType } from '../../types';
 
 interface AddEmployeeModalProps {
   isOpen: boolean;
@@ -41,6 +41,9 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<UserRole>('employee');
+  // Loại hợp đồng quyết định khung giờ ca (SHIFT_TIME_RANGES) — bắt buộc
+  // chọn ngay lúc tạo tài khoản để auto-scheduler map giờ đúng.
+  const [employmentType, setEmploymentType] = useState<EmploymentType>('part-time');
   const [tempPassword] = useState(() => generateTempPassword());
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<'form' | 'success'>('form');
@@ -76,6 +79,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
       name: name.trim(),
       employeeCode,
       role,
+      employmentType,
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}&backgroundColor=EFC14B`,
       email: email.trim().toLowerCase(),
       phone: phone.trim() || undefined,
@@ -93,6 +97,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
     setEmail('');
     setPhone('');
     setRole('employee');
+    setEmploymentType('part-time');
     setError('');
     setStep('form');
     onClose();
@@ -181,6 +186,32 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                   placeholder="0912 345 678"
                   className="w-full h-10 px-3 border border-[#E8DFD0] rounded-lg text-sm focus:border-[#EFC14B] outline-none"
                 />
+              </div>
+
+              {/* Employment type — quyết định khung giờ ca làm */}
+              <div>
+                <label className="block text-xs font-semibold text-[#7A829A] mb-1 uppercase tracking-wide">
+                  Loại nhân viên
+                </label>
+                <div className="flex gap-2">
+                  {([
+                    { value: 'part-time', label: 'Part-time (5–6h/ca)' },
+                    { value: 'full-time', label: 'Full-time (8h/ca)' },
+                  ] as const).map(t => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setEmploymentType(t.value)}
+                      className={`flex-1 h-10 rounded-lg text-xs font-semibold transition-all ${
+                        employmentType === t.value
+                          ? 'bg-[#0F1E44] text-white'
+                          : 'bg-[#FDF8EE] text-[#0F1E44] border border-[#E8DFD0] hover:bg-[#EFC14B]/10'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Role */}
@@ -316,6 +347,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
                   setEmail('');
                   setPhone('');
                   setRole('employee');
+                  setEmploymentType('part-time');
                   setError('');
                 }}
                 className="flex-1 h-11 rounded-xl border-2 border-[#E8DFD0] text-[#0F1E44] font-semibold text-sm hover:bg-[#FDF8EE] transition-all flex items-center justify-center gap-2"

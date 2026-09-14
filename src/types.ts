@@ -1,10 +1,20 @@
 export type UserRole = 'employee' | 'manager';
 
+/**
+ * Loại hợp đồng lao động — quyết định KHUNG GIỜ ca làm khi tự xếp lịch
+ * (part-time 5–6h/ca, full-time 8h/ca). Xem bảng giờ trong
+ * SHIFT_TIME_RANGES (utils/constants.ts).
+ * Optional: tài khoản cũ không có trường này được coi là part-time
+ * (đa số nhân sự cửa hàng) — an toàn với dữ liệu localStorage cũ.
+ */
+export type EmploymentType = 'part-time' | 'full-time';
+
 export interface User {
   id: string;
   name: string;
   employeeCode: string;
   role: UserRole;             // Only 'manager' or 'employee'
+  employmentType?: EmploymentType; // Mặc định 'part-time' nếu bỏ trống
   avatar: string;
   email: string;
   phone?: string;
@@ -237,6 +247,39 @@ export interface WeeklyShiftRegistration {
   managerNote?: string;
   createdAt: string;
   updatedAt: string;
+
+  /**
+   * Result of the AUTOMATIC scheduling pass that ran the moment this
+   * registration was saved. Undefined on legacy rows (saved before
+   * auto-scheduling existed) — they simply re-run through the scheduler
+   * on their next update.
+   *
+   * Kept ON the registration (not on the shift rows alone) so the
+   * manager can audit which requested days were not placed, without
+   * joining two stores.
+   */
+  autoSchedule?: {
+    assignedCount: number;      // shifts successfully placed into the official schedule
+    conflicts: {
+      date: string;             // YYYY-MM-DD
+      shift: ShiftSlot;
+    }[];
+    processedAt: string;        // ISO timestamp of the auto pass
+  };
+}
+
+/**
+ * Row quản lý số người tối đa từng (date, shift) — "bảng capacity".
+ * Chỉ lưu những ô manager CHỈNH KHÁC với mặc định (SHIFT_CAPACITY_DEFAULTS),
+ * nên kích thước store luôn nhỏ. Nhân viên + engine cùng đọc để enforce
+ * cùng một giới hạn (single source of truth cho capacity).
+ */
+export interface ShiftCapacityOverride {
+  /** 'YYYY-MM-DD' */
+  date: string;
+  /** 'Ca sáng' | 'Ca chiều' | 'Ca tối' */
+  shiftName: string;
+  maxCapacity: number;
 }
 
 // ─── Work Hours Tracking ───

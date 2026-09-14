@@ -71,5 +71,5 @@ export function useShifts() {
     setShifts(prev => prev.filter(s => s.id !== shiftId));
   };
 
-  return { shifts, addShift, updateShift, deleteShift };
+  return { shifts, addShift, updateShift, deleteShift, setShifts };
 }

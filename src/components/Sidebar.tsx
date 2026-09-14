@@ -19,9 +19,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
-    if (pathname.includes('/schedule')) return 'manager_schedule';
+    // NOTE: '/schedule' also matches '/schedule/study' — the study-schedules
+    // screen is now a SUB-TAB of "Quản lý", so both URLs highlight the same
+    // sidebar entry. The legacy '/study-schedules' path redirects into it.
+    if (pathname.includes('/schedule') || pathname.includes('/study-schedules')) return 'manager_schedule';
     if (pathname.includes('/work-hours')) return 'work_hours';
-    if (pathname.includes('/study-schedules')) return 'study_schedules';
     if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
@@ -41,7 +43,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? [
           { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
           { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
-          { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
+          // 'study_schedules' moved INSIDE the "Quản lý" tab as a sub-tab —
+          // no longer a top-level navigation entry.
           { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
         ]
       : []),

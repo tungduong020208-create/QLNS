@@ -7,6 +7,8 @@
  * this caused Manager Dashboard to never show check-in data.
  */
 
+import { EmploymentType } from '../types';
+
 // ═══════════════════════════════════════════════════
 // Storage Keys — SINGLE SOURCE OF TRUTH
 // ═══════════════════════════════════════════════════
@@ -76,6 +78,84 @@ export const STORAGE_KEY_POST_COMMENTS = 'aiicafe_post_comments';
 
 /** Dashboard collapse preference (persists across sessions) */
 export const STORAGE_KEY_DASHBOARD_COLLAPSED = 'aiicafe_dashboard_collapsed';
+
+// ═══════════════════════════════════════════════════
+// Auto-Scheduling Configuration
+// ═══════════════════════════════════════════════════
+// When an employee submits a weekly registration, the app IMMEDIATELY places
+// them into the official schedule (no manual manager approval needed) —
+// unless a rule blocks it (shift full). See src/utils/autoSchedule.ts.
+
+/**
+ * Khóa store chứa các ô capacity manager đã chỉnh khác mặc định
+ * (xem ShiftCapacityOverride trong types.ts). Chỉ lưu ô lệch chuẩn →
+ * đọc 1 dòng code biết ô nào đang dùng mặc định.
+ */
+export const STORAGE_KEY_SHIFT_CAPACITY_OVERRIDES = 'coffeehouse_shift_capacity_overrides';
+
+/**
+ * Số người tối đa MẶC ĐỊNH theo ca (mục 3 của nghiệp vụ đăng ký ca):
+ * Sáng 3, Chiều 3 (manager chỉnh được từng ca/ngày qua capacity overrides),
+ * Tối 3.
+ *
+ * Khung giờ ca khớp PART_TIME tạm thời để không phá dữ liệu/hiển thị cũ;
+ * giờ thật của mỗi row luôn do getShiftTimeRange() quyết định theo loại NV.
+ */
+export const SHIFT_CAPACITY_DEFAULTS: Record<'morning' | 'afternoon' | 'evening', number> = {
+  morning: 3,
+  afternoon: 3,
+  evening: 3,
+};
+
+/**
+ * KHUNG GIỜ CA — nguồn cấu hình DUY NHẤT, phân theo loại nhân viên
+ * (mục 2 của nghiệp vụ đăng ký ca). Mọi nơi từng hardcode giờ
+ * (autoSchedule, ManagerScheduleScreen, ManagerStudySchedulesScreen)
+ * đều đọc từ đây qua getShiftTimeRange() — đổi giờ chỉ cần sửa 1 chỗ.
+ */
+export const SHIFT_TIME_RANGES: Record<
+  'morning' | 'afternoon' | 'evening',
+  Record<EmploymentType, { start: string; end: string }>
+> = {
+  morning: {
+    'part-time': { start: '06:30', end: '11:30' },
+    'full-time': { start: '06:30', end: '15:00' },
+  },
+  afternoon: {
+    'part-time': { start: '11:30', end: '17:30' },
+    'full-time': { start: '14:30', end: '23:00' },
+  },
+  evening: {
+    'part-time': { start: '17:30', end: '22:30' },
+    'full-time': { start: '14:30', end: '23:00' },
+  },
+};
+
+/** Đảo ngược tên ca ('Ca sáng') → slot ('morning') — tra capacity mặc định. */
+export const SHIFT_NAME_TO_SLOT: Record<string, 'morning' | 'afternoon' | 'evening'> = {
+  'Ca sáng': 'morning',
+  'Ca chiều': 'afternoon',
+  'Ca tối': 'evening',
+};
+
+/**
+ * Map ca → khung giờ cụ thể của một nhân viên theo loại hợp đồng.
+ * THE hàm "hệ thống tự động map khung giờ theo Employee.type" (mục 4).
+ * employmentType bỏ trống (tài khoản cũ) → mặc định part-time.
+ */
+export function getShiftTimeRange(
+  shiftType: 'morning' | 'afternoon' | 'evening',
+  employmentType?: EmploymentType
+): { start: string; end: string } {
+  return SHIFT_TIME_RANGES[shiftType][employmentType ?? 'part-time'];
+}
+
+/** Official time slots for the auto-placed shifts (must match the manager UI templates). */
+export const SHIFT_SLOT_TEMPLATES: Record<'morning' | 'afternoon' | 'evening', { name: string; startTime: string; endTime: string }> = {
+  morning:   { name: 'Ca sáng', startTime: '07:00', endTime: '12:00' },
+  afternoon: { name: 'Ca chiều', startTime: '13:00', endTime: '18:00' },
+  evening:   { name: 'Ca tối', startTime: '18:00', endTime: '22:00' },
+};
 
 // ═══════════════════════════════════════════════════
 // Office Wi-Fi Configuration (site-specific, from .env.local)

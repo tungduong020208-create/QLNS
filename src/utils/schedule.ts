@@ -3,6 +3,10 @@
  * Used by both WorkSchedule and ReviewScreen (Bàn giao ca).
  */
 
+import { Shift } from '../components/screens/ManagerScheduleScreen';
+import { STORAGE_KEY_SHIFTS } from './constants';
+import { safeParse } from '../hooks/usePersistentState';
+
 // Helper: format date to YYYY-MM-DD using LOCAL time
 export const toDateStr = (date: Date): string => {
   const y = date.getFullYear();
@@ -27,27 +31,35 @@ export const isWeekend = (dateStr: string): boolean => {
 
 /**
  * Check if an employee has any shifts on a given date.
- * Based on the same logic as WorkSchedule: Mon-Fri have 2 shifts, weekends have none.
+ * DATA-DRIVEN: reads the unified shift store (STORAGE_KEY_SHIFTS) — the same
+ * data the manager publishes and the employee sees. A Saturday or Sunday with
+ * a published shift counts as a work day; a weekday with no shift does not.
  */
 export const employeeHasShiftOnDate = (dateStr: string): boolean => {
-  if (isWeekend(dateStr)) return false;
-  // Weekdays: employee always has shifts (morning + afternoon)
-  return true;
+  const shifts = safeParse<Shift[]>(STORAGE_KEY_SHIFTS, []);
+  return shifts.some((s) => s.date === dateStr && s.status !== 'cancelled');
 };
 
 /**
  * Get list of employee IDs who have shifts on the given date.
- * Since all employees follow the same schedule, this returns all employee IDs
- * if it's a weekday, or empty array if weekend.
+ * Reads the unified shift store; falls back to the legacy hard-coded rule
+ * (all employees work weekdays) only when the store is empty.
  */
 export const getEmployeeIdsWithShifts = (dateStr: string, allEmployeeIds: string[]): string[] => {
-  if (isWeekend(dateStr)) return [];
-  return allEmployeeIds;
+  const shifts = safeParse<Shift[]>(STORAGE_KEY_SHIFTS, []);
+  if (shifts.length > 0) {
+    return allEmployeeIds.filter((id) =>
+      shifts.some((s) => s.employeeId === id && s.date === dateStr && s.status !== 'cancelled')
+    );
+  }
+  // Legacy fallback: Mon-Fri everyone works, weekends nobody does
+  return isWeekend(dateStr) ? [] : allEmployeeIds;
 };
 
 /**
  * Filter a list of evidence items to only include those
- * whose employee has a shift on the given date.
+ * whose date matches the selected date. Weekend no longer auto-excluded —
+ * an evidence submitted on a Saturday with a scheduled shift still counts.
  */
 export const filterEvidenceBySchedule = <T extends { employeeId: string; dateString: string }>(
   items: T[],
@@ -56,7 +68,7 @@ export const filterEvidenceBySchedule = <T extends { employeeId: string; dateStr
   return items.filter((item) => {
     // Extract the date part from the dateString
     const itemDate = item.dateString.split('T')[0];
-    return itemDate === selectedDate && !isWeekend(selectedDate);
+    return itemDate === selectedDate;
   });
 };
 
@@ -70,4 +82,15 @@ export const getMonday = (date: Date): Date => {
   d.setDate(d.getDate() + diff);
   d.setHours(0, 0, 0, 0);
   return d;
+};
+
+/**
+ * Get the Sunday (YYYY-MM-DD) of the week that CONTAINS the given Monday.
+ * Assumes `weekStart` is already a Monday — used to bound a published week
+ * when replacing that week's shift rows in the unified shifts store.
+ */
+export const weekEndOf = (weekStart: string): string => {
+  const d = new Date(weekStart + 'T00:00:00');
+  d.setDate(d.getDate() + 6);
+  return toDateStr(d);
 };

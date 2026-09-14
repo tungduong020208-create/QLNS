@@ -53,6 +53,8 @@ create table public.profiles (
   employee_code text unique not null,        -- 'NV-2023-045'
   name text not null,
   role text not null check (role in ('employee','manager')) default 'employee',
+  employment_type text not null default 'part-time'
+    check (employment_type in ('part-time','full-time')),  -- ← employmentType: quyết định khung giờ ca
   avatar_url text,
   email text,
   phone text,
@@ -129,8 +131,81 @@ create table public.shifts (
   start_time time not null,
   end_time time not null,
   status text not null default 'scheduled'
-    check (status in ('scheduled','completed','cancelled'))
+    check (status in ('scheduled','completed','cancelled')),
+  origin text not null default 'auto' check (origin in ('auto','manual'))
 );
+
+-- ════════ SHIFT CAPACITY (mục 3 & 7 — số người tối đa mỗi ca/ngày) ════════
+-- Mặc định nghiệp vụ: Sáng 3, Chiều 3, Tối 3. Bảng này CHỈ lưu các ô
+-- (ngày, ca) mà quản lý chỉnh KHÁC mặc định — đúng pattern của
+-- ShiftCapacityOverride ở phía app. Đọc trống = mọi ca dùng mặc định.
+create table public.shift_capacity_overrides (
+  date date not null,
+  shift_name text not null check (shift_name in ('Ca sáng','Ca chiều','Ca tối')),
+  max_capacity int not null check (max_capacity between 1 and 20),
+  updated_by uuid references public.profiles(id),
+  primary key (date, shift_name)
+);
+
+create or replace function public.shift_capacity(p_date date, p_shift text)
+returns int language sql stable as $$
+  select coalesce(
+    (select max_capacity from public.shift_capacity_overrides
+      where date = p_date and shift_name = p_shift),
+    case p_shift
+      when 'Ca sáng' then 3
+      when 'Ca chiều' then 3
+      when 'Ca tối' then 3
+      else 3
+    end
+  );
+$$;
+
+-- Mục 5 — CHỐNG RACE CONDITION: đăng ký ca phải đi qua RPC này chứ KHÔNG
+-- insert thẳng vào shifts. Việc kiểm tra số người và ghi row diễn ra trong
+-- CÙNG một transaction (mặc định của plpgsql) nên hai nhân viên bấm cùng
+-- lúc cũng chỉ có một người chiếm được slot cuối cùng — điều mà "đếm trước
+-- rồi insert" (2 bước) không thể đảm bảo.
+create or replace function public.try_place_shift(
+  p_employee uuid, p_date date, p_shift text
+) returns boolean language plpgsql as $$
+declare
+  v_max int := public.shift_capacity(p_date, p_shift);
+  v_taken int;
+begin
+  select count(*) into v_taken from public.shifts
+    where date = p_date and shift_name = p_shift and status <> 'cancelled';
+  if v_taken >= v_max then
+    return false;   -- ca đã đầy → frontend đưa vào hàng chờ quản lý
+  end if;
+  insert into public.shifts (employee_id, date, shift_name, start_time, end_time)
+  values (
+    p_employee, p_date, p_shift,
+    -- Khung giờ theo loại nhân viên (mục 2) — DB là nguồn quyết định cuối.
+    case
+      when (select employment_type from public.profiles where id = p_employee) = 'full-time'
+      then case p_shift
+        when 'Ca sáng' then time '06:30'
+        else time '14:30' end
+      else case p_shift
+        when 'Ca sáng' then time '06:30'
+        when 'Ca chiều' then time '11:30'
+        else time '17:30' end
+    end,
+    case
+      when (select employment_type from public.profiles where id = p_employee) = 'full-time'
+      then case p_shift
+        when 'Ca sáng' then time '15:00'
+        else time '23:00' end
+      else case p_shift
+        when 'Ca sáng' then time '11:30'
+        when 'Ca chiều' then time '17:30'
+        else time '22:30' end
+    end
+  );
+  return true;
+end;
+$$;
 
 create table public.shift_registrations (
   id uuid primary key default gen_random_uuid(),

@@ -1,7 +1,10 @@
 import React, { useMemo } from 'react';
 import { PeerReviewSubmission } from '../types';
+import { computeReviewCycle, REQUIRED_REVIEWS, ReviewPeriod } from '../utils/reviewCycle';
 
-const REQUIRED_REVIEWS = 5; // Minimum reviews per week
+// Flip the whole requirement back to weekly by changing this one constant —
+// everything else (window math, labels) derives from the period parameter.
+const REVIEW_PERIOD: ReviewPeriod = 'month';
 
 interface WeeklyReviewTrackerProps {
   userId: string;
@@ -9,31 +12,11 @@ interface WeeklyReviewTrackerProps {
   className?: string;
 }
 
-// Get Monday of current week
-const getMonday = (date: Date): Date => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-};
-
-// Get Sunday of current week
-const getSunday = (date: Date): Date => {
-  const monday = getMonday(date);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-  return sunday;
-};
-
-// Format date to YYYY-MM-DD
-const toDateStr = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// Shared Vietnamese labels per period — kept beside the period constant so a
+// period flip updates both math and copy in one file.
+const PERIOD_LABELS: Record<ReviewPeriod, { title: string; reset: string }> = {
+  week: { title: 'Đánh giá tuần này', reset: 'hết tuần' },
+  month: { title: 'Đánh giá tháng này', reset: 'hết tháng' },
 };
 
 export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
@@ -41,38 +24,14 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
   peerReviews,
   className = '',
 }) => {
-  const { reviewCount, progress, daysLeft, isWarning, isComplete } = useMemo(() => {
-    const today = new Date();
-    const monday = getMonday(today);
-    const sunday = getSunday(today);
-    const mondayStr = toDateStr(monday);
-    const sundayStr = toDateStr(sunday);
+  // All date/window math lives in utils/reviewCycle.ts (pure, testable);
+  // this component only renders the returned numbers.
+  const { reviewCount, progress, daysLeft, isWarning, isComplete } = useMemo(
+    () => computeReviewCycle(userId, peerReviews, REVIEW_PERIOD),
+    [userId, peerReviews]
+  );
 
-    // Count reviews submitted this week by this user
-    const weeklyReviews = peerReviews.filter((r) => {
-      if (r.evaluatorId !== userId) return false;
-      const reviewDate = new Date(r.submittedAt);
-      return reviewDate >= monday && reviewDate <= sunday;
-    });
-
-    const count = weeklyReviews.length;
-    const prog = Math.min((count / REQUIRED_REVIEWS) * 100, 100);
-    
-    // Calculate days left in week (Sunday - today)
-    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
-    const daysRemaining = dayOfWeek === 0 ? 0 : 6 - dayOfWeek + 1; // Days until Sunday
-    
-    const warning = count < REQUIRED_REVIEWS && daysRemaining <= 2;
-    const complete = count >= REQUIRED_REVIEWS;
-
-    return {
-      reviewCount: count,
-      progress: prog,
-      daysLeft: daysRemaining,
-      isWarning: warning,
-      isComplete: complete,
-    };
-  }, [userId, peerReviews]);
+  const periodLabels = PERIOD_LABELS[REVIEW_PERIOD];
 
   // Get status color and text
   const getStatusInfo = () => {
@@ -88,7 +47,7 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
       return {
         color: '#FF3131',
         bgColor: 'rgba(255,49,49,0.12)',
-        text: `Còn ${daysLeft} ngày nữa hết tuần`,
+        text: `Còn ${daysLeft} ngày nữa ${periodLabels.reset}`,
         icon: 'warning',
       };
     }
@@ -109,7 +68,7 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
           <span className="material-symbols-outlined text-[20px]" style={{ color: statusInfo.color }}>
             {statusInfo.icon}
           </span>
-          <h3 className="text-sm font-bold text-[#0F1E44]">Đánh giá tuần này</h3>
+          <h3 className="text-sm font-bold text-[#0F1E44]">{periodLabels.title}</h3>
         </div>
         <span
           className="text-[10px] font-bold px-2.5 py-1 rounded-full"
@@ -143,7 +102,7 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
         <div className="mt-3 p-2 bg-[#FF3131]/10 border border-[#FF3131]/30 rounded-lg flex items-center gap-2">
           <span className="material-symbols-outlined text-[14px] text-[#FF3131]">notifications_active</span>
           <p className="text-[10px] text-[#FF3131] font-semibold">
-            ⚠️ Cảnh báo: Còn {daysLeft} ngày nữa hết tuần. Bạn cần hoàn thành thêm {REQUIRED_REVIEWS - reviewCount} đánh giá!
+            ⚠️ Cảnh báo: Còn {daysLeft} ngày nữa {periodLabels.reset}. Bạn cần hoàn thành thêm {REQUIRED_REVIEWS - reviewCount} đánh giá!
           </p>
         </div>
       )}
@@ -153,7 +112,7 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
         <div className="mt-3 p-2 bg-[#4CAF72]/10 border border-[#4CAF72]/30 rounded-lg flex items-center gap-2">
           <span className="material-symbols-outlined text-[14px] text-[#4CAF72]">emoji_events</span>
           <p className="text-[10px] text-[#4CAF72] font-semibold">
-            🎉 Tuyệt vời! Bạn đã hoàn thành đủ {REQUIRED_REVIEWS} đánh giá tuần này.
+            🎉 Tuyệt vời! Bạn đã hoàn thành đủ {REQUIRED_REVIEWS} đánh giá tháng này.
           </p>
         </div>
       )}

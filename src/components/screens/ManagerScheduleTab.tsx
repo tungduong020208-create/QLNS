@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { User, NotificationItem, WeeklyShiftRegistration } from '../../types';
+import { User, NotificationItem, WeeklyShiftRegistration, StudySchedule, ManualShiftAssignment, ShiftCapacityOverride } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import { ManagerScheduleScreen } from './ManagerScheduleScreen';
 import { ShiftRegistrationScreen } from './ShiftRegistrationScreen';
+import { ManagerStudySchedulesScreen } from './ManagerStudySchedulesScreen';
 
 interface ManagerScheduleTabProps {
   currentUser: User;
@@ -12,14 +13,22 @@ interface ManagerScheduleTabProps {
   onAddShift: (shift: Shift) => void;
   onUpdateShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
+  onSwapShifts: (a: Shift, b: Shift) => void;
   // Registrations
   registrations: WeeklyShiftRegistration[];
   onSubmitRegistration: (reg: WeeklyShiftRegistration) => void;
   onUpdateRegistration: (reg: WeeklyShiftRegistration) => void;
   onAddNotification: (notification: NotificationItem) => void;
+  // Study schedules (moved here as a sub-tab — was a top-level tab)
+  studySchedules: StudySchedule[];
+  manualAssignments: ManualShiftAssignment[];
+  onPublishSchedule: (assignment: ManualShiftAssignment) => void;
+  // Capacity per (date, shift) — manager-visible counts + editable max
+  capacityOverrides: ShiftCapacityOverride[];
+  onSetCapacity: (date: string, shiftName: string, max: number) => void;
 }
 
-type SubTab = 'shifts' | 'weekly';
+type SubTab = 'shifts' | 'weekly' | 'study';
 
 export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   currentUser,
@@ -28,10 +37,16 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   onAddShift,
   onUpdateShift,
   onDeleteShift,
+  onSwapShifts,
   registrations,
   onSubmitRegistration,
   onUpdateRegistration,
   onAddNotification,
+  studySchedules,
+  manualAssignments,
+  onPublishSchedule,
+  capacityOverrides,
+  onSetCapacity,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('shifts');
 
@@ -40,6 +55,7 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   const subTabs: { id: SubTab; label: string; icon: string; badge?: number }[] = [
     { id: 'shifts', label: 'Ca làm', icon: 'calendar_month' },
     { id: 'weekly', label: 'Đăng ký tuần', icon: 'event_available', badge: pendingRegCount > 0 ? pendingRegCount : undefined },
+    { id: 'study', label: 'Xếp lịch học NV', icon: 'school' },
   ];
 
   return (
@@ -76,7 +92,10 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           onAddShift={onAddShift}
           onUpdateShift={onUpdateShift}
           onDeleteShift={onDeleteShift}
+          onSwapShifts={onSwapShifts}
           onAddNotification={onAddNotification}
+          capacityOverrides={capacityOverrides}
+          onSetCapacity={onSetCapacity}
         />
       )}
 
@@ -87,6 +106,18 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           registrations={registrations}
           onSubmitRegistration={onSubmitRegistration}
           onUpdateRegistration={onUpdateRegistration}
+          onAddNotification={onAddNotification}
+        />
+      )}
+
+      {activeSubTab === 'study' && (
+        <ManagerStudySchedulesScreen
+          currentUser={currentUser}
+          allUsers={allUsers}
+          studySchedules={studySchedules}
+          registrations={registrations}
+          manualAssignments={manualAssignments}
+          onPublishSchedule={onPublishSchedule}
           onAddNotification={onAddNotification}
         />
       )}

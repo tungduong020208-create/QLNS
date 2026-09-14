@@ -1,4 +1,7 @@
 import React, { useState, useMemo } from 'react';
+import { Shift } from './screens/ManagerScheduleScreen';
+import { safeParse } from '../hooks/usePersistentState';
+import { STORAGE_KEY_SHIFTS } from '../utils/constants';
 
 export interface WorkSession {
   id: string;
@@ -47,55 +50,62 @@ const getWeekDays = (monday: Date): Date[] => {
   return days;
 };
 
-// Generate mock work schedule data for a given week
-const generateWeekSchedule = (employeeId: string, weekMonday: Date): WorkSession[] => {
-  const sessions: WorkSession[] = [];
+// UNIFIED DATA: build sessions from the REAL published shifts (storage key
+// STORAGE_KEY_SHIFTS) for the given employee + week. No more mock data —
+// whatever the manager published is exactly what the employee sees.
+// Hours are computed from startTime/endTime so any shift length works,
+// including Sat/Sun shifts.
+const buildWeekSchedule = (employeeId: string, weekMonday: Date): WorkSession[] => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateStr(today);
 
   const weekDays = getWeekDays(weekMonday);
+  const first = toDateStr(weekDays[0]);
+  const last = toDateStr(weekDays[6]);
 
-  weekDays.forEach((date) => {
-    const dateStr = toDateStr(date);
-    const dayOfWeek = date.getDay(); // 0=Sun, 6=Sat
-    const isToday = dateStr === todayStr;
-    const isPast = date < today;
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  // Read the unified shift store — same data ManagerScheduleScreen writes.
+  const allShifts = safeParse<Shift[]>(STORAGE_KEY_SHIFTS, []);
+  const weekShifts = allShifts.filter(
+    (s) => s.employeeId === employeeId && s.date >= first && s.date <= last
+  );
 
-    // Weekend: no shifts
-    if (isWeekend) return;
+  return weekShifts
+    .map((s): WorkSession => {
+      const isPastDate = s.date < todayStr;
+      const isToday = s.date === todayStr;
 
-    // Morning shift (Mon-Fri)
-    sessions.push({
-      id: `session-morning-${dateStr}`,
-      date: dateStr,
-      shiftName: 'Ca sáng',
-      startTime: '07:00',
-      endTime: '12:00',
-      checkIn: isPast || isToday ? '07:02' : undefined,
-      checkOut: isPast ? '12:05' : isToday && today.getHours() >= 12 ? '12:00' : undefined,
-      status: isPast ? 'completed' : isToday ? 'in-progress' : 'upcoming',
-      location: 'Cửa hàng Coffee House',
-      totalHours: isPast || (isToday && today.getHours() >= 12) ? 5 : undefined,
-    });
+      // Parse HH:MM to compute duration — weekend and weekday shifts are
+      // treated identically (no special-casing).
+      const toMin = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return (h || 0) * 60 + (m || 0);
+      };
+      const totalHours = (toMin(s.endTime) - toMin(s.startTime)) / 60;
 
-    // Afternoon shift (Mon-Fri)
-    sessions.push({
-      id: `session-afternoon-${dateStr}`,
-      date: dateStr,
-      shiftName: 'Ca chiều',
-      startTime: '13:00',
-      endTime: '18:00',
-      checkIn: isPast ? '13:05' : undefined,
-      checkOut: isPast ? '17:55' : undefined,
-      status: isPast ? 'completed' : isToday && today.getHours() >= 13 ? 'in-progress' : isToday ? 'upcoming' : 'upcoming',
-      location: 'Cửa hàng Coffee House',
-      totalHours: isPast ? 5 : undefined,
-    });
-  });
+      // Status: completed/in-progress derive from date + current time,
+      // otherwise the manager's status flows through as-is.
+      let status: WorkSession['status'] = 'upcoming';
+      if (s.status === 'cancelled') status = 'absent';
+      else if (s.status === 'completed') status = 'completed';
+      else if (isPastDate) status = 'completed';
+      else if (isToday) {
+        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        if (nowMin >= toMin(s.startTime)) status = 'in-progress';
+      }
 
-  return sessions;
+      return {
+        id: s.id,
+        date: s.date,
+        shiftName: s.shiftName,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        status,
+        location: 'Cửa hàng Coffee House',
+        totalHours: totalHours > 0 ? totalHours : undefined,
+      };
+    })
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
 };
 
 const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName }) => {
@@ -113,9 +123,9 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
   // All 7 days of the displayed week
   const weekDays = useMemo(() => getWeekDays(currentMonday), [currentMonday]);
 
-  // Generate sessions for this week
+  // Build sessions for this week from the unified shift store
   const allSessions = useMemo(
-    () => generateWeekSchedule(employeeId, currentMonday),
+    () => buildWeekSchedule(employeeId, currentMonday),
     [employeeId, currentMonday]
   );
 
@@ -128,10 +138,9 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
 
   // Weekly stats
   const weekStats = useMemo(() => {
-    const workDays = weekDays.filter((d) => {
-      const dow = d.getDay();
-      return dow !== 0 && dow !== 6; // Mon-Fri only
-    });
+    // Work days = days that actually HAVE a scheduled shift (Sat/Sun count
+    // exactly like weekdays — no more hard-coded Mon–Fri exclusion).
+    const workDays = weekDays.filter((d) => getSessionsForDate(toDateStr(d)).length > 0);
 
     const totalWorkDays = workDays.length;
     const completedDays = workDays.filter((d) => {
@@ -279,7 +288,7 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
                 className={`flex flex-col items-center rounded-xl py-2 transition-all ${
                   isTodayDate
                     ? 'bg-[#EFC14B] text-[#0F1E44] shadow-golden font-bold'
-                    : isWeekend
+                    : isWeekend && !hasSessions
                     ? 'bg-[#F5EDDF] text-[#7A829A]'
                     : 'bg-[#FDF8EE] text-[#3D4663] hover:bg-[#EFC14B]/10'
                 }`}
@@ -299,13 +308,14 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
                     Hôm nay
                   </span>
                 )}
-                {/* Status indicator */}
+                {/* Status indicator — “Nghỉ” only when the day truly has
+                    NO scheduled shift (data-driven, not day-of-week based). */}
                 <div className="mt-1.5">
-                  {isWeekend ? (
+                  {!hasSessions ? (
                     <span className="text-[9px] font-semibold text-[#7A829A] bg-[#E8DFD0] px-1.5 py-0.5 rounded-full">
                       Nghỉ
                     </span>
-                  ) : hasSessions ? (
+                  ) : (
                     <div className="flex gap-0.5">
                       {sessions.map((s, i) => (
                         <div
@@ -318,10 +328,6 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
                         />
                       ))}
                     </div>
-                  ) : (
-                    <span className="text-[9px] font-semibold text-[#7A829A] bg-[#E8DFD0] px-1.5 py-0.5 rounded-full">
-                      Nghỉ
-                    </span>
                   )}
                 </div>
               </div>
@@ -343,9 +349,9 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
 
         {(() => {
           const todaySessions = getSessionsForDate(todayStr);
-          const isTodayWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
-
-          if (isTodayWeekend || todaySessions.length === 0) {
+          // Data-driven: today is a day off ONLY if no shift is scheduled,
+          // regardless of whether it's Saturday/Sunday.
+          if (todaySessions.length === 0) {
             return (
               <div className="text-center py-6 bg-[#FDF8EE] rounded-xl">
                 <span className="material-symbols-outlined text-4xl text-[#E8DFD0] mb-2 block">

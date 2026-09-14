@@ -5,15 +5,14 @@ import {
   ManualShiftAssignment,
   WeeklyShiftRegistration,
 } from '../../types';
+import { getShiftTimeRange } from '../../utils/constants';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
-const SHIFT_TEMPLATES = [
-  { name: 'Ca sáng', startTime: '07:00', endTime: '12:00' },
-  { name: 'Ca chiều', startTime: '13:00', endTime: '18:00' },
-  { name: 'Ca tối', startTime: '18:00', endTime: '22:00' },
-];
+// 3 ca cố định — KHUNG GIỜ map động qua getShiftTimeRange() theo loại
+// nhân viên được xếp (không còn bảng giờ cứng ở đây).
+const SHIFT_NAMES = ['Ca sáng', 'Ca chiều', 'Ca tối'] as const;
 
 const toDateStr = (d: Date): string => {
   const y = d.getFullYear();
@@ -126,10 +125,9 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
   // Initialize assign shifts when opening modal
   const openAssignModal = (employeeId: string) => {
     setShowAssignModal(employeeId);
-    const existing = weekAssignment?.shifts.filter((s) => {
-      const emp = employees.find((e) => e.id === employeeId);
-      return emp; // Will filter by userId when publishing
-    }) || [];
+    // Prefill ONLY this employee's published shifts for this week —
+    // weekAssignment is keyed per (user, weekStart), so match userId explicitly.
+    const existing = weekAssignment?.userId === employeeId ? weekAssignment.shifts : [];
     const initial: Record<string, string> = {};
     existing.forEach((s) => {
       initial[s.date] = s.shiftName;
@@ -153,12 +151,15 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
     const shifts = Object.entries(assignShifts)
       .filter(([_, shiftName]) => shiftName !== '')
       .map(([date, shiftName]) => {
-        const template = SHIFT_TEMPLATES.find((t) => t.name === shiftName);
+        // Giờ theo LOẠI NHÂN VIÊN đang được xếp (mục 2 & 4) — cùng quy tắc
+        // với auto-scheduler nên hai đường ghi lịch luôn ra khung giờ nhất quán.
+        const slot = shiftName === 'Ca sáng' ? 'morning' : shiftName === 'Ca chiều' ? 'afternoon' : 'evening';
+        const tr = getShiftTimeRange(slot, employee.employmentType);
         return {
           date,
           shiftName: shiftName as string,
-          startTime: template?.startTime || '07:00',
-          endTime: template?.endTime || '12:00',
+          startTime: tr.start,
+          endTime: tr.end,
         };
       });
 
@@ -453,11 +454,10 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
                 const date = new Date(currentMonday);
                 date.setDate(currentMonday.getDate() + idx);
                 const dateStr = toDateStr(date);
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 const isToday = toDateStr(new Date()) === dateStr;
                 const selectedShift = assignShifts[dateStr] || '';
 
-                // Check if employee is busy studying this day
+                // Study-busy info is ADVISORY only: the manager decides.
                 const schedule = weekSchedules.find((s) => s.userId === showAssignModal);
                 const daySchedule = schedule?.days.find((d) => d.day === day);
                 const isBusy = daySchedule?.isBusy || false;
@@ -487,34 +487,38 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
                           </span>
                         )}
                       </div>
-                      {selectedShift && (
+                      {selectedShift ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#4CAF72]/15 text-[#4CAF72]">
                           ✓ {selectedShift}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-[#7A829A]">
+                          Nghỉ
                         </span>
                       )}
                     </div>
 
-                    {!isWeekend && !isBusy && (
-                      <div className="flex gap-1.5">
-                        {SHIFT_TEMPLATES.map((template) => (
-                          <button
-                            key={template.name}
-                            onClick={() => toggleAssignShift(dateStr, template.name)}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                              selectedShift === template.name
-                                ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                                : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                            }`}
-                          >
-                            {template.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {/* All 7 days assignable — rest day is whatever the manager
+                        leaves unselected, not a hard-coded Sat/Sun. */}
+                    <div className="flex gap-1.5">
+                      {SHIFT_NAMES.map((name) => (
+                        <button
+                          key={name}
+                          onClick={() => toggleAssignShift(dateStr, name)}
+                          className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                            selectedShift === name
+                              ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
+                              : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
+                          }`}
+                        >
+                          {name}
+                        </button>
+                      ))}
+                    </div>
 
-                    {(isWeekend || isBusy) && (
-                      <p className="text-xs text-[#7A829A] text-center">
-                        {isWeekend ? 'Ngày nghỉ' : 'Nhân viên bận học'}
+                    {isBusy && (
+                      <p className="text-[10px] text-[#7A829A] mt-2">
+                        ⚠️ Nhân viên đăng ký bận học ngày này
                       </p>
                     )}
                   </div>

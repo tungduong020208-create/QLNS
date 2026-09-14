@@ -18,9 +18,10 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // Map route paths to tab IDs for active state detection
   const tabFromPath = (pathname: string): string => {
     if (pathname === '/' || pathname.endsWith('/home')) return 'home';
-    if (pathname.includes('/schedule')) return 'manager_schedule';
+    // '/schedule/study' (and legacy '/study-schedules') highlight "Quản lý":
+    // the study-schedules screen is now a sub-tab inside it.
+    if (pathname.includes('/schedule') || pathname.includes('/study-schedules')) return 'manager_schedule';
     if (pathname.includes('/work-hours')) return 'work_hours';
-    if (pathname.includes('/study-schedules')) return 'study_schedules';
     if (pathname.includes('/export')) return 'export_report';
     if (pathname.includes('/handover')) return 'review';
     if (pathname.includes('/peer-review')) return 'peer_review';
@@ -35,7 +36,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'home', label: currentUser?.role === 'manager' ? 'Hôm nay' : 'Lịch & Công', icon: 'home' },
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
-    { id: 'study_schedules', label: 'Lịch học NV', icon: 'school' },
+    // 'study_schedules' removed: it is a sub-tab of "Quản lý" now.
     { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
     { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
@@ -48,7 +49,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   // Employee: sees home, reviews, peer review, study schedule, profile (NOT manager tools)
   const tabs = currentUser?.role === 'manager'
     ? allTabs.filter(t => t.id !== 'study_schedule')  // Manager uses study_schedules instead
-    : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report' && t.id !== 'work_hours' && t.id !== 'study_schedules');
+    : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report' && t.id !== 'work_hours');
 
   // ─── Navigation grouping (UI-only, mobile) ───
   // With many tabs the single bottom row gets cramped. Show "home" inline and

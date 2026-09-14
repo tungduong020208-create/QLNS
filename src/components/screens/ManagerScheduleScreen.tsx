@@ -1,5 +1,19 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { User, NotificationItem } from '../../types';
+import { User, NotificationItem, ShiftCapacityOverride } from '../../types';
+import { SHIFT_SLOT_TEMPLATES, SHIFT_NAME_TO_SLOT, getShiftTimeRange } from '../../utils/constants';
+import { getCapacityForDate } from '../../hooks/useShiftCapacity';
+
+// Tên 3 ca cố định. KHUNG GIỜ KHÔNG CỐ ĐỊNH Ở ĐÂY NỮA — map động theo
+// loại nhân viên qua getShiftTimeRange() (xem utils/constants.ts).
+const SHIFT_NAMES = ['Ca sáng', 'Ca chiều', 'Ca tối'] as const;
+
+/** Nhãn giờ ca theo LOẠI NV: "06:30–11:30 (PT) · 06:30–15:00 (FT)". */
+const formatShiftTime = (slot: 'morning' | 'afternoon' | 'evening'): string => {
+  const pt = getShiftTimeRange(slot, 'part-time');
+  const ft = getShiftTimeRange(slot, 'full-time');
+  if (pt.start === ft.start && pt.end === ft.end) return `${pt.start}–${pt.end}`;
+  return `${pt.start}–${pt.end} (PT) · ${ft.start}–${ft.end} (FT)`;
+};
 
 export interface Shift {
   id: string;
@@ -13,6 +27,13 @@ export interface Shift {
   status: 'scheduled' | 'completed' | 'cancelled' | 'swapped';
   notes?: string;
   swappedWith?: string; // employee ID if swapped
+  /**
+   * Who created this row. 'auto' = placed by the scheduler when the
+   * employee registered; 'manual' = placed/edited by a manager. Manual rows
+   * are never overwritten by a resubmission (manual beats auto).
+   * Optional for rows persisted before this field existed (treated as auto).
+   */
+  origin?: 'auto' | 'manual';
 }
 
 interface ManagerScheduleScreenProps {
@@ -22,7 +43,12 @@ interface ManagerScheduleScreenProps {
   onAddShift: (shift: Shift) => void;
   onUpdateShift: (shift: Shift) => void;
   onDeleteShift: (shiftId: string) => void;
+  /** Manager swap: exchange the two employees between two shift rows. */
+  onSwapShifts: (a: Shift, b: Shift) => void;
   onAddNotification: (notification: NotificationItem) => void;
+  /** Capacity per (date, shift) — đếm người/ca + chỉnh max (mục 7). */
+  capacityOverrides: ShiftCapacityOverride[];
+  onSetCapacity: (date: string, shiftName: string, max: number) => void;
 }
 
 // Helper: format date to YYYY-MM-DD using LOCAL time
@@ -54,12 +80,8 @@ const getWeekDays = (monday: Date): Date[] => {
   return days;
 };
 
-// Shift templates
-const SHIFT_TEMPLATES = [
-  { name: 'Ca sáng', startTime: '07:00', endTime: '12:00' },
-  { name: 'Ca chiều', startTime: '13:00', endTime: '18:00' },
-  { name: 'Ca tối', startTime: '18:00', endTime: '22:00' },
-];
+// Shift templates moved to utils/constants (SHIFT_TIME_RANGES) — giờ theo
+// loại nhân viên, không còn bảng cứng ở đây.
 
 export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   currentUser,
@@ -68,12 +90,17 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   onAddShift,
   onUpdateShift,
   onDeleteShift,
+  onSwapShifts,
   onAddNotification,
+  capacityOverrides,
+  onSetCapacity,
 }) => {
   // View state
   const [weekOffset, setWeekOffset] = useState(0);
   const [viewMode, setViewMode] = useState<'week' | 'list'>('week');
   const [selectedDate, setSelectedDate] = useState<string>(() => toDateStr(new Date()));
+  // Panel "số người mỗi ca" — mở khi manager muốn xem/điều chỉnh capacity
+  const [showCapacityPanel, setShowCapacityPanel] = useState(false);
 
   // Filter state
   const [filterEmployee, setFilterEmployee] = useState<string>('all');
@@ -83,6 +110,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Shift | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Shift | null>(null);
+  const [swapSource, setSwapSource] = useState<Shift | null>(null);
 
   // Form state for add/edit
   const [formEmployee, setFormEmployee] = useState('');
@@ -158,6 +186,48 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     setFormNotes('');
   };
 
+  // Loại NV đang thao tác trong form (add: nhân viên đang chọn;
+  // edit: nhân viên của row đang sửa) — quyết định khung giờ tự map.
+  const formEmploymentType = showEditModal
+    ? allUsers.find((u) => u.id === showEditModal.employeeId)?.employmentType
+    : allUsers.find((u) => u.id === formEmployee)?.employmentType;
+
+  // Chọn loại ca trong form → tự điền khung giờ theo LOẠI NHÂN VIÊN
+  // (mục 2 & 4). Manager vẫn sửa tay được sau đó (input giờ giữ nguyên).
+  const applyShiftTemplate = (name: string) => {
+    setFormShiftName(name);
+    const slot = SHIFT_NAME_TO_SLOT[name];
+    if (slot) {
+      const tr = getShiftTimeRange(slot, formEmploymentType);
+      setFormStartTime(tr.start);
+      setFormEndTime(tr.end);
+    }
+  };
+
+  // Đổi nhân viên trong form → nếu đã chọn ca thì map lại giờ theo loại NV mới.
+  const handleFormEmployeeChange = (id: string) => {
+    setFormEmployee(id);
+    if (formShiftName) {
+      const slot = SHIFT_NAME_TO_SLOT[formShiftName];
+      if (slot) {
+        const tr = getShiftTimeRange(slot, allUsers.find((u) => u.id === id)?.employmentType);
+        setFormStartTime(tr.start);
+        setFormEndTime(tr.end);
+      }
+    }
+  };
+
+  // Ca đang chọn trong form đã đủ người chưa (mục 5) — chỉ áp dụng cho
+  // modal THÊM MỚI. Manager là "god mode": hiện cảnh báo nhưng không chặn
+  // (có thể cố ý overbook), khác với nhân viên bị chặn hẳn ở form đăng ký.
+  const formShiftFull = useMemo(() => {
+    if (showEditModal || !formDate || !formShiftName) return false;
+    const taken = shifts.filter(
+      (s) => s.date === formDate && s.shiftName === formShiftName && s.status !== 'cancelled'
+    ).length;
+    return taken >= getCapacityForDate(capacityOverrides, formDate, formShiftName);
+  }, [showEditModal, formDate, formShiftName, shifts, capacityOverrides]);
+
   // Open add modal
   const openAddModal = (date?: string) => {
     resetForm();
@@ -183,6 +253,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       endTime: formEndTime,
       status: 'scheduled',
       notes: formNotes || undefined,
+      origin: 'manual',
     };
 
     onAddShift(newShift);
@@ -213,6 +284,34 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     setShowEditModal(shift);
   };
 
+  // Manager SWAP: click swap on row A, then on row B — the two employees
+  // trade shift rows (identity fields swap, date/shift/time stay put).
+  // Done as two row-updates so it flows through the same onUpdateShift path
+  // (and therefore the same toasts/notifications) as any other edit.
+  const handleSwapClick = (shift: Shift) => {
+    if (!swapSource) {
+      setSwapSource(shift);
+      return;
+    }
+    if (swapSource.id === shift.id) {
+      setSwapSource(null); // clicked the same row → cancel
+      return;
+    }
+    const a: Shift = { ...swapSource, employeeId: shift.employeeId, employeeName: shift.employeeName, employeeAvatar: shift.employeeAvatar, status: 'swapped', swappedWith: shift.employeeId, origin: 'manual' };
+    const b: Shift = { ...shift, employeeId: swapSource.employeeId, employeeName: swapSource.employeeName, employeeAvatar: swapSource.employeeAvatar, status: 'swapped', swappedWith: swapSource.employeeId, origin: 'manual' };
+    onSwapShifts(a, b);
+    onAddNotification({
+      id: `notif-swap-${Date.now()}`,
+      title: 'Ca làm việc được hoán đổi',
+      message: `${a.employeeName} và ${b.employeeName} đã hoán đổi ca ${a.shiftName} ngày ${a.date} (giờ ${a.startTime}-${a.endTime} giữ nguyên).`,
+      time: 'Vừa xong',
+      read: false,
+      type: 'system',
+      category: 'management',
+    });
+    setSwapSource(null);
+  };
+
   // Handle edit shift
   const handleEditShift = () => {
     if (!showEditModal || !formShiftName || !formStartTime || !formEndTime) return;
@@ -223,6 +322,9 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       startTime: formStartTime,
       endTime: formEndTime,
       notes: formNotes || undefined,
+      // Any manager edit promotes the row to manual so a later employee
+      // resubmission cannot wipe it (manual beats auto).
+      origin: 'manual',
     };
 
     onUpdateShift(updatedShift);
@@ -353,6 +455,84 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
         )}
       </div>
 
+      {/* Capacity per ca/ngày (mục 7) — đếm người + chỉnh max */}
+      <div className="bg-white rounded-2xl border border-[#E8DFD0] shadow-sm mb-5">
+        <button
+          onClick={() => setShowCapacityPanel((v) => !v)}
+          className="w-full px-5 py-3 flex items-center justify-between"
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#EFC14B] text-xl">groups</span>
+            <h3 className="text-sm font-bold text-[#0F1E44]">
+              Số người mỗi ca — ngày {selectedDate}
+            </h3>
+          </div>
+          <span className={`material-symbols-outlined text-[#7A829A] text-xl transition-transform ${showCapacityPanel ? 'rotate-180' : ''}`}>
+            expand_more
+          </span>
+        </button>
+        {showCapacityPanel && (
+          <div className="px-5 pb-4 space-y-2">
+            {SHIFT_NAMES.map((name) => {
+              const slot = SHIFT_NAME_TO_SLOT[name];
+              // Tổng người trong ca NÀY của ngày ĐANG CHỌN (bấm ngày trong
+              // lưới tuần để đổi ngày — selectedDate).
+              const registered = shifts.filter(
+                (s) => s.date === selectedDate && s.shiftName === name && s.status !== 'cancelled'
+              );
+              const max = getCapacityForDate(capacityOverrides, selectedDate, name);
+              const isFull = registered.length >= max;
+              return (
+                <div key={name} className={`rounded-xl border p-3 ${isFull ? 'border-[#FF3131]/40 bg-[#FF3131]/5' : 'border-[#E8DFD0]'}`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <p className="text-sm font-bold text-[#0F1E44]">
+                        {name}{" "}
+                        <span className="text-xs font-semibold text-[#7A829A]">{formatShiftTime(slot)}</span>
+                      </p>
+                      <p className={`text-[10px] font-semibold ${isFull ? 'text-[#FF3131]' : 'text-[#7A829A]'}`}>
+                        {registered.length}/{max} người{isFull ? ' — ĐÃ ĐỦ' : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => onSetCapacity(selectedDate, name, Math.max(1, max - 1))}
+                        title="Giảm số người tối đa"
+                        className="w-7 h-7 rounded-lg bg-[#FDF8EE] hover:bg-[#EFC14B]/20 text-[#0F1E44] font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="w-8 text-center text-sm font-bold text-[#0F1E44]">{max}</span>
+                      <button
+                        onClick={() => onSetCapacity(selectedDate, name, Math.min(9, max + 1))}
+                        title="Tăng số người tối đa"
+                        className="w-7 h-7 rounded-lg bg-[#FDF8EE] hover:bg-[#EFC14B]/20 text-[#0F1E44] font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  {registered.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {registered.map((s) => (
+                        <span key={s.id} className="text-[10px] font-semibold bg-[#0F1E44]/10 text-[#0F1E44] px-2 py-0.5 rounded-full">
+                          {s.employeeName}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-[#7A829A]">Chưa có ai đăng ký</p>
+                  )}
+                </div>
+              );
+            })}
+            <p className="text-[10px] text-[#7A829A] mt-1">
+              Mặc định: Sáng 3 · Chiều 3 · Tối 3. Chỉnh số max chỉ áp dụng cho ngày đang chọn.
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Week Navigation */}
       <div className="bg-white rounded-2xl border border-[#E8DFD0] shadow-sm mb-5">
         <div className="px-5 py-3 border-b border-[#F5EDDF] flex items-center justify-between">
@@ -380,6 +560,16 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
         {/* View toggle */}
         <div className="px-5 py-2 border-b border-[#F5EDDF] flex gap-2">
+          {swapSource && (
+            <div className="w-full flex items-center justify-between bg-[#EFC14B]/10 border border-[#EFC14B]/40 rounded-lg px-3 py-1.5 mb-2">
+              <span className="text-[11px] font-semibold text-[#0F1E44]">
+                Đang hoán đổi: {swapSource.employeeName} — ca {swapSource.shiftName} ngày {swapSource.date}. Chọn ca thứ hai.
+              </span>
+              <button onClick={() => setSwapSource(null)} className="text-[10px] font-bold text-[#7A829A] hover:underline">
+                Hủy
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setViewMode('week')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
@@ -415,7 +605,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                 return (
                   <div
                     key={dateStr}
-                    onClick={() => !isWeekend && setSelectedDate(dateStr)}
+                    onClick={() => setSelectedDate(dateStr)}
                     className={`rounded-xl p-2 transition-all cursor-pointer ${
                       selectedDate === dateStr
                         ? 'bg-[#0F1E44] text-white shadow-md'
@@ -433,9 +623,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                       <p className={`text-lg font-bold ${selectedDate === dateStr ? 'text-white' : 'text-[#0F1E44]'}`}>{dayNum}</p>
                     </div>
                     <div className="space-y-1">
-                      {isWeekend ? (
-                        <span className="text-[8px] text-center block text-[#7A829A]">Nghỉ</span>
-                      ) : dayShifts.length === 0 ? (
+                      {dayShifts.length === 0 ? (
                         <span className="text-[8px] text-center block text-[#7A829A]">Trống</span>
                       ) : (
                         dayShifts.slice(0, 3).map((s) => (
@@ -453,7 +641,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                           </div>
                         ))
                       )}
-                      {!isWeekend && dayShifts.length > 3 && (
+                      {dayShifts.length > 3 && (
                         <span className="text-[8px] text-center block text-[#7A829A]">+{dayShifts.length - 3}</span>
                       )}
                     </div>
@@ -470,7 +658,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
             <div className="space-y-3">
               {weekDays.map((date) => {
                 const dateStr = toDateStr(date);
-                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                 const dayShifts = getShiftsForDate(dateStr);
                 const isTodayDate = dateStr === todayStr;
 
@@ -485,18 +672,14 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                           <span className="text-[9px] font-bold bg-[#EFC14B] text-[#0F1E44] px-1.5 py-0.5 rounded">HÔM NAY</span>
                         )}
                       </div>
-                      {!isWeekend && (
-                        <button
-                          onClick={() => openAddModal(dateStr)}
-                          className="text-[10px] font-semibold text-[#EFC14B] hover:underline"
-                        >
-                          + Thêm ca
-                        </button>
-                      )}
+                      <button
+                        onClick={() => openAddModal(dateStr)}
+                        className="text-[10px] font-semibold text-[#EFC14B] hover:underline"
+                      >
+                        + Thêm ca
+                      </button>
                     </div>
-                    {isWeekend ? (
-                      <div className="px-4 py-3 text-center text-xs text-[#7A829A]">Ngày nghỉ</div>
-                    ) : dayShifts.length === 0 ? (
+                    {dayShifts.length === 0 ? (
                       <div className="px-4 py-3 text-center text-xs text-[#7A829A]">Chưa có ca nào</div>
                     ) : (
                       <div className="divide-y divide-[#F5EDDF]">
@@ -521,10 +704,17 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                                     : 'bg-[#EFC14B]/20 text-[#D4A833]'
                                 }`}
                               >
-                                {shift.status === 'cancelled' ? 'Đã hủy' : shift.status === 'completed' ? 'Hoàn thành' : 'Đã lên lịch'}
+                                {shift.status === 'cancelled' ? 'Đã hủy' : shift.status === 'completed' ? 'Hoàn thành' : shift.status === 'swapped' ? 'Đã hoán đổi' : 'Đã lên lịch'}
                               </span>
                               {shift.status !== 'cancelled' && (
                                 <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleSwapClick(shift)}
+                                    title={swapSource ? 'Chọn ca thứ hai để hoán đổi' : 'Hoán đổi nhân viên sang ca khác'}
+                                    className={`p-1 rounded ${swapSource?.id === shift.id ? 'bg-[#EFC14B]/30' : 'hover:bg-[#FDF8EE]'}`}
+                                  >
+                                    <span className={`material-symbols-outlined text-[14px] ${swapSource ? 'text-[#EFC14B]' : 'text-[#7A829A]'}`}>swap_horiz</span>
+                                  </button>
                                   <button onClick={() => openEditModal(shift)} className="p-1 hover:bg-[#FDF8EE] rounded">
                                     <span className="material-symbols-outlined text-[14px] text-[#7A829A]">edit</span>
                                   </button>
@@ -561,7 +751,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                 <label className="block text-xs font-semibold text-[#7A829A] mb-1">Nhân viên</label>
                 <select
                   value={formEmployee}
-                  onChange={(e) => setFormEmployee(e.target.value)}
+                  onChange={(e) => handleFormEmployeeChange(e.target.value)}
                   className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none"
                 >
                   <option value="">Chọn nhân viên</option>
@@ -586,21 +776,17 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-[#7A829A] mb-1">Loại ca</label>
                 <div className="flex gap-2">
-                  {SHIFT_TEMPLATES.map((t) => (
+                  {SHIFT_NAMES.map((name) => (
                     <button
-                      key={t.name}
-                      onClick={() => {
-                        setFormShiftName(t.name);
-                        setFormStartTime(t.startTime);
-                        setFormEndTime(t.endTime);
-                      }}
+                      key={name}
+                      onClick={() => applyShiftTemplate(name)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        formShiftName === t.name
+                        formShiftName === name
                           ? 'bg-[#0F1E44] text-white'
                           : 'bg-[#FDF8EE] text-[#3D4663] hover:bg-[#EFC14B]/20'
                       }`}
                     >
-                      {t.name}
+                      {name}
                     </button>
                   ))}
                 </div>
@@ -670,21 +856,17 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-[#7A829A] mb-1">Loại ca</label>
                 <div className="flex gap-2">
-                  {SHIFT_TEMPLATES.map((t) => (
+                  {SHIFT_NAMES.map((name) => (
                     <button
-                      key={t.name}
-                      onClick={() => {
-                        setFormShiftName(t.name);
-                        setFormStartTime(t.startTime);
-                        setFormEndTime(t.endTime);
-                      }}
+                      key={name}
+                      onClick={() => applyShiftTemplate(name)}
                       className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        formShiftName === t.name
+                        formShiftName === name
                           ? 'bg-[#0F1E44] text-white'
                           : 'bg-[#FDF8EE] text-[#3D4663] hover:bg-[#EFC14B]/20'
                       }`}
                     >
-                      {t.name}
+                      {name}
                     </button>
                   ))}
                 </div>

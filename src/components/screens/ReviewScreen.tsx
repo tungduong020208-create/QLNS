@@ -266,7 +266,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
               <label className="block text-sm font-semibold text-[#0F1E44]">Hình ảnh <span className="text-[#7A829A] font-normal">(tùy chọn)</span></label>
               {selectedImage ? (
                 <div className="relative rounded-xl overflow-hidden border-2 border-[#0F1E44]/30 max-h-48 w-full group">
-                  <img src={selectedImage} alt="Ảnh minh chứng" className="w-full h-full object-cover max-h-48" />
+                  <img src={selectedImage} alt="Ảnh minh chứng" className="max-w-full max-h-48 w-auto h-auto object-contain mx-auto" />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                     <button type="button" onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-white text-[#0F1E44] rounded-lg text-xs font-bold shadow hover:bg-[rgba(239,193,75,0.15)]">Chọn ảnh khác</button>
                     <button type="button" onClick={() => setSelectedImage('')} className="p-2 bg-[#FF3131] text-white rounded-lg shadow hover:bg-red-700">
@@ -438,8 +438,17 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
                 </div>
 
                 {item.imageUrl && (
-                  <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#F5EDDF] border border-[#E8DFD0]/60">
-                    <img className="w-full h-full object-cover" src={item.imageUrl} alt={item.title || 'Ảnh bài đăng'} />
+                  <div className="w-full rounded-xl overflow-hidden bg-[#F5EDDF] border border-[#E8DFD0]/60 flex items-center justify-center">
+                    {/* object-contain keeps the original aspect ratio (no stretch,
+                        no crop). The wrapper has NO forced aspect ratio so it
+                        sizes to the image itself; flex centering letterboxes any
+                        direction inside the post width. */}
+                    <img
+                      className="max-w-full max-h-[28rem] w-auto h-auto object-contain"
+                      src={item.imageUrl}
+                      alt={item.title || 'Ảnh bài đăng'}
+                      loading="lazy"
+                    />
                   </div>
                 )}
 

@@ -7,17 +7,23 @@ import {
   StudyTimeSlot,
   WeeklyShiftRegistration,
   DayOfWeek,
+  ShiftCapacityOverride,
 } from '../../types';
+import { Shift } from './ManagerScheduleScreen';
+import { getShiftTimeRange } from '../../utils/constants';
+import { getCapacityForDate } from '../../hooks/useShiftCapacity';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
 const DAY_KEYS: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ];
 
-const SHIFT_OPTIONS = [
-  { value: 'morning', label: 'Ca sáng (07:00-12:00)', startTime: '07:00', endTime: '12:00' },
-  { value: 'afternoon', label: 'Ca chiều (13:00-18:00)', startTime: '13:00', endTime: '18:00' },
-  { value: 'evening', label: 'Ca tối (18:00-22:00)', startTime: '18:00', endTime: '22:00' },
+// 3 ca cố định. KHUNG GIỜ KHÔNG CỐ ĐỊNH Ở ĐÂY — hiển thị động theo loại
+// nhân viên qua getShiftTimeRange() (part-time vs full-time khác giờ).
+const SHIFT_SLOTS: { value: 'morning' | 'afternoon' | 'evening'; name: string; icon: string; short: string }[] = [
+  { value: 'morning', name: 'Ca sáng', icon: '🌅', short: 'Sáng' },
+  { value: 'afternoon', name: 'Ca chiều', icon: '☀️', short: 'Chiều' },
+  { value: 'evening', name: 'Ca tối', icon: '🌙', short: 'Tối' },
 ];
 
 // Helper functions
@@ -63,6 +69,9 @@ interface StudyScheduleScreenProps {
   currentUser: User;
   studySchedules: StudySchedule[];
   registrations: WeeklyShiftRegistration[];
+  /** Lịch chính thức — để đếm người/ca và chặn ca đã đầy (mục 5). */
+  shifts: Shift[];
+  capacityOverrides: ShiftCapacityOverride[];
   onSubmitStudySchedule: (schedule: StudySchedule) => void;
   onSubmitRegistration: (reg: WeeklyShiftRegistration) => void;
   onUpdateRegistration: (reg: WeeklyShiftRegistration) => void;
@@ -72,6 +81,8 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
   currentUser,
   studySchedules,
   registrations,
+  shifts,
+  capacityOverrides,
   onSubmitStudySchedule,
   onSubmitRegistration,
   onUpdateRegistration,
@@ -413,10 +424,15 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
             date.setDate(targetWeekMonday.getDate() + idx);
             const dateStr = toDateStr(date);
             const isToday = toDateStr(new Date()) === dateStr;
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const daySchedule = daySchedules.find(d => d.day === day);
             const isBusy = daySchedule?.isBusy || false;
             const selectedShift = shiftPreferences[dateStr] || '';
+            // Giờ hiển thị = map (ca đã chọn, loại NV) — nhân viên KHÔNG
+            // chọn giờ, chỉ được xem khung giờ hệ thống sẽ xếp (mục 4).
+            const selectedTime =
+              selectedShift && selectedShift !== 'off'
+                ? getShiftTimeRange(selectedShift as 'morning' | 'afternoon' | 'evening', currentUser.employmentType)
+                : null;
 
             return (
               <div
@@ -439,24 +455,45 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                   <div className="flex-1">
                     {isBusy ? (
                       <p className="text-xs text-[#FF3131] font-semibold">📚 Bận học</p>
-                    ) : isWeekend ? (
-                      <p className="text-xs text-[#7A829A]">Ngày nghỉ</p>
                     ) : (
-                      <div className="flex gap-1.5">
-                        {SHIFT_OPTIONS.map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => setShiftPreference(dateStr, opt.value)}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                              selectedShift === opt.value
-                                ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                                : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                            }`}
-                          >
-                            {opt.value === 'morning' ? '🌅' : opt.value === 'afternoon' ? '☀️' : '🌙'} {opt.value === 'morning' ? 'Sáng' : opt.value === 'afternoon' ? 'Chiều' : 'Tối'}
-                          </button>
-                        ))}
-                      </div>
+                      <>
+                        <div className="flex gap-1.5">
+                          {SHIFT_SLOTS.map((slot) => {
+                            // Ca đã đầy? (mục 5 — UX advisory: đếm người KHÁC
+                            // đã có trong ca; engine vẫn re-check khi lưu).
+                            const count = shifts.filter(
+                              (s) => s.date === dateStr && s.shiftName === slot.name &&
+                                     s.status !== 'cancelled' && s.employeeId !== currentUser.id
+                            ).length;
+                            const max = getCapacityForDate(capacityOverrides, dateStr, slot.name);
+                            const isFull = count >= max;
+                            const disabled = isFull && selectedShift !== slot.value;
+                            const tr = getShiftTimeRange(slot.value, currentUser.employmentType);
+                            return (
+                              <button
+                                key={slot.value}
+                                onClick={() => !disabled && setShiftPreference(dateStr, slot.value)}
+                                disabled={disabled}
+                                title={isFull ? 'Ca đã đầy' : `${slot.name}: ${tr.start}–${tr.end}`}
+                                className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
+                                  selectedShift === slot.value
+                                    ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
+                                    : disabled
+                                    ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                                    : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
+                                }`}
+                              >
+                                {slot.icon} {slot.short}{isFull ? ' (đầy)' : ''}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selectedTime && (
+                          <p className="text-[9px] text-[#7A829A] mt-1">
+                            Giờ của bạn: <strong className="text-[#0F1E44]">{selectedTime.start}–{selectedTime.end}</strong>
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
@@ -493,7 +530,9 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
           <ul className="text-xs text-[#7A829A] space-y-1">
             <li>• Đánh dấu <strong>ngày bận học</strong> để Quản lý biết bạn không thể đi làm</li>
             <li>• Đăng ký <strong>ca làm việc mong muốn</strong> cho các ngày rảnh</li>
-            <li>• Quản lý sẽ xếp lịch dựa trên lịch học và nguyện vọng của bạn</li>
+            <li>• Khung giờ tự động theo loại nhân viên của bạn
+              {currentUser.employmentType === 'full-time' ? ' (Full-time: Sáng 06:30–15:00, Chiều/Tối 14:30–23:00)' : ' (Part-time: Sáng 06:30–11:30, Chiều 11:30–17:30, Tối 17:30–22:30)'}</li>
+            <li>• Ca đã đủ số người sẽ khóa — hệ thống xếp theo thứ tự đăng ký trước</li>
             <li>• Form mở từ <strong>Thứ 6 đến Chủ nhật</strong> hàng tuần</li>
           </ul>
         </div>
