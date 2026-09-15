@@ -174,6 +174,46 @@ export function clearSession(): void {
 }
 
 // ═══════════════════════════════════════════════════
+// Session Watchdog
+// ═══════════════════════════════════════════════════
+//
+// WHY: the sliding window was only renewed on navigation (ProtectedRoute's
+// effect). A tab left open on one screen never renewed — after
+// SESSION_TIMEOUT_MS the stored session expired while React state still said
+// "logged in". The next navigation then ping-ponged forever between
+// ProtectedRoute (→ /login) and GuestRoute (→ back), because each trusted a
+// different source of truth.
+//
+// The watchdog ENFORCES expiry: it re-checks the stored session on a fixed
+// interval and calls onExpired() exactly once the moment it lapses, so the
+// app can log out cleanly. Renewal is deliberately NOT done here — it is
+// driven by real user interaction (see useAuth) so that idle tabs actually
+// time out, which is the whole point of a sliding window.
+
+/** How often the watchdog re-checks the session (must be « SESSION_TIMEOUT_MS). */
+const SESSION_WATCHDOG_INTERVAL_MS = 30 * 1000;
+
+/**
+ * Start checking the stored session every interval; the moment it is no
+ * longer valid, invoke onExpired() exactly once and stop checking.
+ * Returns a cleanup function that also prevents any pending onExpired call.
+ */
+export function startSessionWatchdog(onExpired: () => void): () => void {
+  let expired = false;
+  const id = window.setInterval(() => {
+    if (expired) return;
+    if (!isSessionValid()) {
+      expired = true;
+      onExpired();
+    }
+  }, SESSION_WATCHDOG_INTERVAL_MS);
+  return () => {
+    window.clearInterval(id);
+    expired = true;
+  };
+}
+
+// ═══════════════════════════════════════════════════
 // PIN Generation (Server-side ready)
 // ═══════════════════════════════════════════════════
 

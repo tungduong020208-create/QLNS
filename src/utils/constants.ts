@@ -180,12 +180,12 @@ export const SHIFT_SLOT_TEMPLATES: Record<'morning' | 'afternoon' | 'evening', {
  * template. Restart the dev server after editing (Vite reads env at startup).
  */
 export const OFFICE_WIFI = {
-  displayName: import.meta.env.VITE_OFFICE_WIFI_NAME || 'Office WiFi',
-  publicIPs: (import.meta.env.VITE_OFFICE_PUBLIC_IPS || '')
+  displayName: import.meta.env?.VITE_OFFICE_WIFI_NAME || 'Office WiFi',
+  publicIPs: (import.meta.env?.VITE_OFFICE_PUBLIC_IPS || '')
     .split(',').map(s => s.trim()).filter(Boolean) as string[],
-  localSubnets: (import.meta.env.VITE_OFFICE_LOCAL_SUBNETS || '')
+  localSubnets: (import.meta.env?.VITE_OFFICE_LOCAL_SUBNETS || '')
     .split(',').map(s => s.trim()).filter(Boolean) as string[],
-  fallbackEnabled: import.meta.env.VITE_OFFICE_WIFI_FALLBACK === 'true',
+  fallbackEnabled: import.meta.env?.VITE_OFFICE_WIFI_FALLBACK === 'true',
 };
 
 /**

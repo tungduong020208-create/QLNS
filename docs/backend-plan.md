@@ -414,6 +414,53 @@ App.tsx — chỉ đổi từ "push local array" thành "insert row, listener t�
   server-side của Supabase auth — giữ code như UX guardrail, xóa trách nhiệm
   bảo mật khỏi client.
 
+#### Sổ tay trust boundary của Phase 1 (ai là nguồn sự thật, trước vs. sau)
+
+**Hôm nay (localStorage) — role chỉ là niềm tin phía client:**
+
+| Thông tin | Nguồn sự thật | Ai thay được |
+|---|---|---|
+| Đã đăng nhập? | flag `enterprise_hr_auth` + session 30' (watchdog `useAuth`) | Bất kỳ ai mở DevTools |
+| Vai trò | `User.role` trong user list localStorage | Bất kỳ ai mở DevTools |
+| "Phân quyền" màn hình | `requiredRole` trong ProtectedRoute | Cosmetics — không chặn được gì thật |
+
+**Sau Phase 1 — role là dữ liệu do server cấp:**
+- Đăng nhập → Supabase cấp JWT, tự refresh; client **không tự compose session nữa**
+- `role` đọc từ row `profiles` lúc sign-in và re-fetch khi `onAuthStateChange` — client chỉ *hiển thị*, không *quyết định*
+- Enforcement thật nằm ở RLS: UI vẽ sai thế nào đi nữa, DB vẫn từ chối row ngoài quyền
+- Bộ máy client vừa build (watchdog, startup recovery, sliding window trong `useAuth`/`auth.ts`) là **code chuyển tiếp**: bị thay bởi `supabase.auth.onAuthStateChange` + token auto-refresh. Giá trị của nó là cầm chân tới Phase 1 — không phải công nợ kỹ thuật, đừng mang theo sang backend.
+
+**⚠️ Lỗ hổng trong chính SQL ở mục 2 — phải vá NGAY trong Phase 1:**
+Policy `"profiles self update"` (`using (auth.uid() = id) with check (auth.uid() = id)`)
+cho phép user UPDATE **mọi cột** của chính mình — kể cả `role`. Các policy permissive
+trong Postgres là OR nhau: employee khớp policy self-update là đủ được UPDATE row,
+set `role = 'manager'` → **leo thang đặc quyền ngay phiên migrate đầu tiên**.
+Vá (chọn 1):
+1. Trigger chặn đổi cột nhạy cảm khi caller không phải manager:
+   ```sql
+   create function public.protect_profile_columns() returns trigger
+   language plpgsql as $$
+   begin
+     if (new.role is distinct from old.role or new.employee_code is distinct from old.employee_code)
+        and not public.is_manager() then
+       raise exception 'Chỉ manager được đổi role/mã NV';
+     end if;
+     return new;
+   end $$;
+   create trigger trg_protect_profile before update on public.profiles
+     for each row execute function public.protect_profile_columns();
+   ```
+2. Hoặc bỏ policy self-update, đổi avatar/tên qua Edge Function kiểm tra owner.
+
+> **Nguyên tắc ghi nhớ:** RLS policy cho UPDATE bảo vệ *toàn row* — muốn bảo vệ
+> **1 cột** phải dùng trigger hoặc GRANT cấp cột. Policy không thể bảo vệ riêng
+> từng cột trong cùng 1 bảng.
+
+**Role đổi giữa phiên:** manager hạ cấp nhân viên → JWT client vẫn mang role cũ
+đến lần refresh token kế, UI có thể hiện stale. RLS vẫn đúng **ngay lập tức**
+(đọc DB mỗi query) — dữ liệu an toàn, chỉ UI lệch. Client re-fetch profile trong
+`onAuthStateChange(USER_UPDATED)` / sau token refresh để UI bắt kịp.
+
 ### Phase 2 — profiles + notifications (1 buổi)
 - [ ] Migrate `useAuth.users` → bảng `profiles`; `useNotifications` → bảng
       notifications (có realtime → badge cập nhật mượt)

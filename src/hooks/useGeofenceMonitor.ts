@@ -58,7 +58,17 @@ export interface GeofenceStatus {
 }
 
 export function readGeofenceEvents(): GeofenceEvent[] {
-  return safeParse<GeofenceEvent[]>(STORAGE_KEY_GEOFENCE_EVENTS, []);
+  // Guard: a malformed value (e.g. an object instead of an array) must never
+  // crash the whole dashboard — treat anything non-array as empty and wipe it
+  // so the bad shape doesn't linger in storage.
+  const parsed = safeParse<GeofenceEvent[] | null>(STORAGE_KEY_GEOFENCE_EVENTS, null);
+  if (!Array.isArray(parsed)) {
+    if (parsed !== null) {
+      try { localStorage.removeItem(STORAGE_KEY_GEOFENCE_EVENTS); } catch { /* ignore */ }
+    }
+    return [];
+  }
+  return parsed;
 }
 
 function appendGeofenceEvent(event: GeofenceEvent): void {

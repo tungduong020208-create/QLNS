@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { User, EvidenceItem, CheckInRecord } from '../types';
+import { Shift } from './screens/ManagerScheduleScreen';
+import { getMonday, toDateStr } from '../utils/schedule';
+import { useShiftCapacity } from '../hooks/useShiftCapacity';
 import { STORAGE_KEY_ATTENDANCE_RECORDS, STORAGE_KEY_DASHBOARD_COLLAPSED, GEOFENCE } from '../utils/constants';
+
+/** Thứ tự 3 ca cố định — dùng để đếm slot trống cho từng ca trong ngày. */
+const SHIFT_NAMES = ['Ca sáng', 'Ca chiều', 'Ca tối'] as const;
 import { getGeofenceStatus, GeofenceStatus } from '../hooks/useGeofenceMonitor';
 import { safeParse } from '../hooks/usePersistentState';
 import { ManagerCheckInToggle } from './ManagerCheckInToggle';
@@ -9,8 +15,10 @@ interface ManagerDashboardProps {
   currentUser: User;
   evidences: EvidenceItem[];
   allUsers: User[];
+  shifts: Shift[];
   onSelectEmployee: (user: User) => void;
   onNavigateReview: () => void;
+  onNavigateSchedule: () => void;
   onCheckIn?: (record: CheckInRecord) => void;
 }
 
@@ -25,11 +33,12 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   currentUser,
   evidences,
   allUsers,
+  shifts,
   onSelectEmployee,
   onNavigateReview,
+  onNavigateSchedule,
   onCheckIn
 }) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
   const [employeeStatuses, setEmployeeStatuses] = useState<EmployeeCheckInStatus[]>([]);
   const [geoStatus, setGeoStatus] = useState<GeofenceStatus>(() => getGeofenceStatus());
 
@@ -40,6 +49,10 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
     return localStorage.getItem(STORAGE_KEY_DASHBOARD_COLLAPSED) === 'true';
   });
 
+  // Geofence block: compact by default when there's nothing to act on —
+  // the user can still expand it to read the audit trail.
+  const [geoExpanded, setGeoExpanded] = useState(false);
+
   const toggleDashboard = () => {
     setDashboardCollapsed(prev => {
       const next = !prev;
@@ -47,11 +60,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       return next;
     });
   };
-
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     // Refresh geofence panel (out-of-range employees + audit trail)
@@ -114,19 +122,68 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const totalEmployees = allUsers.filter(u => u.role === 'employee').length;
   const checkedInCount = employeeStatuses.filter(s => s.hasCheckedIn).length;
-  const checkedOutCount = employeeStatuses.filter(s => s.hasCheckedOut).length;
   const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
-  const totalPoints = evidences.reduce((acc, e) => acc + e.points, 0);
-  const avgTeamScore = totalEmployees > 0 ? Math.round(totalPoints / totalEmployees) : 0;
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  };
+  // ── "Ca còn trống" — số slot chưa ai lấp trong TUẦN LÀM VIỆC hiện tại.
+  // WHY this replaced "Điểm TB team": averaging evidence points per person
+  // has no HR meaning (evidences are per-event approvals, not a per-person
+  // score) and the number never drives an action. Unfilled capacity is the
+  // opposite: a manager who sees "5 ca trống" can DO something today — assign
+  // staff or ask them to register. It also reuses the exact capacity logic
+  // the scheduler enforces (getCapacityForDate), so the dashboard number
+  // cannot drift from the rules.
+  const { capacityOverrides, getCapacityForDate } = useShiftCapacity();
+  const weekStartMs = new Date(toDateStr(getMonday(new Date())) + 'T00:00:00').getTime();
+  const weekEndMs = weekStartMs + 7 * 24 * 60 * 60 * 1000;
+  const weekShifts = shifts.filter(s => {
+    const t = new Date(s.date + 'T00:00:00').getTime();
+    return t >= weekStartMs && t < weekEndMs;
+  });
+  const openShiftSlots = Array.from(new Set(weekShifts.map(s => s.date))).reduce((total, date) => {
+    return total + SHIFT_NAMES.reduce((dayTotal, shiftName) => {
+      const assigned = weekShifts.filter(
+        s => s.date === date && s.shiftName === shiftName && s.status !== 'cancelled' && s.status !== 'swapped'
+      ).length;
+      const capacity = getCapacityForDate(capacityOverrides, date, shiftName);
+      return dayTotal + Math.max(0, capacity - assigned);
+    }, 0);
+  }, 0);
 
-  const formatDate = (date: Date) => {
-    const days = ['Chủ nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-    const months = ['tháng 1', 'tháng 2', 'tháng 3', 'tháng 4', 'tháng 5', 'tháng 6', 'tháng 7', 'tháng 8', 'tháng 9', 'tháng 10', 'tháng 11', 'tháng 12'];
-    return `${days[date.getDay()]}, ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  // Geofence block is "alerting" only when someone is actually out of range;
+  // otherwise it collapses to a single-line status.
+  const geoAlertActive = geoStatus.outOfRange.length > 0;
+
+  // ── Card 1: check-in rate — the ratio IS the instruction (see who's missing).
+  const checkInRate = totalEmployees > 0 ? Math.round((checkedInCount / totalEmployees) * 100) : 0;
+  const notCheckedInCount = Math.max(0, totalEmployees - checkedInCount);
+
+  // ── Card 4: warnings = ngoài vùng + đi trễ hôm nay.
+  // "Đi trễ" = check-in sau giờ bắt đầu của ca SỚM NHẤT trong ngày mà NV có
+  // lịch (ngày nghỉ không tính trễ). Grace = 0 phút: manager nhìn giờ cụ thể
+  // và tự đánh giá — metric không tự tiện tha thứ.
+  const todayLocal = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+  const lateCount = employeeStatuses.filter(s => {
+    if (!s.checkInRecord) return false;
+    const dayShifts = shifts.filter(
+      sh => sh.employeeId === s.user.id && sh.date === todayLocal &&
+            sh.status !== 'cancelled' && sh.status !== 'swapped'
+    );
+    if (dayShifts.length === 0) return false;
+    const earliestStart = dayShifts.map(sh => sh.startTime).sort()[0]; // 'HH:MM' sorts correctly as text
+    const [h, m] = earliestStart.split(':').map(Number);
+    const t = new Date(s.checkInRecord.timestamp);
+    return t.getHours() > h || (t.getHours() === h && t.getMinutes() > m);
+  }).length;
+  const warningCount = geoStatus.outOfRange.length + lateCount;
+
+  // Card clicks take you to the block where the number becomes actionable.
+  const scrollToStatus = () =>
+    document.getElementById('employee-status-block')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToWarnings = () => {
+    setGeoExpanded(true);
+    requestAnimationFrame(() =>
+      document.getElementById('geofence-block')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    );
   };
 
   return (
@@ -158,80 +215,115 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       {/* Collapsible dashboard content — hidden while collapsed, only the title bar above remains */}
       {!dashboardCollapsed && (
       <>
-      {/* Manager Time & Info Card */}
-      <div className="bg-gradient-to-r from-[#000666] to-[#1a237e] text-white rounded-2xl p-6 mb-6 shadow-lg relative overflow-hidden">
-        <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/5 rounded-full blur-2xl" />
-        <div className="absolute -left-6 -bottom-6 w-32 h-32 bg-[#4fc3f7]/10 rounded-full blur-xl" />
-        
-        <div className="relative z-10">
-          <div className="text-xs uppercase tracking-wider text-white/70 mb-1">QUẢN LÝ</div>
-          <div className="font-headline text-4xl sm:text-5xl font-bold mb-2">{formatTime(currentTime)}</div>
-          <div className="text-sm text-white/80">{formatDate(currentTime)}</div>
-        </div>
-      </div>
-
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {/* Total Employees */}
-        <div className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm">
+        {/* Check-in rate today — click → the list of who's missing. */}
+        <div
+          className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm cursor-pointer hover:border-[#000666]/50 transition-colors"
+          onClick={scrollToStatus}
+          title="Xem ai chưa check-in"
+        >
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-[#000666] text-[20px]">group</span>
-            <span className="text-xs text-[#454652] font-medium">Tổng nhân viên</span>
+            <span className={`material-symbols-outlined text-[20px] ${checkInRate === 100 ? 'text-green-600' : 'text-[#000666]'}`}>how_to_reg</span>
+            <span className="text-xs text-[#454652] font-medium">Check-in hôm nay</span>
           </div>
-          <div className="font-headline text-2xl font-bold text-[#000666]">{totalEmployees}</div>
-        </div>
-
-        {/* Checked In Today */}
-        <div className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-green-600 text-[20px]">check_circle</span>
-            <span className="text-xs text-[#454652] font-medium">Đã check-in</span>
-          </div>
-          <div className="font-headline text-2xl font-bold text-green-600">{checkedInCount}</div>
+          <div className={`font-headline text-2xl font-bold ${checkInRate === 100 ? 'text-green-600' : 'text-[#000666]'}`}>{checkInRate}%</div>
           <div className="text-xs text-[#767683] mt-1">
-            {checkedOutCount} đã check-out
+            {checkedInCount}/{totalEmployees} đã vào{notCheckedInCount > 0 ? ` · ${notCheckedInCount} chưa` : ''}
           </div>
         </div>
 
-        {/* Pending Reviews */}
-        <div className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm cursor-pointer hover:border-[#000666]/50 transition-colors" onClick={onNavigateReview}>
+        {/* Pending approvals — 0 renders quiet: nothing to act on. */}
+        <div
+          className={`bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm ${pendingReviewCount > 0 ? 'cursor-pointer hover:border-[#000666]/50 transition-colors' : 'opacity-70'}`}
+          onClick={pendingReviewCount > 0 ? onNavigateReview : undefined}
+          title={pendingReviewCount > 0 ? 'Xử lý phê duyệt' : undefined}
+        >
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-amber-500 text-[20px]">pending</span>
-            <span className="text-xs text-[#454652] font-medium">Đang xử lý</span>
+            <span className={`material-symbols-outlined text-[20px] ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-[#767683]'}`}>pending</span>
+            <span className="text-xs text-[#454652] font-medium">Phê duyệt chờ</span>
           </div>
-          <div className="font-headline text-2xl font-bold text-amber-500">{pendingReviewCount}</div>
-          <div className="text-xs text-[#000666] mt-1 font-medium">Xem ngay →</div>
+          <div className={`font-headline text-2xl font-bold ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-[#767683]'}`}>{pendingReviewCount}</div>
+          {pendingReviewCount > 0 && (
+            <div className="text-xs text-[#000666] mt-1 font-medium">Xử lý →</div>
+          )}
         </div>
 
-        {/* Team Score */}
-        <div className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm">
+        {/* Open Shift Slots — replaced the meaningless "team average score"
+            (see computation comment above). Clickable because it is an
+            instruction, not a statistic. */}
+        <div
+          className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm cursor-pointer hover:border-[#000666]/50 transition-colors"
+          onClick={onNavigateSchedule}
+          title="Xem lịch và xếp ca"
+        >
           <div className="flex items-center gap-2 mb-2">
-            <span className="material-symbols-outlined text-[#000666] text-[20px]">star</span>
-            <span className="text-xs text-[#454652] font-medium">Điểm TB team</span>
+            <span className={`material-symbols-outlined text-[20px] ${openShiftSlots > 0 ? 'text-amber-500' : 'text-[#000666]'}`}>event_available</span>
+            <span className="text-xs text-[#454652] font-medium">Ca còn trống</span>
           </div>
-          <div className="font-headline text-2xl font-bold text-[#000666]">{avgTeamScore}</div>
-          <div className="text-xs text-[#767683] mt-1">điểm/người</div>
+          <div className={`font-headline text-2xl font-bold ${openShiftSlots > 0 ? 'text-amber-500' : 'text-[#000666]'}`}>{openShiftSlots}</div>
+          <div className="text-xs text-[#000666] mt-1 font-medium">Tuần này · Xếp ca →</div>
         </div>
+
+        {/* Warnings (late arrivals + out-of-range) — only clickable when
+            there is something to act on (quiet-state pattern). */}
+        {warningCount > 0 ? (
+          <div
+            className="bg-white border border-[#FF3131]/40 rounded-xl p-4 shadow-sm cursor-pointer hover:border-[#FF3131]/70 transition-colors"
+            onClick={scrollToWarnings}
+            title="Xem chi tiết cảnh báo"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-[#FF3131] text-[20px]">notification_important</span>
+              <span className="text-xs text-[#454652] font-medium">Cảnh báo</span>
+            </div>
+            <div className="font-headline text-2xl font-bold text-[#FF3131]">{warningCount}</div>
+            <div className="text-xs text-[#767683] mt-1">
+              {geoStatus.outOfRange.length} ngoài vùng · {lateCount} đi trễ
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="material-symbols-outlined text-green-600 text-[20px]">verified</span>
+              <span className="text-xs text-[#454652] font-medium">Cảnh báo</span>
+            </div>
+            <div className="font-headline text-2xl font-bold text-green-600">0</div>
+            <div className="text-xs text-[#767683] mt-1">Không có vi phạm hôm nay</div>
+          </div>
+        )}
       </div>
 
-      {/* Geofence — employees out of office range */}
-      <div className={`bg-white border rounded-2xl p-5 mb-6 shadow-sm ${
-        geoStatus.outOfRange.length > 0 ? 'border-[#FF3131]/40' : 'border-[#c6c5d4]/60'
+      {/* Geofence — compact single-line status when all is well (no news is
+          not news, it's noise); full alert UI only when someone is out of
+          range. The audit trail stays reachable via the expander. */}
+      <div id="geofence-block" className={`bg-white border rounded-2xl mb-6 shadow-sm ${
+        geoAlertActive ? 'border-[#FF3131]/40 p-5' : 'border-[#c6c5d4]/60 p-3'
       }`}>
-        <div className="flex items-center justify-between mb-4">
+        <div className={`flex items-center justify-between ${geoAlertActive ? 'mb-4' : ''}`}>
           <div>
-            <h3 className="font-headline font-bold text-[#1b1b21] text-base">Ngoài phạm vi làm việc</h3>
-            <p className="text-xs text-[#767683] mt-0.5">Nhân viên cách văn phòng hơn {GEOFENCE.alertRadiusM}m sau khi check-in</p>
+            <h3 className={`font-headline font-bold text-[#1b1b21] ${geoAlertActive ? 'text-base' : 'text-sm'}`}>
+              {geoAlertActive ? 'Ngoài phạm vi làm việc' : 'Phạm vi làm việc: tất cả OK'}
+            </h3>
+            {geoAlertActive && (
+              <p className="text-xs text-[#767683] mt-0.5">Nhân viên cách văn phòng hơn {GEOFENCE.alertRadiusM}m sau khi check-in</p>
+            )}
           </div>
-          <span className={`material-symbols-outlined text-[22px] ${
-            geoStatus.outOfRange.length > 0 ? 'text-[#FF3131]' : 'text-[#000666]'
-          }`}>
-            location_off
-          </span>
+          {geoAlertActive ? (
+            <span className="material-symbols-outlined text-[22px] text-[#FF3131]">location_off</span>
+          ) : (
+            <button
+              onClick={() => setGeoExpanded(v => !v)}
+              title={geoExpanded ? 'Thu gọn' : 'Xem chi tiết và lịch sử cảnh báo'}
+              className="flex-shrink-0 w-8 h-8 rounded-lg bg-[#f9f8fc] border border-[#c6c5d4]/60 flex items-center justify-center text-[#454652] hover:bg-[#f0eef5] transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]">{geoExpanded ? 'expand_less' : 'expand_more'}</span>
+            </button>
+          )}
         </div>
 
-        {geoStatus.outOfRange.length > 0 ? (
-          <div className="space-y-2 mb-4">
+        {geoAlertActive && (
+          <div id="out-of-range-list" className="space-y-2 mb-4">
             {geoStatus.outOfRange.map(entry => (
               <div key={entry.employeeId} className="flex items-center gap-3 p-3 bg-[#FF3131]/5 border border-[#FF3131]/20 rounded-xl">
                 <div className="w-9 h-9 rounded-full overflow-hidden border border-[#FF3131]/30 flex-shrink-0">
@@ -262,12 +354,14 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-xs text-[#767683] mb-4">Tất cả nhân viên đang làm việc đều trong phạm vi văn phòng.</p>
+        )}
+
+        {!geoAlertActive && geoExpanded && (
+          <p className="text-xs text-[#767683] mb-3">Tất cả nhân viên đang làm việc đều trong phạm vi văn phòng (≤ {GEOFENCE.alertRadiusM}m).</p>
         )}
 
         {/* Audit trail */}
-        {geoStatus.recentEvents.length > 0 && (
+        {(geoAlertActive || geoExpanded) && geoStatus.recentEvents.length > 0 && (
           <div className="border-t border-[#e6e4ee] pt-3">
             <p className="text-[10px] font-semibold text-[#767683] uppercase tracking-wider mb-2">Lịch sử cảnh báo</p>
             <div className="space-y-1.5">
@@ -288,7 +382,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
       </div>
 
       {/* Employee Check-in Status */}
-      <div className="bg-white border border-[#c6c5d4]/60 rounded-2xl p-5 mb-6 shadow-sm">
+      <div id="employee-status-block" className="bg-white border border-[#c6c5d4]/60 rounded-2xl p-5 mb-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-headline font-bold text-[#1b1b21] text-base">Trạng thái nhân viên hôm nay</h3>

@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import type * as FaceApiNamespace from 'face-api.js';
+import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { CheckInRecord, CheckInMethod } from '../types';
 import {
   getCurrentPosition,
@@ -9,512 +8,174 @@ import {
   getCheckInMethodLabel,
   getCheckInMethodColor,
 } from '../utils/checkin';
-import { loadFaceApiModels } from '../utils/faceApiModel';
-import { safeParse, writeStoredValue } from '../hooks/usePersistentState';
 import { compressImage, generatePhotoHash } from '../utils/imageCompress';
-import { generateShiftPin, validateShiftPin, getCurrentShiftType } from '../utils/auth';
+import { validateShiftPin, getCurrentShiftType } from '../utils/auth';
 import { validateWifiConnection, IpCheckResult, OFFICE_WIFI_NAME } from '../utils/ipCheck';
+import { resolveAttendanceGate } from '../utils/attendanceGate';
+import { makeAttendanceStore } from '../utils/attendanceStore';
 import {
-  STORAGE_KEY_CHECKIN_SESSION,
-  STORAGE_KEY_ATTENDANCE_RECORDS,
-  DEFAULT_STORE,
-  OFFICE_WIFI,
-} from '../utils/constants';
+  attendanceFlowReducer,
+  attendanceSessionReducer,
+  deriveInitialSessionState,
+  initialPinState,
+  pinReducer,
+  sanitizePinInput,
+  shouldLockPin,
+  toWifiSnapshot,
+  WifiSnapshot,
+} from '../utils/attendanceFlow';
+import { DEFAULT_STORE, OFFICE_WIFI } from '../utils/constants';
+import { useCurrentLocation } from '../hooks/useCurrentLocation';
+import { useCameraPermission } from '../hooks/useCameraPermission';
+import SmileDetector from './SmileDetector';
 
 interface CheckInCheckOutProps {
   employeeId: string;
   onCheckIn: (record: CheckInRecord) => void;
 }
 
-type ModalView = 'idle' | 'permission' | 'camera' | 'review' | 'success' | 'fail' | 'fallback-select' | 'gps' | 'pin';
 type ActionType = 'checkin' | 'checkout';
 
-const SmileDetector: React.FC<{
-  onDetected: () => void;
-  onManualCapture?: () => void;
-  onCameraError?: (error: string) => void;
-}> = ({ onDetected, onManualCapture, onCameraError }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const animFrameRef = useRef<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [smileScore, setSmileScore] = useState(0);
-  const [faceDetected, setFaceDetected] = useState(false);
-  const detectedRef = useRef(false);
-
+/** Ticking clock shared by the header, the elapsed timers and records. */
+function useNow(intervalMs = 1000): Date {
+  const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    let mounted = true;
-    const start = async () => {
-      try {
-        // FIX: Use singleton model loader instead of loading 6MB models every mount
-        // This ensures models are loaded only once and cached in memory.
-        // The faceapi namespace is typed via FaceApiNamespace (type-only import,
-        // erased at build) and fetched at runtime here — first camera open.
-        const modelsLoaded = await loadFaceApiModels();
-        const faceapi: typeof FaceApiNamespace = await import('face-api.js');
-        if (!modelsLoaded) {
-          throw new Error('Không thể tải model nhận diện khuôn mặt');
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
-        });
-
-        if (!mounted) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        streamRef.current = stream;
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-        }
-
-        setLoading(false);
-
-        const detect = async () => {
-          if (!videoRef.current || !canvasRef.current || !mounted || detectedRef.current) return;
-          const video = videoRef.current;
-          if (video.readyState < 2) {
-            animFrameRef.current = requestAnimationFrame(detect);
-            return;
-          }
-
-          try {
-            const detections = await faceapi
-              .detectAllFaces(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
-              .withFaceExpressions();
-
-            if (!mounted) return;
-
-            if (detections.length > 0) {
-              setFaceDetected(true);
-              const happy = detections[0].expressions.happy;
-              setSmileScore(happy);
-
-              if (happy >= 0.5 && !detectedRef.current) {
-                detectedRef.current = true;
-                onDetected();
-                return;
-              }
-            } else {
-              setFaceDetected(false);
-              setSmileScore(0);
-            }
-          } catch {
-            // Silently continue
-          }
-
-          if (mounted && !detectedRef.current) {
-            animFrameRef.current = requestAnimationFrame(detect);
-          }
-        };
-
-        animFrameRef.current = requestAnimationFrame(detect);
-      } catch (err: any) {
-        if (mounted) {
-          const errorMsg = err?.message || 'Không thể truy cập camera';
-          setError(errorMsg);
-          onCameraError?.(errorMsg);
-        }
-      }
-    };
-
-    start();
-
-    return () => {
-      mounted = false;
-      cancelAnimationFrame(animFrameRef.current);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-    };
-  }, [onDetected, onCameraError]);
-
-  const smilePct = Math.min(Math.round(smileScore * 100), 100);
-
-  const handleManualCapture = () => {
-    if (!videoRef.current || !onManualCapture) return;
-    detectedRef.current = true;
-    onManualCapture();
-  };
-
-  return (
-    <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden">
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover"
-        style={{ transform: 'scaleX(-1)' }}
-      />
-      <canvas ref={canvasRef} className="hidden" />
-
-      {/* Smile progress ring */}
-      <div className="absolute top-3 right-3 w-16 h-16">
-        <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            fill="none"
-            stroke="rgba(255,255,255,0.3)"
-            strokeWidth="3"
-          />
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            fill="none"
-            stroke={smileScore >= 0.5 ? '#22c55e' : smileScore >= 0.3 ? '#eab308' : '#ef4444'}
-            strokeWidth="3"
-            strokeDasharray={`${smilePct}, 100`}
-            className="transition-all duration-300"
-          />
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-white text-[10px] font-bold">{smilePct}%</span>
-        </div>
-      </div>
-
-      {/* Loading overlay */}
-      {loading && (
-        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3 z-10">
-          <div className="w-10 h-10 border-3 border-white/20 border-t-white rounded-full animate-spin" />
-          <p className="text-white text-sm font-medium">Đang tải AI model...</p>
-        </div>
-      )}
-
-      {/* Error */}
-      {error && (
-        <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-10">
-          <div className="bg-white rounded-xl p-4 max-w-xs text-center">
-            <span className="material-symbols-outlined text-4xl text-red-500">error</span>
-            <p className="text-sm text-gray-600 mt-2">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Face guide & status */}
-      {!loading && !error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10">
-          <div
-            className={`w-36 h-44 rounded-full border-2 border-dashed transition-colors duration-300 mb-4 ${
-              faceDetected
-                ? smileScore >= 0.5
-                  ? 'border-green-400'
-                  : 'border-yellow-400'
-                : 'border-white/60'
-            }`}
-          />
-          <div className="bg-black/50 backdrop-blur-sm rounded-full px-4 py-2">
-            {!faceDetected ? (
-              <span className="text-white text-sm font-medium">Đặt khuôn mặt vào vòng tròn</span>
-            ) : smileScore < 0.3 ? (
-              <span className="text-white text-sm font-medium">😠 Hãy cười lên nào!</span>
-            ) : smileScore < 0.5 ? (
-              <span className="text-yellow-300 text-sm font-medium">😊 Cười nhiều hơn nữa!</span>
-            ) : (
-              <span className="text-green-300 text-sm font-bold">😄 Tuyệt vời! Đang chụp...</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Smile threshold bar */}
-      {!loading && !error && (
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-3 z-10">
-          <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                smileScore >= 0.5 ? 'bg-green-400' : smileScore >= 0.3 ? 'bg-yellow-400' : 'bg-red-400'
-              }`}
-              style={{ width: `${smilePct}%` }}
-            />
-          </div>
-          <p className="text-white text-[10px] text-center mt-1 opacity-80">Mức nụ cười tối thiểu: 50%</p>
-        </div>
-      )}
-
-      {/* Manual Capture Button */}
-      {!loading && !error && onManualCapture && (
-        <div className="absolute bottom-14 left-0 right-0 flex justify-center z-20">
-          <button
-            onClick={handleManualCapture}
-            className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-100"
-          >
-            <span className="material-symbols-outlined text-[#0F1E44] text-3xl">photo_camera</span>
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const STORAGE_KEY_CHECKIN = STORAGE_KEY_CHECKIN_SESSION;
-
-interface CheckInSession {
-  employeeId: string;
-  hasCheckedIn: boolean;
-  checkInTime: string;
-  checkInTimestamp: number;
-  checkInMethod: CheckInMethod;
-  address: string;
+    const timer = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
 }
 
+const formatTime = (d: Date) =>
+  d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+
+const formatDate = (d: Date) =>
+  d.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+const formatElapsed = (startTimestamp: number, nowMs: number): string => {
+  const diff = Math.floor((nowMs - startTimestamp) / 1000);
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  const s = diff % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
+
+const formatElapsedVerbose = (startTimestamp: number, nowMs: number): string => {
+  const diff = Math.floor((nowMs - startTimestamp) / 1000);
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  const s = diff % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h} giờ`);
+  if (m > 0) parts.push(`${m} phút`);
+  if (s > 0 || parts.length === 0) parts.push(`${s} giây`);
+  return parts.join(' ');
+};
+
+/**
+ * CheckInCheckOut — presentation only.
+ *
+ * All state transitions live in `attendanceFlow.ts` (pure reducers, unit
+ * tested in scripts/test-attendance.ts); persistence lives in
+ * `attendanceStore.ts`; the gating rules live in `attendanceGate.ts`. This
+ * component is the event→dispatch wiring plus JSX. If you are adding a
+ * business rule, it does NOT belong here.
+ */
 const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn }) => {
-  const [now, setNow] = useState(new Date());
-  const [address, setAddress] = useState('Đang lấy vị trí...');
-  const [locationReady, setLocationReady] = useState(false);
-  const [gpsCoords, setGpsCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [view, setView] = useState<ModalView>('idle');
-  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
-  const [record, setRecord] = useState<CheckInRecord | null>(null);
+  // Persistence is delegated to the dedicated module (see attendanceStore.ts):
+  // the component no longer knows the storage keys or the record-map shape.
+  const attendance = useMemo(() => makeAttendanceStore(localStorage), []);
+
+  // ── Reducers (the only state owners) ────────────────────────────────────
+  const [flow, dispatchFlow] = useReducer(attendanceFlowReducer, { view: 'idle' });
+  const [session, dispatchSession] = useReducer(
+    attendanceSessionReducer,
+    undefined,
+    () => deriveInitialSessionState(attendance.readActiveSession(employeeId))
+  );
+  const [pin, dispatchPin] = useReducer(pinReducer, initialPinState);
+
+  // ── Presentation-only leftovers ─────────────────────────────────────────
   const [actionType, setActionType] = useState<ActionType>('checkin');
-
-  // Restored from localStorage (parse-safe: one corrupted key can't crash the render)
-  const readSession = (): CheckInSession | null => {
-    const session = safeParse<CheckInSession | null>(STORAGE_KEY_CHECKIN, null);
-    return session && session.employeeId === employeeId && session.hasCheckedIn ? session : null;
-  };
-  const [hasCheckedIn, setHasCheckedIn] = useState(() => readSession() !== null);
-  const [checkInTime, setCheckInTime] = useState<string | null>(() => readSession()?.checkInTime ?? null);
-  const [checkInTimestamp, setCheckInTimestamp] = useState<number | null>(() => readSession()?.checkInTimestamp ?? null);
-  const [checkInMethod, setCheckInMethod] = useState<CheckInMethod | null>(() => readSession()?.checkInMethod ?? null);
-  const [workHoursSummary, setWorkHoursSummary] = useState<{ hours: string; duration: string } | null>(null);
-  const [permissionDeniedMsg, setPermissionDeniedMsg] = useState<string | null>(null);
-
-  // Fallback state
   const [cameraRetryCount, setCameraRetryCount] = useState(0);
-  const [cameraError, setCameraError] = useState('');
-  const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [gpsError, setGpsError] = useState('');
-  const [gpsDistance, setGpsDistance] = useState<number | null>(null);
-  const [pinInput, setPinInput] = useState('');
-  const [pinError, setPinError] = useState('');
-  const [pinAttempts, setPinAttempts] = useState(0);
-  const [pinLocked, setPinLocked] = useState(false);
-  const [pinLockTimer, setPinLockTimer] = useState(0);
+  const now = useNow();
+  const location = useCurrentLocation();
+  const camera = useCameraPermission();
+  const address = location.address || 'Đang lấy vị trí...';
 
-  // WiFi IP Check state
-  const [wifiCheckResult, setWifiCheckResult] = useState<IpCheckResult | null>(null);
-  const [wifiCheckLoading, setWifiCheckLoading] = useState(false);
-
-  // GPS gate state (blocks check-in when GPS fails or employee is out of office radius)
-  const [gpsBlockError, setGpsBlockError] = useState<{
-    kind: 'error' | 'too_far';
-    message: string;
-    distance?: number;
-  } | null>(null);
-
-  // Real-time clock
+  // PIN lock countdown — timer is a component concern; the transition rules
+  // (lock at 3 wrong attempts, unlock at 0) live in pinReducer.
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 1000);
+    if (!pin.locked) return;
+    const timer = setInterval(() => dispatchPin({ type: 'tick' }), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [pin.locked]);
 
-  // PIN lock timer
-  useEffect(() => {
-    if (pinLocked && pinLockTimer > 0) {
-      const timer = setInterval(() => {
-        setPinLockTimer((prev) => {
-          if (prev <= 1) {
-            setPinLocked(false);
-            setPinAttempts(0);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [pinLocked, pinLockTimer]);
+  // ── Capture → record (compression + hash + persistence via reducer) ────
+  const commitRecord = useCallback(
+    async (method: CheckInMethod, photo: string = '', loc?: any, pinAttempt?: number, fallbackReason?: string) => {
+      const ts = new Date();
+      const timestamp = ts.getTime();
 
-  // Geolocation
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setAddress('Thiết bị không hỗ trợ định vị');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        setGpsCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
+      let compressedPhoto = photo;
+      let photoHash = '';
+      if (photo && method === 'photo') {
         try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=vi`
-          );
-          const data = await res.json();
-          const display =
-            data?.display_name?.split(',').slice(0, 3).join(',') ||
-            `${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`;
-          setAddress(display);
-        } catch {
-          setAddress(`${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}`);
+          compressedPhoto = await compressImage(photo);
+          photoHash = await generatePhotoHash(photo);
+        } catch (err) {
+          console.warn('Image compression failed, using original:', err);
         }
-        setLocationReady(true);
-      },
-      () => {
-        setAddress('Không thể lấy vị trí');
-        setLocationReady(true);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  }, []);
-
-  const formatTime = (d: Date) =>
-    d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-  const captureCurrentFrame = useCallback(() => {
-    const video = document.querySelector('#smile-video video') as HTMLVideoElement;
-    if (!video) {
-      const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 480;
-      const ctx = canvas.getContext('2d')!;
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(0, 0, 640, 480);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '24px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('📸 Smile Detected!', 320, 240);
-      setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.8));
-    } else {
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0);
-      setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.8));
-    }
-    setTimeout(() => setView('review'), 500);
-  }, []);
-
-  const handleSmileDetected = useCallback(() => {
-    captureCurrentFrame();
-  }, [captureCurrentFrame]);
-
-  const handleManualCapture = useCallback(() => {
-    captureCurrentFrame();
-  }, [captureCurrentFrame]);
-
-  // Camera error handler
-  const handleCameraError = useCallback((error: string) => {
-    setCameraError(error);
-    setCameraRetryCount((prev) => prev + 1);
-  }, []);
-
-  // CRITICAL FIX: Unified createRecord that:
-  // 1. Compresses images to <30KB to prevent localStorage overflow
-  // 2. Writes to BOTH session store AND attendance records store
-  //    (previously ManagerDashboard read from a different key than CheckInCheckOut wrote to)
-  // 3. Generates photo hash for deduplication (anti-fraud)
-  const createRecord = async (method: CheckInMethod, photo: string = '', location?: any, pinAttempt?: number, fallbackReason?: string) => {
-    const now = new Date();
-    const timestamp = now.getTime();
-
-    // FIX: Compress image before storing to prevent localStorage overflow
-    // Original ~500KB per image → compressed to <30KB
-    let compressedPhoto = photo;
-    let photoHash = '';
-    if (photo && method === 'photo') {
-      try {
-        compressedPhoto = await compressImage(photo);
-        photoHash = await generatePhotoHash(photo);
-      } catch (err) {
-        console.warn('Image compression failed, using original:', err);
       }
-    }
 
-    const newRecord: CheckInRecord = {
-      id: `checkin-${Date.now()}`,
-      type: actionType,
-      time: formatTime(now),
-      address,
-      photo: compressedPhoto,  // COMPRESSED image (<30KB)
-      smileDetected: method === 'photo',
-      timestamp,
-      checkInMethod: method,
-      location,
-      pinAttempt,
-      fallbackReason,
-    };
-    setRecord(newRecord);
-    setCheckInMethod(method);
-    setView('success');
-    onCheckIn(newRecord);
-
-    // Persist check-in session to localStorage (for current employee UI state)
-    if (actionType === 'checkin') {
-      setHasCheckedIn(true);
-      setCheckInTime(formatTime(now));
-      setCheckInTimestamp(timestamp);
-      const session: CheckInSession = {
-        employeeId,
-        hasCheckedIn: true,
-        checkInTime: formatTime(now),
-        checkInTimestamp: timestamp,
-        checkInMethod: method,
+      const newRecord: CheckInRecord = {
+        id: `checkin-${Date.now()}`,
+        type: actionType,
+        time: formatTime(ts),
         address,
+        photo: compressedPhoto, // COMPRESSED image (<30KB)
+        smileDetected: method === 'photo',
+        timestamp,
+        checkInMethod: method,
+        location: loc,
+        pinAttempt,
+        fallbackReason,
       };
-      localStorage.setItem(STORAGE_KEY_CHECKIN, JSON.stringify(session));
-    } else {
-      // Calculate work hours
-      if (checkInTimestamp) {
-        const diffMs = timestamp - checkInTimestamp;
-        const diffHours = diffMs / (1000 * 60 * 60);
-        const hours = Math.floor(diffHours);
-        const minutes = Math.floor((diffHours - hours) * 60);
-        setWorkHoursSummary({
-          hours: diffHours.toFixed(1),
-          duration: hours > 0 ? `${hours} tiếng ${minutes} phút` : `${minutes} phút`,
+
+      // Persistence happens HERE — once per user action, not inside the
+      // reducer (React may double-invoke reducers in dev/StrictMode; storage
+      // writes there would double-append records).
+      if (actionType === 'checkin') {
+        attendance.saveActiveSession({
+          employeeId,
+          hasCheckedIn: true,
+          checkInTime: newRecord.time,
+          checkInTimestamp: newRecord.timestamp,
+          checkInMethod: method,
+          address: newRecord.address,
         });
+      } else {
+        attendance.clearActiveSession();
       }
-      setHasCheckedIn(false);
-      setCheckInTime(null);
-      setCheckInTimestamp(null);
-      localStorage.removeItem(STORAGE_KEY_CHECKIN);
-    }
+      attendance.appendEmployeeRecord(employeeId, newRecord);
 
-    // CRITICAL FIX: Also write to attendance records store
-    // This is what ManagerDashboard reads from — previously this was MISSING
-    // causing Manager Dashboard to never show check-in data
-    {
-      const allRecords = safeParse<Record<string, CheckInRecord[]>>(STORAGE_KEY_ATTENDANCE_RECORDS, {});
-      if (!allRecords[employeeId]) {
-        allRecords[employeeId] = [];
-      }
-      allRecords[employeeId].push(newRecord);
-      writeStoredValue(STORAGE_KEY_ATTENDANCE_RECORDS, allRecords);
-    }
-  };
+      // Render-state mirror of the same transition (pure reducer).
+      dispatchSession({ type: 'attendance-captured', capture: { type: actionType, method, record: newRecord } });
+      onCheckIn(newRecord);
+    },
+    [actionType, address, onCheckIn]
+  );
 
-  const handleConfirm = async () => {
-    await createRecord('photo', capturedPhoto || '');
-  };
-
-  // Wi-Fi + GPS validation before check-in/out — both checks run in PARALLEL.
-  // Wi-Fi gate: device must be on the office network (public IP / local subnet).
-  // GPS gate: device must be within the office radius — a valid Wi-Fi but a far
-  // GPS position suggests spoofed Wi-Fi / VPN and is rejected.
-  const handleCaptureClick = async (type: ActionType) => {
+  // ── Gate: Wi-Fi + GPS in parallel, decision in the pure gate ────────────
+  const runGateCheck = useCallback(async (type: ActionType) => {
     setActionType(type);
     setCameraRetryCount(0);
-    setCameraError('');
 
-    setWifiCheckLoading(true);
     const [wifiSettled, gpsSettled] = await Promise.allSettled([
       validateWifiConnection(),
       getCurrentPosition(),
     ]);
-    setWifiCheckLoading(false);
 
-    // ── Wi-Fi gate ──
     let wifiResult: IpCheckResult;
     if (wifiSettled.status === 'fulfilled') {
       wifiResult = wifiSettled.value;
@@ -528,85 +189,94 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         details: { publicIPValid: false, localIPValid: false },
       };
     }
-    setWifiCheckResult(wifiResult);
 
-    if (!wifiResult.isValid && !wifiResult.useFallback) {
-      // Wrong Wi-Fi and no fallback — the Wi-Fi error modal is shown
-      return; // Don't proceed to permission/camera
-    }
-    if (!wifiResult.isValid && wifiResult.useFallback) {
-      // Wi-Fi invalid but fallback enabled — show fallback selection
-      setView('fallback-select');
-      return;
-    }
-
-    // ── GPS gate (parallel with Wi-Fi, mandatory) ──
+    let gpsErrorMessage: string | null = null;
     if (gpsSettled.status === 'rejected') {
       const reason: any = gpsSettled.reason;
-      const message = typeof reason?.code === 'number'
+      gpsErrorMessage = typeof reason?.code === 'number'
         ? getLocationErrorMessage(reason as GeolocationPositionError)
         : (reason?.message || 'Không thể xác định vị trí GPS');
-      setGpsBlockError({ kind: 'error', message });
-      return;
-    }
-    const position = gpsSettled.value;
-    setGpsCoords({ lat: position.coords.latitude, lon: position.coords.longitude });
-    const distance = Math.round(getDistanceToOffice(position.coords.latitude, position.coords.longitude));
-    if (distance > DEFAULT_STORE.radius) {
-      // Correct Wi-Fi but far away — possible spoofed Wi-Fi / VPN
-      setGpsBlockError({
-        kind: 'too_far',
-        message: `Bạn đang cách văn phòng ${distance}m (giới hạn ${DEFAULT_STORE.radius}m). Wi-Fi hợp lệ nhưng vị trí GPS lệch xa — nghi ngờ giả mạo Wi-Fi hoặc dùng VPN. Vui lòng đến văn phòng để chấm công.`,
-        distance,
-      });
-      return;
     }
 
-    // Both gates passed — proceed to camera flow
-    setView('permission');
+    const gate = resolveAttendanceGate({
+      wifi: wifiResult,
+      gpsPosition: gpsSettled.status === 'fulfilled'
+        ? {
+            coords: {
+              latitude: gpsSettled.value.coords.latitude,
+              longitude: gpsSettled.value.coords.longitude,
+              accuracy: gpsSettled.value.coords.accuracy,
+            },
+          }
+        : null,
+      gpsErrorMessage,
+      officeRadiusMeters: DEFAULT_STORE.radius,
+      distanceToOffice: getDistanceToOffice,
+    });
+
+    const wifi: WifiSnapshot | null =
+      gate.verdict === 'wifi-invalid' ? toWifiSnapshot(wifiResult) : null;
+    dispatchFlow({
+      type: 'gate-verdict',
+      verdict:
+        gate.verdict === 'wifi-invalid'
+          ? 'wifi-blocked'
+          : gate.verdict === 'wifi-fallback'
+            ? 'fallback'
+            : gate.verdict,
+      message: 'message' in gate ? gate.message : undefined,
+      distance: 'distance' in gate ? gate.distance : undefined,
+      wifi,
+    });
+  }, []);
+
+  const handleCaptureClick = (type: ActionType) => {
+    dispatchFlow({ type: 'attempt', action: type });
+    runGateCheck(type);
   };
 
-  const handleGpsRetry = () => {
-    setGpsBlockError(null);
-    handleCaptureClick(actionType);
-  };
+  // ── Camera frame capture (presentation-level glue) ──────────────────────
+  const captureCurrentFrame = useCallback(() => {
+    const video = document.querySelector('#smile-video video') as HTMLVideoElement;
+    let photo: string;
+    if (!video) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 640;
+      canvas.height = 480;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(0, 0, 640, 480);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '24px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('📸 Smile Detected!', 320, 240);
+      photo = canvas.toDataURL('image/jpeg', 0.8);
+    } else {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      photo = canvas.toDataURL('image/jpeg', 0.8);
+    }
+    setTimeout(() => dispatchFlow({ type: 'smile-captured', photo }), 500);
+  }, []);
 
   const handlePermissionAllow = async () => {
-    setPermissionDeniedMsg(null);
-    try {
-      // Actually request camera permission via browser API
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // Got permission — stop the stream and open our camera modal
-      stream.getTracks().forEach((t) => t.stop());
-      setView('camera');
-    } catch (err) {
+    // Real getUserMedia probe lives in the hook (reusable, testable seam).
+    const result = await camera.probe();
+    if (result === 'granted') {
+      dispatchFlow({ type: 'camera-allowed' });
+    } else {
       // Permission denied or camera unavailable
-      setPermissionDeniedMsg(
-        err?.name === 'NotAllowedError'
-          ? 'Bạn đã từ chối quyền camera. Vui lòng chọn phương án dự phòng.'
-          : 'Camera không khả dụng. Vui lòng chọn phương án dự phòng.'
-      );
       setCameraRetryCount((prev) => prev + 1);
-      setView('fallback-select');
+      dispatchFlow({ type: 'camera-denied' });
     }
   };
 
-  const handlePermissionDeny = () => {
-    setPermissionDeniedMsg(null);
-    setView('fallback-select');
-  };
-
-  // Camera failed - show fallback
-  const handleCameraFailed = () => {
-    setView('fallback-select');
-  };
-
-  // GPS Check-in
+  // ── Fallback: GPS locate ─────────────────────────────────────────────────
   const handleGPSCheckIn = async () => {
-    setView('gps');
-    setGpsStatus('loading');
-    setGpsError('');
-
+    dispatchFlow({ type: 'fallback-gps' });
     try {
       const position = await getCurrentPosition();
       const { within, distance } = isWithinStoreRadius(
@@ -614,12 +284,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         position.coords.longitude
       );
 
-      setGpsDistance(distance);
-
       if (within) {
-        setGpsStatus('success');
+        dispatchFlow({ type: 'gps-locate-phase', phase: 'success', distance });
+        // Keep the 1.5s "Điểm danh thành công" beat before the success modal.
         setTimeout(async () => {
-          await createRecord(
+          await commitRecord(
             'gps',
             '',
             {
@@ -629,92 +298,55 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               distanceFromStore: distance,
             },
             undefined,
-            cameraError || 'user_choice'
+            'user_choice'
           );
+          dispatchFlow({ type: 'confirmed' });
         }, 1500);
       } else {
-        setGpsStatus('error');
-        setGpsError(`Bạn đang cách cửa hàng ${distance}m. Vui lòng đến trong phạm vi 100m.`);
+        dispatchFlow({
+          type: 'gps-locate-phase',
+          phase: 'error',
+          message: `Bạn đang cách cửa hàng ${distance}m. Vui lòng đến trong phạm vi 100m.`,
+        });
       }
     } catch (err: any) {
-      setGpsStatus('error');
-      setGpsError(getLocationErrorMessage(err));
+      dispatchFlow({ type: 'gps-locate-phase', phase: 'error', message: getLocationErrorMessage(err) });
     }
   };
 
-  // PIN Check-in
-  const handlePinCheckIn = () => {
-    setView('pin');
-    setPinInput('');
-    setPinError('');
-  };
-
+  // ── Fallback: PIN ────────────────────────────────────────────────────────
   const handlePinSubmit = async () => {
-    if (pinLocked) return;
+    if (pin.locked) return;
 
     const today = new Date().toISOString().split('T')[0];
     const shiftType = getCurrentShiftType();
-    const isValid = validateShiftPin(pinInput, today, shiftType);
+    const isValid = validateShiftPin(flow.view === 'pin' ? flow.input : '', today, shiftType);
 
     if (isValid) {
-      await createRecord('pin', '', undefined, pinAttempts + 1, cameraError || 'user_choice');
-    } else {
-      const newAttempts = pinAttempts + 1;
-      setPinAttempts(newAttempts);
-      setPinError('Mã PIN không đúng. Vui lòng thử lại.');
+      await commitRecord('pin', '', undefined, pin.attempts + 1, 'user_choice');
+      dispatchFlow({ type: 'confirmed' });
+      return;
+    }
 
-      if (newAttempts >= 3) {
-        setPinLocked(true);
-        setPinLockTimer(300); // 5 minutes
-        setPinError('Đã nhập sai 3 lần. Vui lòng thử lại sau 5 phút.');
-      }
+    dispatchPin({ type: 'wrong-attempt' });
+    if (shouldLockPin(pin.attempts + 1)) {
+      dispatchPin({ type: 'lock' });
+      dispatchFlow({ type: 'pin-error', message: 'Đã nhập sai 3 lần. Vui lòng thử lại sau 5 phút.' });
+    } else {
+      dispatchFlow({ type: 'pin-error', message: 'Mã PIN không đúng. Vui lòng thử lại.' });
     }
   };
 
-  const handleRetake = () => {
-    setCapturedPhoto(null);
-    setView('camera');
-  };
-
-  const handleClose = () => {
-    setView('idle');
-    setCapturedPhoto(null);
-    setRecord(null);
+  const onClose = () => {
+    dispatchFlow({ type: 'close' });
+    dispatchPin({ type: 'reset' });
     setCameraRetryCount(0);
-    setCameraError('');
-    setGpsStatus('idle');
-    setGpsError('');
-    setGpsDistance(null);
-    setPinInput('');
-    setPinError('');
-    setWorkHoursSummary(null);
-    setPermissionDeniedMsg(null);
-    setWifiCheckResult(null);
-    setGpsBlockError(null);
   };
 
-  const formatElapsed = (startTimestamp: number, nowMs: number): string => {
-    const diff = Math.floor((nowMs - startTimestamp) / 1000);
-    const h = Math.floor(diff / 3600);
-    const m = Math.floor((diff % 3600) / 60);
-    const s = diff % 60;
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
-
-  const formatElapsedVerbose = (startTimestamp: number, nowMs: number): string => {
-    const diff = Math.floor((nowMs - startTimestamp) / 1000);
-    const h = Math.floor(diff / 3600);
-    const m = Math.floor((diff % 3600) / 60);
-    const s = diff % 60;
-    const parts: string[] = [];
-    if (h > 0) parts.push(`${h} giờ`);
-    if (m > 0) parts.push(`${m} phút`);
-    if (s > 0 || parts.length === 0) parts.push(`${s} giây`);
-    return parts.join(' ');
-  };
-
-  const todayStr = new Date().toISOString().split('T')[0];
-  const currentPin = generateShiftPin(todayStr, getCurrentShiftType());
+  const busy = flow.view !== 'idle';
+  const capturedPhoto = flow.view === 'review' ? flow.photo : null;
+  const pinInput = flow.view === 'pin' ? flow.input : '';
+  const pinError = flow.view === 'pin' ? flow.error : null;
 
   return (
     <>
@@ -748,7 +380,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <p className="text-xs font-semibold text-[#7A829A] uppercase tracking-wide">Vị trí hiện tại</p>
               <p className="text-sm text-[#0F1E44] font-medium mt-0.5 truncate">{address}</p>
             </div>
-            {!locationReady && (
+            {!location.ready && (
               <div className="ml-auto mt-0.5">
                 <div className="w-4 h-4 border-2 border-[#EFC14B]/30 border-t-[#EFC14B] rounded-full animate-spin" />
               </div>
@@ -758,11 +390,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
         {/* Action */}
         <div className="px-5 py-4">
-          {!hasCheckedIn ? (
+          {session.status !== 'on' ? (
             <>
               <button
                 onClick={() => handleCaptureClick('checkin')}
-                disabled={view !== 'idle'}
+                disabled={busy}
                 className="w-full bg-[#0F1E44] text-white rounded-xl h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#1A2D5A] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[22px]">add_a_photo</span>
@@ -779,7 +411,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               {/* Show fallback button after 2 camera failures */}
               {cameraRetryCount >= 2 && (
                 <button
-                  onClick={handleCameraFailed}
+                  onClick={() => dispatchFlow({ type: 'open-fallback' })}
                   className="w-full mt-3 bg-[#FDF8EE] border border-[#E8DFD0] text-[#0F1E44] rounded-xl h-10 flex items-center justify-center gap-2 text-sm font-medium hover:bg-[#EFC14B]/10 transition-all"
                 >
                   <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
@@ -796,20 +428,20 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                     <span className="material-symbols-outlined text-[#4CAF72] text-xl">check_circle</span>
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm font-bold text-[#2E7D52]">Đã check-in lúc {checkInTime}</p>
+                    <p className="text-sm font-bold text-[#2E7D52]">Đã check-in lúc {session.checkInTime}</p>
                     <p className="text-[11px] text-[#4CAF72] flex items-center gap-1">
                       <span className="material-symbols-outlined text-[14px]">verified</span>
-                      {getCheckInMethodLabel(checkInMethod || 'photo')}
+                      {getCheckInMethodLabel(session.checkInMethod || 'photo')}
                     </p>
                   </div>
                 </div>
-                {checkInTimestamp && (
+                {session.checkInTimestamp && (
                   <div className="bg-white rounded-xl p-3 border border-[#4CAF72]/20">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold mb-0.5">Thời gian đang làm</p>
                         <p className="text-2xl font-heading font-bold text-[#2E7D52] tabular-nums tracking-tight">
-                          {formatElapsed(checkInTimestamp, now.getTime())}
+                          {formatElapsed(session.checkInTimestamp, now.getTime())}
                         </p>
                       </div>
                       <div className="w-10 h-10 bg-[#4CAF72]/10 rounded-full flex items-center justify-center">
@@ -817,12 +449,13 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                       </div>
                     </div>
                     <p className="text-[10px] text-[#4CAF72] mt-1 text-center">Đang trong ca làm việc</p>
+                    <p className="text-[10px] text-[#7A829A] mt-0.5 text-center">{formatElapsedVerbose(session.checkInTimestamp, now.getTime())}</p>
                   </div>
                 )}
               </div>
               <button
                 onClick={() => handleCaptureClick('checkout')}
-                disabled={view !== 'idle'}
+                disabled={busy}
                 className="w-full bg-[#FF3131] text-white rounded-xl h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#D42C2C] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[22px]">logout</span>
@@ -840,8 +473,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       </div>
 
-      {/* WiFi IP Check Error (shown when IP is invalid and no fallback) */}
-      {wifiCheckResult && !wifiCheckResult.isValid && !wifiCheckResult.useFallback && (
+      {/* Wi-Fi hard-block modal (state: wifi-blocked) */}
+      {flow.view === 'wifi-blocked' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#FF3131]/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -851,34 +484,34 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               Chưa kết nối Wi-Fi quán
             </h3>
             <p className="text-sm text-[#7A829A] text-center mb-4">
-              {wifiCheckResult.error || 'Bạn chưa kết nối với mạng Wi-Fi hợp lệ của quán.'}
+              {flow.message || 'Bạn chưa kết nối với mạng Wi-Fi hợp lệ của quán.'}
             </p>
-            
+
             {/* Show both IP types */}
             <div className="bg-[#F9F8FC] rounded-xl p-3 mb-4 space-y-2">
-              {wifiCheckResult.publicIP && (
+              {flow.wifi?.publicIP && (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Public IP</p>
-                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{wifiCheckResult.publicIP}</p>
+                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{flow.wifi.publicIP}</p>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    wifiCheckResult.details?.publicIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
+                    flow.wifi.publicIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
                   }`}>
-                    {wifiCheckResult.details?.publicIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
+                    {flow.wifi.publicIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
                   </span>
                 </div>
               )}
-              {wifiCheckResult.localIP && (
+              {flow.wifi?.localIP && (
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Local IP</p>
-                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{wifiCheckResult.localIP}</p>
+                    <p className="text-sm font-bold text-[#0F1E44] font-mono">{flow.wifi.localIP}</p>
                   </div>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    wifiCheckResult.details?.localIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
+                    flow.wifi.localIPValid ? 'bg-[#4CAF72]/20 text-[#4CAF72]' : 'bg-[#FF3131]/20 text-[#FF3131]'
                   }`}>
-                    {wifiCheckResult.details?.localIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
+                    {flow.wifi.localIPValid ? '✓ Hợp lệ' : '✗ Không hợp lệ'}
                   </span>
                 </div>
               )}
@@ -893,20 +526,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
             </div>
             <button
-              onClick={() => {
-                setWifiCheckResult(null);
-                handleCaptureClick(actionType);
-              }}
+              onClick={() => handleCaptureClick(actionType)}
               className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">refresh</span>
               Thử lại
             </button>
             <button
-              onClick={() => {
-                setWifiCheckResult(null);
-                setView('idle');
-              }}
+              onClick={onClose}
               className="w-full h-11 mt-2 text-[#7A829A] rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#F9F8FC] transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">close</span>
@@ -916,45 +543,41 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* GPS gate error (GPS failed or employee out of office radius while Wi-Fi is valid) */}
-      {gpsBlockError && !wifiCheckLoading && (
+      {/* GPS gate block modal (state: gps-unavailable | gps-too-far) */}
+      {(flow.view === 'gps-unavailable' || flow.view === 'gps-too-far') && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
-              gpsBlockError.kind === 'too_far' ? 'bg-[#EFC14B]/20' : 'bg-[#FF3131]/20'
+              flow.view === 'gps-too-far' ? 'bg-[#EFC14B]/20' : 'bg-[#FF3131]/20'
             }`}>
               <span className={`material-symbols-outlined text-3xl ${
-                gpsBlockError.kind === 'too_far' ? 'text-[#EFC14B]' : 'text-[#FF3131]'
+                flow.view === 'gps-too-far' ? 'text-[#EFC14B]' : 'text-[#FF3131]'
               }`}>
-                {gpsBlockError.kind === 'too_far' ? 'location_off' : 'gps_off'}
+                {flow.view === 'gps-too-far' ? 'location_off' : 'gps_off'}
               </span>
             </div>
             <h3 className="font-heading text-xl font-bold text-[#0F1E44] text-center mb-2">
-              {gpsBlockError.kind === 'too_far' ? 'Ngoài phạm vi văn phòng' : 'Không xác định được vị trí'}
+              {flow.view === 'gps-too-far' ? 'Ngoài phạm vi văn phòng' : 'Không xác định được vị trí'}
             </h3>
-            <p className="text-sm text-[#7A829A] text-center mb-4">{gpsBlockError.message}</p>
-            {gpsBlockError.distance !== undefined && (
+            <p className="text-sm text-[#7A829A] text-center mb-4">{flow.message}</p>
+            {flow.view === 'gps-too-far' && (
               <div className="bg-[#F9F8FC] rounded-xl p-3 mb-4 flex items-center justify-between">
                 <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Khoảng cách tới văn phòng</p>
-                <p className="text-sm font-bold text-[#FF3131] font-mono">{gpsBlockError.distance}m</p>
+                <p className="text-sm font-bold text-[#FF3131] font-mono">{flow.distance}m</p>
               </div>
             )}
             <p className="text-[11px] text-[#7A829A] text-center mb-4">
               Wi-Fi: <span className="font-bold text-[#0F1E44]">{OFFICE_WIFI_NAME}</span> đã được xác nhận — chỉ vị trí GPS chưa hợp lệ.
             </p>
             <button
-              onClick={handleGpsRetry}
+              onClick={() => handleCaptureClick(actionType)}
               className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">refresh</span>
               Thử lại
             </button>
             <button
-              onClick={() => {
-                setGpsBlockError(null);
-                setWifiCheckResult(null);
-                setView('idle');
-              }}
+              onClick={onClose}
               className="w-full h-11 mt-2 text-[#7A829A] rounded-xl font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#F9F8FC] transition-all cursor-pointer"
             >
               <span className="material-symbols-outlined text-lg">close</span>
@@ -964,8 +587,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* WiFi Check Loading Overlay */}
-      {wifiCheckLoading && (
+      {/* Gate checks loading overlay (state: checking) */}
+      {flow.view === 'checking' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -981,8 +604,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Permission Dialog */}
-      {view === 'permission' && (
+      {/* Permission Dialog (state: permission) */}
+      {flow.view === 'permission' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1010,15 +633,9 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
             </div>
 
-            {permissionDeniedMsg && (
-              <div className="bg-[#FF3131]/10 rounded-xl p-3 mb-4 flex items-start gap-2">
-                <span className="material-symbols-outlined text-[#FF3131] text-lg mt-0.5">warning</span>
-                <p className="text-xs text-[#FF3131] font-medium">{permissionDeniedMsg}</p>
-              </div>
-            )}
             <div className="flex gap-3">
               <button
-                onClick={handlePermissionDeny}
+                onClick={() => dispatchFlow({ type: 'camera-denied' })}
                 className="flex-1 h-12 rounded-xl border-2 border-[#E8DFD0] text-[#7A829A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#FDF8EE] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg">close</span>
@@ -1036,11 +653,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Camera Modal */}
-      {view === 'camera' && (
+      {/* Camera Modal (state: camera) */}
+      {flow.view === 'camera' && (
         <div className="fixed inset-0 z-50 flex flex-col bg-black">
           <div className="flex items-center justify-between px-4 py-3 bg-black">
-            <button onClick={handleClose} className="text-white p-1">
+            <button onClick={onClose} className="text-white p-1">
               <span className="material-symbols-outlined">close</span>
             </button>
             <p className="text-white text-sm font-semibold">{actionType === 'checkin' ? 'Check-in' : 'Check-out'} - Chụp ảnh nụ cười</p>
@@ -1051,9 +668,9 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <div className="w-full max-w-md">
               <div id="smile-video">
                 <SmileDetector
-                  onDetected={handleSmileDetected}
-                  onManualCapture={handleManualCapture}
-                  onCameraError={handleCameraError}
+                  onDetected={captureCurrentFrame}
+                  onManualCapture={captureCurrentFrame}
+                  onCameraError={() => setCameraRetryCount((prev) => prev + 1)}
                 />
               </div>
             </div>
@@ -1066,7 +683,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </div>
             {cameraRetryCount >= 1 && (
               <button
-                onClick={handleCameraFailed}
+                onClick={() => dispatchFlow({ type: 'open-fallback' })}
                 className="w-full py-2.5 bg-[#EFC14B] text-[#0F1E44] rounded-xl text-sm font-semibold"
               >
                 Dùng phương án dự phòng
@@ -1076,8 +693,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Fallback Selection Modal */}
-      {view === 'fallback-select' && (
+      {/* Fallback Selection Modal (state: fallback-select) */}
+      {flow.view === 'fallback-select' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1105,7 +722,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </button>
 
               <button
-                onClick={handlePinCheckIn}
+                onClick={() => dispatchFlow({ type: 'fallback-pin' })}
                 className="w-full p-4 bg-[#FDF8EE] border border-[#E8DFD0] rounded-xl flex items-center gap-3 hover:bg-[#EFC14B]/10 transition-all"
               >
                 <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
@@ -1119,7 +736,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </div>
 
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="w-full py-2.5 text-sm font-medium text-[#7A829A] hover:text-[#0F1E44]"
             >
               Quay lại
@@ -1128,11 +745,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* GPS Check-in Modal */}
-      {view === 'gps' && (
+      {/* GPS Check-in Modal (state: gps-locate) */}
+      {flow.view === 'gps-locate' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
-            {gpsStatus === 'loading' && (
+            {flow.phase === 'loading' && (
               <>
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <div className="w-10 h-10 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
@@ -1142,25 +759,25 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </>
             )}
 
-            {gpsStatus === 'success' && (
+            {flow.phase === 'success' && (
               <>
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="material-symbols-outlined text-green-600 text-3xl">check_circle</span>
                 </div>
                 <h3 className="font-heading text-lg font-bold text-green-700 mb-2">Điểm danh thành công!</h3>
-                <p className="text-sm text-[#7A829A]">📍 Xác nhận vị trí: {gpsDistance}m từ cửa hàng</p>
+                <p className="text-sm text-[#7A829A]">📍 Xác nhận vị trí: {flow.distance}m từ cửa hàng</p>
               </>
             )}
 
-            {gpsStatus === 'error' && (
+            {flow.phase === 'error' && (
               <>
                 <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="material-symbols-outlined text-red-500 text-3xl">error</span>
                 </div>
                 <h3 className="font-heading text-lg font-bold text-[#FF3131] mb-2">Không thể điểm danh</h3>
-                <p className="text-sm text-[#7A829A] mb-4">{gpsError}</p>
+                <p className="text-sm text-[#7A829A] mb-4">{flow.message}</p>
                 <button
-                  onClick={handleClose}
+                  onClick={onClose}
                   className="w-full py-2.5 bg-[#0F1E44] text-white rounded-xl text-sm font-semibold"
                 >
                   Đóng
@@ -1171,8 +788,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* PIN Check-in Modal */}
-      {view === 'pin' && (
+      {/* PIN Check-in Modal (state: pin) */}
+      {flow.view === 'pin' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1186,14 +803,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <input
               type="text"
               value={pinInput}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, '').slice(0, 6);
-                setPinInput(val);
-                setPinError('');
-              }}
+              onChange={(e) => dispatchFlow({ type: 'pin-typing', value: sanitizePinInput(e.target.value) })}
               placeholder="000000"
               className="w-full text-center text-2xl font-bold tracking-[0.3em] py-3 border border-[#E8DFD0] rounded-xl focus:border-[#EFC14B] outline-none mb-2"
-              disabled={pinLocked}
+              disabled={pin.locked}
               maxLength={6}
             />
 
@@ -1201,22 +814,22 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <p className="text-xs text-[#FF3131] text-center mb-3">{pinError}</p>
             )}
 
-            {pinLocked && (
+            {pin.locked && (
               <p className="text-xs text-[#7A829A] text-center mb-3">
-                Thử lại sau {Math.floor(pinLockTimer / 60)}:{(pinLockTimer % 60).toString().padStart(2, '0')}
+                Thử lại sau {Math.floor(pin.lockTimer / 60)}:{(pin.lockTimer % 60).toString().padStart(2, '0')}
               </p>
             )}
 
             <div className="flex gap-3">
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]"
               >
                 Hủy
               </button>
               <button
                 onClick={handlePinSubmit}
-                disabled={pinInput.length !== 6 || pinLocked}
+                disabled={pinInput.length !== 6 || pin.locked}
                 className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A] disabled:opacity-50"
               >
                 Xác nhận
@@ -1226,8 +839,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Review Modal */}
-      {view === 'review' && capturedPhoto && (
+      {/* Review Modal (state: review) */}
+      {flow.view === 'review' && capturedPhoto && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom">
             <div className="px-5 pt-5 pb-3">
@@ -1235,7 +848,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <h3 className="font-heading text-xl font-bold text-[#0F1E44]">
                   Xác nhận {actionType === 'checkin' ? 'check-in' : 'check-out'}
                 </h3>
-                <button onClick={handleClose} className="w-8 h-8 rounded-full bg-[#FDF8EE] flex items-center justify-center">
+                <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#FDF8EE] flex items-center justify-center">
                   <span className="material-symbols-outlined text-[#7A829A] text-xl">close</span>
                 </button>
               </div>
@@ -1270,14 +883,17 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
             <div className="px-5 pb-5 flex gap-3">
               <button
-                onClick={handleRetake}
+                onClick={() => dispatchFlow({ type: 'retake' })}
                 className="flex-1 h-12 rounded-xl border-2 border-[#E8DFD0] text-[#7A829A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#FDF8EE] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg">refresh</span>
                 Chụp lại
               </button>
               <button
-                onClick={handleConfirm}
+                onClick={async () => {
+                  await commitRecord('photo', capturedPhoto || '');
+                  dispatchFlow({ type: 'confirmed' });
+                }}
                 className="flex-1 h-12 rounded-xl bg-[#0F1E44] text-white font-semibold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg fill">check</span>
@@ -1288,8 +904,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Success Modal */}
-      {view === 'success' && record && (
+      {/* Success Modal (state: success) */}
+      {flow.view === 'success' && session.lastRecord && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1305,31 +921,31 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <div className="bg-[#FDF8EE] rounded-xl p-4 text-left space-y-2 mb-5">
               <div className="flex justify-between">
                 <span className="text-xs text-[#7A829A]">Thời gian {actionType === 'checkin' ? 'vào' : 'ra'} ca</span>
-                <span className="text-xs font-bold text-[#0F1E44]">{record.time}</span>
+                <span className="text-xs font-bold text-[#0F1E44]">{session.lastRecord.time}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-[#7A829A]">Phương thức</span>
-                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getCheckInMethodColor(record.checkInMethod)}`}>
-                  {getCheckInMethodLabel(record.checkInMethod)}
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${getCheckInMethodColor(session.lastRecord.checkInMethod)}`}>
+                  {getCheckInMethodLabel(session.lastRecord.checkInMethod)}
                 </span>
               </div>
-              {record.location && (
+              {session.lastRecord.location && (
                 <div className="flex justify-between">
                   <span className="text-xs text-[#7A829A]">Khoảng cách</span>
-                  <span className="text-xs font-bold text-[#0F1E44]">{record.location.distanceFromStore}m</span>
+                  <span className="text-xs font-bold text-[#0F1E44]">{session.lastRecord.location.distanceFromStore}m</span>
                 </div>
               )}
-              {actionType === 'checkout' && workHoursSummary && (
+              {actionType === 'checkout' && session.workHoursSummary && (
                 <>
-                  {checkInTime && (
+                  {session.checkInTime && (
                     <div className="flex justify-between">
                       <span className="text-xs text-[#7A829A]">Giờ vào</span>
-                      <span className="text-xs font-bold text-[#0F1E44]">{checkInTime}</span>
+                      <span className="text-xs font-bold text-[#0F1E44]">{session.checkInTime}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span className="text-xs text-[#7A829A]">Giờ ra</span>
-                    <span className="text-xs font-bold text-[#0F1E44]">{record.time}</span>
+                    <span className="text-xs font-bold text-[#0F1E44]">{session.lastRecord.time}</span>
                   </div>
                   <div className="bg-[#4CAF72]/10 border border-[#4CAF72]/30 rounded-lg p-3 mt-2">
                     <div className="flex items-center justify-between">
@@ -1338,8 +954,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                         <span className="text-xs font-bold text-[#2E7D52]">Tổng giờ làm</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-lg font-heading font-bold text-[#2E7D52]">{workHoursSummary.duration}</span>
-                        <span className="text-[10px] text-[#4CAF72] ml-1">({workHoursSummary.hours}h)</span>
+                        <span className="text-lg font-heading font-bold text-[#2E7D52]">{session.workHoursSummary.duration}</span>
+                        <span className="text-[10px] text-[#4CAF72] ml-1">({session.workHoursSummary.hours}h)</span>
                       </div>
                     </div>
                   </div>
@@ -1347,14 +963,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               )}
             </div>
 
-            {record.photo && (
+            {session.lastRecord.photo && (
               <div className="rounded-lg overflow-hidden border border-[#E8DFD0] mb-5">
-                <img src={record.photo} alt="Check-in" className="w-full aspect-video object-cover" style={{ transform: 'scaleX(-1)' }} />
+                <img src={session.lastRecord.photo} alt="Check-in" className="w-full aspect-video object-cover" style={{ transform: 'scaleX(-1)' }} />
               </div>
             )}
 
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="w-full h-12 rounded-xl bg-[#0F1E44] text-white font-semibold shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
             >
               Hoàn tất

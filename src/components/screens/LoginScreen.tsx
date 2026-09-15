@@ -369,6 +369,36 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
             </button>
           </form>
 
+          {/* Dev-only quick login — statically removed from production builds.
+              `import.meta.env.DEV` is replaced with `false` at build time by Vite,
+              so this JSX never ships; it exists purely to speed up manual testing
+              of both roles without typing credentials. */}
+          {import.meta.env.DEV && allUsers.length > 0 && (
+            <div className="pt-3 border-t border-dashed border-[#E8DFD0]/60 flex flex-col gap-2">
+              <p className="text-[10px] font-semibold text-[#7A829A] uppercase tracking-wide text-center">
+                Dev — Đăng nhập nhanh
+              </p>
+              <div className="flex flex-wrap gap-1.5 justify-center">
+                {[...allUsers]
+                  .sort((a, b) => (a.role === 'manager' ? -1 : 1) - (b.role === 'manager' ? -1 : 1))
+                  .map((u) => (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => {
+                        resetLoginThrottle();
+                        onLogin(u);
+                      }}
+                      className="px-2.5 py-1.5 rounded-full border border-[#E8DFD0] bg-white text-[11px] font-semibold text-[#0F1E44] hover:border-[#EFC14B] hover:bg-[#EFC14B]/10 transition-colors cursor-pointer"
+                      title={`${u.employeeCode} · ${u.role}`}
+                    >
+                      {u.role === 'manager' ? '★ ' : ''}{u.name.split(' ').slice(-2).join(' ')}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Footer */}
           <div className="pt-3 border-t border-[#E8DFD0]/40">
             <p className="text-[11px] text-[#7A829A] text-center mb-2">© 2025 AiiCafe — Where love brews and dreams grow</p>

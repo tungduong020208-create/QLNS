@@ -18,10 +18,31 @@ import {
   STORAGE_KEY_AUTH,
 } from '../utils/constants';
 import { usePersistentState } from './usePersistentState';
-import { createSession, clearSession } from '../utils/auth';
+import {
+  createSession,
+  clearSession,
+  isSessionValid,
+  refreshSession,
+  startSessionWatchdog,
+} from '../utils/auth';
 
 export function useAuth() {
   const [users, setUsers] = usePersistentState<User[]>(STORAGE_KEY_USERS, INITIAL_USERS);
+
+  // ── Startup recovery: wipe an EXPIRED session BEFORE any state reads storage.
+  // The auth flag (STORAGE_KEY_AUTH) is persist-only — it survives a reload even
+  // after the expiry timestamp has passed. Without this wipe, ProtectedRoute
+  // ("storage expired → go to /login") and GuestRoute ("flag still true → go
+  // back") trusted two different sources of truth and redirected against each
+  // other forever — the login↔dashboard loop observed on reload after 30 idle
+  // minutes. Running the cleanup at hook init keeps flag ↔ expiry consistent
+  // from the very first render. Idempotent under StrictMode double-render.
+  if (
+    localStorage.getItem(STORAGE_KEY_AUTH) === 'true' &&
+    !isSessionValid()
+  ) {
+    clearSession();
+  }
 
   // Restore session by id, resolved against the persisted user list
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -33,6 +54,42 @@ export function useAuth() {
   });
 
   const [isLoggedIn, setIsLoggedIn] = usePersistentState<boolean>(STORAGE_KEY_AUTH, false);
+
+  // ── Session watchdog + interaction-driven renewal.
+  // Expiry is now ENFORCED (interval) instead of only being noticed when the
+  // user happens to navigate. Renewal happens on real activity (click, keys,
+  // scroll, touch — throttled to once per minute) so an idle tab actually ages
+  // out and gets logged out, while an active one keeps its window sliding.
+  // That is the entire point of a sliding window; without the interaction
+  // requirement it would never expire for anyone.
+  useEffect(() => {
+    const stop = startSessionWatchdog(() => {
+      clearSession();
+      setIsLoggedIn(false);
+      setCurrentUser(null);
+      // Redirect is handled by routing itself: with isLoggedIn=false the
+      // ProtectedRoute navigates to /login (and GuestRoute stops bouncing
+      // because both now agree on the same truth).
+    });
+
+    let lastRenew = 0;
+    const RENEW_THROTTLE_MS = 60 * 1000;
+    const onActivity = () => {
+      if (!isSessionValid()) return;
+      const now = Date.now();
+      if (now - lastRenew < RENEW_THROTTLE_MS) return;
+      lastRenew = now;
+      refreshSession();
+    };
+
+    const events: (keyof WindowEventMap)[] = ['click', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }));
+
+    return () => {
+      stop();
+      events.forEach(e => window.removeEventListener(e, onActivity));
+    };
+  }, []);
 
   // Persist ONLY the id (see storage contract in the file header)
   useEffect(() => {

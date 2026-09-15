@@ -466,8 +466,10 @@ export default function App() {
                           currentUser={currentUser}
                           evidences={evidences}
                           allUsers={auth.users}
+                          shifts={shifts}
                           onSelectEmployee={setSelectedEmployee}
                           onNavigateReview={() => goTo('review')}
+                          onNavigateSchedule={() => goTo('manager_schedule')}
                           onCheckIn={handleCheckInOutRecord}
                         />
                       } />
@@ -565,8 +567,10 @@ export default function App() {
                         currentUser={currentUser}
                         evidences={evidences}
                         allUsers={auth.users}
+                        shifts={shifts}
                         onSelectEmployee={setSelectedEmployee}
                         onNavigateReview={() => goTo('review')}
+                        onNavigateSchedule={() => goTo('manager_schedule')}
                       />
                     } />
                     <Route path="schedule/*" element={
