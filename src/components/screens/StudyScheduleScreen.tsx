@@ -11,6 +11,9 @@ import {
 } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import { getShiftTimeRange } from '../../utils/constants';
+import {
+  getSlotAvailability,
+} from '../../utils/autoSchedule';
 import { getCapacityForDate } from '../../hooks/useShiftCapacity';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
@@ -128,6 +131,29 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
     return initial;
   });
 
+  // XIN NGHỈ (type 'leave'): các ngày NV tường minh xin nghỉ. Mutual exclusive
+  // với chọn ca trong cùng ngày — chọn ca gỡ nghỉ, chọn nghỉ gỡ ca.
+  const [leaveDays, setLeaveDays] = useState<Set<string>>(() => {
+    if (!existingReg) return new Set();
+    return new Set(existingReg.days.filter((d) => d.type === 'leave').map((d) => d.date));
+  });
+
+  // Bật/tắt xin nghỉ 1 ngày: bật → gỡ ca đã chọn của ngày đó; tắt → ngày
+  // trở về mặc định (không đăng ký). Không cần lý do (đã bỏ theo yêu cầu).
+  const toggleLeave = (dateStr: string) => {
+    setLeaveDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(dateStr)) {
+        next.delete(dateStr);
+      } else {
+        next.add(dateStr);
+        // Bỏ chọn ca của ngày này — 2 loại lựa chọn loại trừ lẫn nhau.
+        setShiftPreferences((p) => ({ ...p, [dateStr]: 'off' }));
+      }
+      return next;
+    });
+  };
+
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState<'study' | 'shifts'>('study');
@@ -217,11 +243,14 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
 
     targetWeekDays.forEach((day, idx) => {
       const dateStr = toDateStr(day);
-      const pref = shiftPreferences[dateStr] || 'off';
+      const isLeave = leaveDays.has(dateStr);
+      const pref = isLeave ? 'off' : (shiftPreferences[dateStr] || 'off');
       days.push({
         date: dateStr,
         dayLabel: DAY_LABELS[idx],
+        // Leave days carry NO time slot — shift stays 'off' by contract.
         shift: pref as any,
+        type: isLeave ? 'leave' : 'shift',
       });
     });
 
@@ -383,13 +412,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                             className="rounded-lg border border-[#E8DFD0] px-2 py-1.5 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
                           />
                         </div>
-                        <input
-                          type="text"
-                          value={slot.subject || ''}
-                          onChange={(e) => updateTimeSlot(daySchedule.day, slotIdx, 'subject', e.target.value)}
-                          placeholder="Môn học (tùy chọn)"
-                          className="flex-1 rounded-lg border border-[#E8DFD0] px-2 py-1.5 text-xs text-[#0F1E44] focus:border-[#EFC14B] outline-none"
-                        />
+
                         <button
                           onClick={() => removeTimeSlot(daySchedule.day, slotIdx)}
                           className="p-1.5 hover:bg-[#FF3131]/10 rounded-lg"
@@ -417,16 +440,16 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
         <div className="space-y-3 mb-4">
           <p className="text-xs text-[#7A829A]">
             Chọn ca làm việc bạn muốn đăng ký cho tuần tới.
-          </p>
-
-          {DAY_KEYS.map((day, idx) => {
+          </p>          {DAY_KEYS.map((day, idx) => {
             const date = new Date(targetWeekMonday);
             date.setDate(targetWeekMonday.getDate() + idx);
             const dateStr = toDateStr(date);
             const isToday = toDateStr(new Date()) === dateStr;
+            const isPast = dateStr < toDateStr(new Date());
             const daySchedule = daySchedules.find(d => d.day === day);
             const isBusy = daySchedule?.isBusy || false;
             const selectedShift = shiftPreferences[dateStr] || '';
+            const isLeave = selectedShift === 'off' && leaveDays.has(dateStr);
             // Giờ hiển thị = map (ca đã chọn, loại NV) — nhân viên KHÔNG
             // chọn giờ, chỉ được xem khung giờ hệ thống sẽ xếp (mục 4).
             const selectedTime =
@@ -440,8 +463,10 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                 className={`bg-white rounded-xl border p-3 transition-all ${
                   isBusy
                     ? 'border-[#FF3131]/30 opacity-60'
+                    : isLeave
+                    ? 'border-[#D4A833]/60 bg-[#EFC14B]/10'
                     : isToday
-                    ? 'border-[#EFC14B]'
+                    ? 'border-[#EFC14B]' 
                     : 'border-[#E8DFD0]'
                 }`}
               >
@@ -457,22 +482,51 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                       <p className="text-xs text-[#FF3131] font-semibold">📚 Bận học</p>
                     ) : (
                       <>
+                        {/* XIN NGHỈ — loại trừ lẫn nhau với mọi ca trong ngày:
+                            chọn Nghỉ → bỏ chọn ca đã chọn; chọn ca → gỡ Nghỉ.
+                            Ngày quá khứ không cho xin nghỉ (cùng rule với ca). */}
+                        <div className="flex gap-1.5 mb-1.5">
+                          <button
+                            onClick={() => toggleLeave(dateStr)}
+                            disabled={isPast}
+                            title={isPast ? 'Không thể xin nghỉ cho ngày đã qua' : 'Xin nghỉ cả ngày — các ca đã chọn sẽ bị gỡ'}
+                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all flex items-center justify-center gap-1 ${
+                              isLeave
+                                ? 'bg-[#D4A833] text-white border-[#D4A833]'
+                                : isPast
+                                ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                                : 'bg-white text-[#D4A833] border-[#D4A833]/40 hover:bg-[#EFC14B]/10'
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">{isLeave ? 'beach_access' : 'event_busy'}</span>
+                            {isLeave ? 'Đã xin nghỉ ngày này' : 'Nghỉ (xin nghỉ ngày này)'}
+                          </button>
+                        </div>
                         <div className="flex gap-1.5">
                           {SHIFT_SLOTS.map((slot) => {
-                            // Ca đã đầy? (mục 5 — UX advisory: đếm người KHÁC
-                            // đã có trong ca; engine vẫn re-check khi lưu).
-                            const count = shifts.filter(
-                              (s) => s.date === dateStr && s.shiftName === slot.name &&
-                                     s.status !== 'cancelled' && s.employeeId !== currentUser.id
-                            ).length;
-                            const max = getCapacityForDate(capacityOverrides, dateStr, slot.name);
-                            const isFull = count >= max;
+                            // Hint dùng CHÍNH getSlotAvailability — hàm duy nhất
+                            // mà engine dùng để chặn khi lưu. Hint và luật không
+                            // thể lệch nhau vì là CÙNG một phép tính; own auto
+                            // rows không chiếm chỗ của chính mình (đúng luật
+                            // resubmission của engine).
+                            const av = getSlotAvailability(
+                              shifts, dateStr, slot.name, capacityOverrides,
+                              currentUser.id
+                            );
+                            const count = av.taken;
+                            const max = av.max;
+                            const isFull = av.isFull;
                             const disabled = isFull && selectedShift !== slot.value;
                             const tr = getShiftTimeRange(slot.value, currentUser.employmentType);
                             return (
                               <button
                                 key={slot.value}
-                                onClick={() => !disabled && setShiftPreference(dateStr, slot.value)}
+                                onClick={() => {
+                                  if (disabled) return;
+                                  // Chọn ca → gỡ trạng thái Nghỉ của ngày (mutual exclusion)
+                                  setLeaveDays(prev => { const n = new Set(prev); n.delete(dateStr); return n; });
+                                  setShiftPreference(dateStr, slot.value);
+                                }}
                                 disabled={disabled}
                                 title={isFull ? 'Ca đã đầy' : `${slot.name}: ${tr.start}–${tr.end}`}
                                 className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
@@ -483,14 +537,41 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                                     : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
                                 }`}
                               >
-                                {slot.icon} {slot.short}{isFull ? ' (đầy)' : ''}
+                                <span className="leading-none">{slot.icon} {slot.short}</span>
+                                <span className={`text-[8px] leading-none ${
+                                  selectedShift === slot.value
+                                    ? 'text-white/70'
+                                    : isFull
+                                    ? 'text-[#FF3131]/70'
+                                    : av.remaining === 1
+                                    ? 'text-[#D4A833]'
+                                    : 'text-[#4CAF72]'
+                                }`}>
+                                  {isFull ? 'Đầy' : `Còn ${av.remaining}/${av.max}`}
+                                </span>
                               </button>
                             );
                           })}
                         </div>
-                        {selectedTime && (
+                        {isLeave ? (
+                          <p className="text-[9px] text-[#D4A833] mt-1">
+                            🏖️ Đã chọn nghỉ cả ngày — không đăng ký ca nào cho ngày này.
+                          </p>
+                        ) : selectedTime && (
                           <p className="text-[9px] text-[#7A829A] mt-1">
                             Giờ của bạn: <strong className="text-[#0F1E44]">{selectedTime.start}–{selectedTime.end}</strong>
+                          </p>
+                        )}
+                        {/* Chỗ cuối cùng sắp mất: nhấn mạnh để NV tự quyết
+                            trước khi submit thay vì phát hiện conflict sau. */}
+                        {SHIFT_SLOTS.some((slot) => {
+                          const s = shiftPreferences[dateStr];
+                          return s && s !== 'off' &&
+                            s !== slot.value &&
+                            getSlotAvailability(shifts, dateStr, slot.name, capacityOverrides, currentUser.id).isFull;
+                        }) && (
+                          <p className="text-[9px] text-[#FF3131] mt-1">
+                            Một số ca trong ngày này đã đủ người — hệ thống xếp theo thứ tự đăng ký trước.
                           </p>
                         )}
                       </>

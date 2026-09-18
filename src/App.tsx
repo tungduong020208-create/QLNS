@@ -39,6 +39,7 @@ import { Sidebar } from './components/Sidebar';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { ReviewScreen } from './components/screens/ReviewScreen';
+import { ApprovalsScreen } from './components/screens/ApprovalsScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
 import { EvidenceDetailModal } from './components/modals/EvidenceDetailModal';
 import { ToastNotification } from './components/modals/ToastNotification';
@@ -341,10 +342,21 @@ export default function App() {
     // when the manager published one. This handler is the single WRITE path
     // that keeps both roles on one source of truth.
     setShifts(prev => {
+      // PER-DATE RECONCILE, not a week wipe. The employee's auto rows for
+      // days the manager did NOT touch must survive — otherwise publishing
+      // one day silently cancels the auto-placed shifts of every other day.
+      // Rule per date inside the week: rows on a date present in
+      // `assignment.shifts` are replaced; dates listed in `clearedDates`
+      // (manager explicitly removed the shift) are dropped; all other dates
+      // keep their existing rows.
+      const weekEnd = weekEndOf(assignment.weekStart);
+      const cleared = new Set(assignment.clearedDates ?? []);
       const others = prev.filter(
         s => !(s.employeeId === assignment.userId &&
                s.date >= assignment.weekStart &&
-               s.date <= weekEndOf(assignment.weekStart))
+               s.date <= weekEnd) ||
+               (!cleared.has(s.date) &&
+                !assignment.shifts.some(ps => ps.date === s.date))
       );
       const published = assignment.shifts.map(s => {
         const user = auth.users.find(u => u.id === assignment.userId);
@@ -381,13 +393,18 @@ export default function App() {
         // study_schedules is now a sub-tab of "Quản lý" — resolved to the
         // schedule tab so any stale caller lands in the right place.
         study_schedules: ROUTES.MANAGER_SCHEDULE + '/study',
-        review: ROUTES.MANAGER_HANDOVER,
+        // 'review' (the Bảng Tin entry) now lands the manager on the APPROVAL
+        // queue — the social feed keeps its own entry ('feed').
+        review: ROUTES.MANAGER_APPROVALS,
+        feed: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
         export_report: ROUTES.MANAGER_EXPORT,
         profile: ROUTES.MANAGER_PROFILE,
       },
       employee: {
         home: ROUTES.EMPLOYEE_HOME,
+        // 'feed' is the shared "Bảng Tin" tab id; 'review' kept for legacy callers.
+        feed: ROUTES.EMPLOYEE_HANDOVER,
         review: ROUTES.EMPLOYEE_HANDOVER,
         peer_review: ROUTES.EMPLOYEE_PEER_REVIEW,
         study_schedule: ROUTES.EMPLOYEE_SHIFT_REGISTRATION,
@@ -591,6 +608,7 @@ export default function App() {
                             studySchedules={studySchedules}
                             manualAssignments={manualAssignments}
                             onPublishSchedule={handlePublishSchedule}
+                            onApplyBatchShifts={setShifts}
                             capacityOverrides={capacityOverrides}
                             onSetCapacity={setCapacityForDate}
                           />
@@ -606,8 +624,10 @@ export default function App() {
                             studySchedules={studySchedules}
                             registrations={shiftRegistrations}
                             manualAssignments={manualAssignments}
+                            shifts={shifts}
                             onPublishSchedule={handlePublishSchedule}
                             onAddNotification={pushNotification}
+                            onApplyBatchShifts={setShifts}
                           />
                         } />
                       </Routes>
@@ -646,6 +666,17 @@ export default function App() {
                         onTogglePostReaction={toggleReaction}
                         onAddPostComment={addComment}
                         onDeletePostComment={deleteComment}
+                      />
+                    } />
+                    {/* Manager-only: approval queue for feed posts — SEPARATE
+                        route from the social feed. Posts land here as
+                        'pending'; the feed itself stays a social space. */}
+                    <Route path="approvals" element={
+                      <ApprovalsScreen
+                        currentUser={currentUser}
+                        evidences={evidences}
+                        onEvaluate={handleReviewEvidence}
+                        onOpenDetail={setSelectedEvidence}
                       />
                     } />
                     <Route path="peer-review" element={

@@ -23,7 +23,7 @@
  * data survives the refactor untouched.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 /**
  * Read and parse a localStorage value, never throwing.
@@ -69,6 +69,34 @@ export function usePersistentState<T>(key: string, initial: T) {
   useEffect(() => {
     writeStoredValue(key, value);
   }, [key, value]);
+
+  // Cross-tab sync (real-time): the `storage` event fires in every OTHER tab
+  // when one tab writes. Without this, a manager fixing the schedule in tab
+  // B and an employee reading the "còn x/y chỗ" hint in tab A would each see
+  // a stale private copy — the exact divergence this store was created to
+  // kill. The event never fires in the writing tab itself, so there is no
+  // self-echo loop; the follow-up write stores the identical value.
+  const initialRef = useRef(initial);
+  useEffect(() => {
+    initialRef.current = initial;
+  }, [initial]);
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== key) return;
+      // key removed or cleared (e.key === null) → back to initial
+      if (e.newValue === null) {
+        setValue(initialRef.current);
+        return;
+      }
+      try {
+        setValue(JSON.parse(e.newValue) as T);
+      } catch {
+        // Corrupted write from another tab → ignore; our next write heals it
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [key]);
 
   return [value, setValue] as const;
 }

@@ -110,7 +110,10 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Shift | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<Shift | null>(null);
+  // Swap là một CHẾ ĐỘ của edit modal (1 entry point, 1 dialog): source =
+  // row có icon swap được bấm, partner = row được chọn trong modal.
   const [swapSource, setSwapSource] = useState<Shift | null>(null);
+  const [swapPartner, setSwapPartner] = useState<Shift | null>(null);
 
   // Form state for add/edit
   const [formEmployee, setFormEmployee] = useState('');
@@ -284,21 +287,37 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     setShowEditModal(shift);
   };
 
-  // Manager SWAP: click swap on row A, then on row B — the two employees
-  // trade shift rows (identity fields swap, date/shift/time stay put).
-  // Done as two row-updates so it flows through the same onUpdateShift path
-  // (and therefore the same toasts/notifications) as any other edit.
-  const handleSwapClick = (shift: Shift) => {
-    if (!swapSource) {
-      setSwapSource(shift);
-      return;
-    }
-    if (swapSource.id === shift.id) {
-      setSwapSource(null); // clicked the same row → cancel
-      return;
-    }
-    const a: Shift = { ...swapSource, employeeId: shift.employeeId, employeeName: shift.employeeName, employeeAvatar: shift.employeeAvatar, status: 'swapped', swappedWith: shift.employeeId, origin: 'manual' };
-    const b: Shift = { ...shift, employeeId: swapSource.employeeId, employeeName: swapSource.employeeName, employeeAvatar: swapSource.employeeAvatar, status: 'swapped', swappedWith: swapSource.employeeId, origin: 'manual' };
+  // Manager SWAP — một entry point duy nhất. Bấm icon swap mở thẳng edit
+  // modal ở chế độ hoán đổi: chọn đối tác ngay trong modal thay vì phải tìm
+  // một row thứ hai ngoài danh sách (luồng 2 bước cũ dễ quên đang swap và
+  // bấm nhầm sang edit/delete). Chỉ trao NGƯỜI giữa 2 row — ngày/ca/giờ giữ.
+  const openSwapModal = (shift: Shift) => {
+    setSwapSource(shift);
+    setSwapPartner(null);
+    // Prefill form để hủy/đóng không để lại state cũ của modal edit thường.
+    setFormEmployee(shift.employeeId);
+    setFormDate(shift.date);
+    setFormShiftName(shift.shiftName);
+    setFormStartTime(shift.startTime);
+    setFormEndTime(shift.endTime);
+    setFormNotes('');
+    setShowEditModal(shift);
+  };
+
+  const closeSwapModal = () => {
+    setShowEditModal(null);
+    setSwapSource(null);
+    setSwapPartner(null);
+    resetForm();
+  };
+
+  // Execute: GIỮ NGUYÊN ngữ nghĩa cũ — hai row trao identity fields
+  // (employeeId/Name/Avatar), status 'swapped', origin 'manual' (qua cùng
+  // đường onSwapShifts như trước, cùng toast/notification).
+  const executeSwap = () => {
+    if (!swapSource || !swapPartner || swapSource.id === swapPartner.id) return;
+    const a: Shift = { ...swapSource, employeeId: swapPartner.employeeId, employeeName: swapPartner.employeeName, employeeAvatar: swapPartner.employeeAvatar, status: 'swapped', swappedWith: swapPartner.employeeId, origin: 'manual' };
+    const b: Shift = { ...swapPartner, employeeId: swapSource.employeeId, employeeName: swapSource.employeeName, employeeAvatar: swapSource.employeeAvatar, status: 'swapped', swappedWith: swapSource.employeeId, origin: 'manual' };
     onSwapShifts(a, b);
     onAddNotification({
       id: `notif-swap-${Date.now()}`,
@@ -309,8 +328,25 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       type: 'system',
       category: 'management',
     });
-    setSwapSource(null);
+    closeSwapModal();
   };
+
+  // Đối tác hoán đổi: mọi row chưa hủy ngoài row nguồn (cùng ngày đứng
+  // trước). Không cần check capacity — hoán đổi chỉ trao người, tổng số
+  // người mỗi ca không đổi.
+  const swapCandidates = useMemo(() => {
+    if (!swapSource) return [];
+    const order = ['Ca sáng', 'Ca chiều', 'Ca tối'];
+    return shifts
+      .filter((s) => s.id !== swapSource.id && s.status !== 'cancelled')
+      .sort((x, y) => {
+        const sameX = x.date === swapSource.date ? 0 : 1;
+        const sameY = y.date === swapSource.date ? 0 : 1;
+        if (sameX !== sameY) return sameX - sameY;
+        if (x.date !== y.date) return x.date < y.date ? -1 : 1;
+        return order.indexOf(x.shiftName) - order.indexOf(y.shiftName);
+      });
+  }, [swapSource, shifts]);
 
   // Handle edit shift
   const handleEditShift = () => {
@@ -560,16 +596,6 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
         {/* View toggle */}
         <div className="px-5 py-2 border-b border-[#F5EDDF] flex gap-2">
-          {swapSource && (
-            <div className="w-full flex items-center justify-between bg-[#EFC14B]/10 border border-[#EFC14B]/40 rounded-lg px-3 py-1.5 mb-2">
-              <span className="text-[11px] font-semibold text-[#0F1E44]">
-                Đang hoán đổi: {swapSource.employeeName} — ca {swapSource.shiftName} ngày {swapSource.date}. Chọn ca thứ hai.
-              </span>
-              <button onClick={() => setSwapSource(null)} className="text-[10px] font-bold text-[#7A829A] hover:underline">
-                Hủy
-              </button>
-            </div>
-          )}
           <button
             onClick={() => setViewMode('week')}
             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
@@ -709,11 +735,11 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                               {shift.status !== 'cancelled' && (
                                 <div className="flex gap-1">
                                   <button
-                                    onClick={() => handleSwapClick(shift)}
-                                    title={swapSource ? 'Chọn ca thứ hai để hoán đổi' : 'Hoán đổi nhân viên sang ca khác'}
-                                    className={`p-1 rounded ${swapSource?.id === shift.id ? 'bg-[#EFC14B]/30' : 'hover:bg-[#FDF8EE]'}`}
+                                    onClick={() => openSwapModal(shift)}
+                                    title="Hoán đổi nhân viên với ca khác"
+                                    className="p-1 rounded hover:bg-[#FDF8EE]"
                                   >
-                                    <span className={`material-symbols-outlined text-[14px] ${swapSource ? 'text-[#EFC14B]' : 'text-[#7A829A]'}`}>swap_horiz</span>
+                                    <span className="material-symbols-outlined text-[14px] text-[#7A829A]">swap_horiz</span>
                                   </button>
                                   <button onClick={() => openEditModal(shift)} className="p-1 hover:bg-[#FDF8EE] rounded">
                                     <span className="material-symbols-outlined text-[14px] text-[#7A829A]">edit</span>
@@ -838,16 +864,46 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
         </div>
       )}
 
-      {/* Edit Shift Modal */}
+      {/* Edit Shift Modal — đồng thời là dialog HOÁN ĐỔI duy nhất */}
       {showEditModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-lg border border-[#E8DFD0]">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">Chỉnh sửa ca làm việc</h3>
-              <button onClick={() => setShowEditModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
+              <h3 className="font-heading text-lg font-bold text-[#0F1E44]">
+                {swapSource ? 'Hoán đổi ca làm việc' : 'Chỉnh sửa ca làm việc'}
+              </h3>
+              <button onClick={swapSource ? closeSwapModal : () => setShowEditModal(null)} className="text-[#7A829A] hover:text-[#0F1E44]">
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
+            {swapSource ? (
+              <div className="space-y-3">
+                <div className="bg-[#EFC14B]/10 border border-[#EFC14B]/40 rounded-lg p-3">
+                  <p className="text-xs text-[#7A829A]">Ca nguồn:</p>
+                  <p className="text-sm font-semibold text-[#0F1E44]">
+                    {swapSource.employeeName} — {swapSource.shiftName} ({swapSource.startTime}–{swapSource.endTime}) ngày {swapSource.date}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-[#7A829A] mb-1">Hoán đổi với ca của</label>
+                  <select
+                    value={swapPartner?.id || ''}
+                    onChange={(e) => setSwapPartner(swapCandidates.find((s) => s.id === e.target.value) || null)}
+                    className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none"
+                  >
+                    <option value="">Chọn ca muốn đổi người</option>
+                    {swapCandidates.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.employeeName} — {s.shiftName} ({s.startTime}–{s.endTime}) ngày {s.date}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[10px] text-[#7A829A] mt-1">
+                    Hai nhân viên trao chỗ cho nhau; ngày, ca và khung giờ giữ nguyên. Ca cùng ngày được đưa lên trước.
+                  </p>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-3">
               <div className="bg-[#FDF8EE] rounded-lg p-3">
                 <p className="text-xs text-[#7A829A]">Nhân viên:</p>
@@ -902,13 +958,24 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                 />
               </div>
             </div>
+            )}
             <div className="flex gap-2 mt-4">
-              <button onClick={() => setShowEditModal(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]">
+              <button onClick={swapSource ? closeSwapModal : () => setShowEditModal(null)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]">
                 Hủy
               </button>
-              <button onClick={handleEditShift} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A]">
-                Lưu thay đổi
-              </button>
+              {swapSource ? (
+                <button
+                  onClick={executeSwap}
+                  disabled={!swapPartner}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A] disabled:opacity-50"
+                >
+                  Hoán đổi
+                </button>
+              ) : (
+                <button onClick={handleEditShift} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A]">
+                  Lưu thay đổi
+                </button>
+              )}
             </div>
           </div>
         </div>

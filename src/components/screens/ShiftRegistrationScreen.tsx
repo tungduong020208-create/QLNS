@@ -247,7 +247,11 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
 
   const handleManagerDayChange = (date: string, shift: ShiftSlot) => {
     setEditDaySelections((prev) =>
-      prev.map((d) => (d.date === date ? { ...d, shift } : d))
+      prev.map((d) => (d.date === date
+        // Type phải theo trạng thái mới: shift != 'off' → 'shift';
+        // 'off' do manager chủ động chọn → giữ 'leave' nếu ngày đó đang leave.
+        ? { ...d, shift, type: shift !== 'off' ? 'shift' : d.type }
+        : d))
     );
   };
 
@@ -586,19 +590,30 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
                 </div>
               </div>
 
-              {/* Shift summary */}
+              {/* Shift summary — 3 trạng thái màu rõ ràng: ca (navy),
+                  XIN NGHỈ tường minh (vàng + icon), không đăng ký (xám) */}
               <div className="grid grid-cols-7 gap-1 mb-3">
                 {reg.days.map((day, idx) => {
                   const si = getShiftInfo(day.shift);
+                  const isLeave = day.shift === 'off' && day.type === 'leave';
                   return (
                     <div key={day.date} className="text-center">
                       <p className="text-[8px] text-[#7A829A] uppercase">{DAY_LABELS[idx].replace('Thứ ', 'T')}</p>
                       <p className="text-[9px] text-[#7A829A]">{day.date.split('-')[2]}</p>
                       <div className={`mt-0.5 rounded-md px-1 py-0.5 text-[8px] font-bold ${
-                        day.shift === 'off' ? 'bg-gray-100 text-gray-400' : 'bg-[#0F1E44]/10 text-[#0F1E44]'
+                        isLeave
+                          ? 'bg-[#EFC14B]/25 text-[#D4A833]'
+                          : day.shift === 'off'
+                          ? 'bg-gray-100 text-gray-400'
+                          : 'bg-[#0F1E44]/10 text-[#0F1E44]'
                       }`}>
-                        <span className="material-symbols-outlined text-[10px] align-middle">{si.icon}</span>
+                        <span className="material-symbols-outlined text-[10px] align-middle">
+                          {isLeave ? 'beach_access' : si.icon}
+                        </span>
                       </div>
+                      {isLeave && (
+                        <p className="text-[7px] font-bold text-[#D4A833] mt-0.5">Nghỉ</p>
+                      )}
                     </div>
                   );
                 })}

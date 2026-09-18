@@ -23,6 +23,8 @@ interface ManagerScheduleTabProps {
   studySchedules: StudySchedule[];
   manualAssignments: ManualShiftAssignment[];
   onPublishSchedule: (assignment: ManualShiftAssignment) => void;
+  /** Apply batch auto-schedule result directly to the shifts store. */
+  onApplyBatchShifts: (shifts: Shift[]) => void;
   // Capacity per (date, shift) — manager-visible counts + editable max
   capacityOverrides: ShiftCapacityOverride[];
   onSetCapacity: (date: string, shiftName: string, max: number) => void;
@@ -45,6 +47,7 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   studySchedules,
   manualAssignments,
   onPublishSchedule,
+  onApplyBatchShifts,
   capacityOverrides,
   onSetCapacity,
 }) => {
@@ -117,8 +120,10 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           studySchedules={studySchedules}
           registrations={registrations}
           manualAssignments={manualAssignments}
+          shifts={shifts}
           onPublishSchedule={onPublishSchedule}
           onAddNotification={onAddNotification}
+          onApplyBatchShifts={onApplyBatchShifts}
         />
       )}
     </div>

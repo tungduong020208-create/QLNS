@@ -17,6 +17,10 @@ export const ROUTES = {
   MANAGER_WORK_HOURS: '/admin/work-hours',
   EMPLOYEE_SHIFT_REGISTRATION: '/employee/shift-registration',
   MANAGER_HANDOVER: '/admin/handover',
+  // Manager-only approval queue for news-feed posts (evidence workflow).
+  // Deliberately a SEPARATE route from the feed: the feed is a social space
+  // (post/react/comment), approvals are a work queue — one screen each.
+  MANAGER_APPROVALS: '/admin/approvals',
   MANAGER_PEER_REVIEW: '/admin/peer-review',
   MANAGER_PROFILE: '/admin/profile',
   MANAGER_EXPORT: '/admin/export',

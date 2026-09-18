@@ -229,6 +229,12 @@ export interface DayShiftRegistration {
   date: string;              // YYYY-MM-DD
   dayLabel: string;           // 'Thứ 2', 'Thứ 3', ...
   shift: ShiftSlot;
+  /** 'leave' = employee EXPLICITLY requested the day off (shown amber in
+   *  manager views). Undefined/'shift' = normal shift registration or an
+   *  untouched day (shift 'off' with no type = default, not a request).
+   *  Optional so old stored registrations keep reading unchanged. Leave
+   *  days carry no time slot (shift stays 'off'). */
+  type?: 'shift' | 'leave';
 }
 
 export interface WeeklyShiftRegistration {
@@ -372,4 +378,10 @@ export interface ManualShiftAssignment {
   publishedAt?: string;
   publishedBy?: string;
   notes?: string;
+  // Days within weekStart..weekEnd where the manager REMOVED a shift that
+  // previously existed (auto or manual). Publish is a per-date reconcile on
+  // the unified store: dates in `shifts` get replaced, dates here get their
+  // rows dropped, everything else is left untouched. Optional so old stored
+  // assignments (without the field) stay readable.
+  clearedDates?: string[];
 }

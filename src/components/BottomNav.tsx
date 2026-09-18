@@ -23,7 +23,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (pathname.includes('/schedule') || pathname.includes('/study-schedules')) return 'manager_schedule';
     if (pathname.includes('/work-hours')) return 'work_hours';
     if (pathname.includes('/export')) return 'export_report';
-    if (pathname.includes('/handover')) return 'review';
+    // Single "Bảng Tin" entry for both roles (points at the social feed).
+    // The manager approval queue (/admin/approvals) still exists — reached
+    // from the dashboard's pending-approvals card — and highlights this tab.
+    if (pathname.includes('/approvals')) return 'feed';
+    if (pathname.includes('/handover')) return 'feed';
     if (pathname.includes('/peer-review')) return 'peer_review';
     if (pathname.includes('/shift-registration')) return 'study_schedule';
     if (pathname.includes('/profile')) return 'profile';
@@ -37,7 +41,9 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     { id: 'manager_schedule', label: 'Quản lý', icon: 'dashboard' },
     { id: 'work_hours', label: 'Giờ làm', icon: 'schedule' },
     // 'study_schedules' removed: it is a sub-tab of "Quản lý" now.
-    { id: 'review', label: 'Bảng Tin', icon: 'handshake' },
+    // One shared "Bảng Tin" tab for both roles (the social feed). The
+    // approval queue keeps its route but no longer its own nav entry.
+    { id: 'feed', label: 'Bảng Tin', icon: 'handshake' },
     { id: 'peer_review', label: 'Đánh giá', icon: 'rate_review' },
     { id: 'export_report', label: 'Xuất báo cáo', icon: 'download' },
     { id: 'study_schedule', label: 'Đăng ký lịch', icon: 'event_available' },
@@ -45,8 +51,8 @@ export const BottomNav: React.FC<BottomNavProps> = ({
   ];
 
   // Filter tabs based on role
-  // Manager: sees dashboard, reviews, peer review, export, profile (NOT employee shift registration)
-  // Employee: sees home, reviews, peer review, study schedule, profile (NOT manager tools)
+  // Manager: sees dashboard, feed, peer review, export, profile (NOT employee shift registration)
+  // Employee: sees home, feed, peer review, study schedule, profile (NOT manager tools)
   const tabs = currentUser?.role === 'manager'
     ? allTabs.filter(t => t.id !== 'study_schedule')  // Manager uses study_schedules instead
     : allTabs.filter(t => t.id !== 'manager_schedule' && t.id !== 'export_report' && t.id !== 'work_hours');
