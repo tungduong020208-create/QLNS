@@ -80,7 +80,9 @@ export async function fetchPublicIP(): Promise<string | null> {
 
       // Extract IP based on API response format
       if (data.ip) return data.ip; // ipify, httpbin
-      if (data.origin) return data.origin; // httpbin
+      // httpbin returns "origin": "1.2.3.4, 5.6.7.8" when behind proxy/
+      // X-Forwarded-For chain — take only the first (client) IP.
+      if (data.origin) return String(data.origin).split(',')[0].trim();
 
       continue;
     } catch {
@@ -284,13 +286,24 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
   }
 
   // Validate Local IP (if any are configured)
+  //
+  // WHY localIP === null is treated as PASS (not FAIL):
+  // Modern browsers (Chrome 116+, Safari 17+, Firefox 125+, Edge 116+)
+  // enable mDNS ICE candidate obfuscation by default. This means
+  // WebRTC candidates return a UUID-like "xxxxxxxx-xxxx-xxxx-xxxx-
+  // xxxxxxxxxxxx.local" string instead of a real IPv4/IPv6 address.
+  // Our regex in fetchLocalIP() never matches this format, so
+  // localIP is null on the vast majority of real devices — even
+  // when the device IS on the correct office Wi-Fi. Treating null
+  // as a failure would block every employee, which is worse than
+  // skipping the local-IP check entirely. The Public IP check
+  // remains the authoritative signal; local IP is a bonus layer
+  // that only activates on browsers/devices that still expose
+  // non-mDNS candidates (e.g. older browsers, certain VPN setups,
+  // or hosts with the mDNS flag disabled).
   let localIPValid = true;
-  if (config.localSubnets.length > 0) {
-    if (!localIP) {
-      localIPValid = false;
-    } else {
-      localIPValid = isLocalIPAllowed(localIP, [...config.localSubnets]);
-    }
+  if (config.localSubnets.length > 0 && localIP) {
+    localIPValid = isLocalIPAllowed(localIP, [...config.localSubnets]);
   }
 
   const isValid = publicIPValid && localIPValid;
@@ -315,12 +328,12 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
       errors.push(`Public IP (${publicIP}) không hợp lệ`);
     }
   }
-  if (config.localSubnets.length > 0 && !localIPValid) {
-    if (!localIP) {
-      errors.push('Không thể xác định Local IP');
-    } else {
-      errors.push(`Local IP (${localIP}) không trong dải mạng quán`);
-    }
+  // Only report a local-IP error when we actually GOT a local IP and
+  // it failed the subnet check. If localIP is null (mDNS obfuscation)
+  // the check was silently skipped — see the comment above — so there
+  // is nothing useful to show the user here.
+  if (config.localSubnets.length > 0 && localIP && !localIPValid) {
+    errors.push(`Local IP (${localIP}) không trong dải mạng quán`);
   }
 
   return {

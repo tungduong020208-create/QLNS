@@ -1,7 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { Shift } from './screens/ManagerScheduleScreen';
-import { safeParse } from '../hooks/usePersistentState';
-import { STORAGE_KEY_SHIFTS } from '../utils/constants';
 
 export interface WorkSession {
   id: string;
@@ -19,6 +17,10 @@ export interface WorkSession {
 interface WorkScheduleProps {
   employeeId: string;
   employeeName: string;
+  /** Published shift rows — passed from App via React state so the
+   *  component re-renders whenever the store changes (submit, publish,
+   *  batch auto-schedule, etc.) instead of reading stale localStorage. */
+  shifts: Shift[];
 }
 
 // Helper: get Monday of the week containing a date
@@ -50,12 +52,11 @@ const getWeekDays = (monday: Date): Date[] => {
   return days;
 };
 
-// UNIFIED DATA: build sessions from the REAL published shifts (storage key
-// STORAGE_KEY_SHIFTS) for the given employee + week. No more mock data —
-// whatever the manager published is exactly what the employee sees.
-// Hours are computed from startTime/endTime so any shift length works,
-// including Sat/Sun shifts.
-const buildWeekSchedule = (employeeId: string, weekMonday: Date): WorkSession[] => {
+// UNIFIED DATA: build sessions from the REAL published shifts passed via
+// React state (shifts prop). No more direct localStorage reads — the
+// parent component (HomeScreen → App) owns the source of truth and
+// re-renders this component whenever the store changes.
+const buildWeekSchedule = (employeeId: string, weekMonday: Date, allShifts: Shift[]): WorkSession[] => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = toDateStr(today);
@@ -64,8 +65,6 @@ const buildWeekSchedule = (employeeId: string, weekMonday: Date): WorkSession[] 
   const first = toDateStr(weekDays[0]);
   const last = toDateStr(weekDays[6]);
 
-  // Read the unified shift store — same data ManagerScheduleScreen writes.
-  const allShifts = safeParse<Shift[]>(STORAGE_KEY_SHIFTS, []);
   const weekShifts = allShifts.filter(
     (s) => s.employeeId === employeeId && s.date >= first && s.date <= last
   );
@@ -108,7 +107,7 @@ const buildWeekSchedule = (employeeId: string, weekMonday: Date): WorkSession[] 
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 };
 
-const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName }) => {
+const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, shifts }) => {
   // Current week offset (0 = this week, -1 = last week, +1 = next week)
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -123,10 +122,10 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName })
   // All 7 days of the displayed week
   const weekDays = useMemo(() => getWeekDays(currentMonday), [currentMonday]);
 
-  // Build sessions for this week from the unified shift store
+  // Build sessions for this week from the shifts prop (React state)
   const allSessions = useMemo(
-    () => buildWeekSchedule(employeeId, currentMonday),
-    [employeeId, currentMonday]
+    () => buildWeekSchedule(employeeId, currentMonday, shifts),
+    [employeeId, currentMonday, shifts]
   );
 
   const todayStr = toDateStr(new Date());

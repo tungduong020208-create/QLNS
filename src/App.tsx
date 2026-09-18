@@ -496,6 +496,7 @@ export default function App() {
                           currentUser={currentUser}
                           peerReviews={peerReviews}
                           onCheckIn={handleCheckInOutRecord}
+                          shifts={shifts}
                         />
                       } />
                     )}
@@ -519,6 +520,7 @@ export default function App() {
                         currentUser={currentUser}
                         peerReviews={peerReviews}
                         onCheckIn={handleCheckInOutRecord}
+                        shifts={shifts}
                       />
                     } />
                     <Route path="handover" element={

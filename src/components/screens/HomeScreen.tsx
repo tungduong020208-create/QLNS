@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { User, CheckInRecord, PeerReviewSubmission } from '../../types';
+import { Shift } from './ManagerScheduleScreen';
 import { ManagerCheckInToggle } from '../ManagerCheckInToggle';
 import WorkSchedule from '../WorkSchedule';
 import { WeeklyReviewTracker } from '../WeeklyReviewTracker';
@@ -13,12 +14,15 @@ interface HomeScreenProps {
   currentUser: User;
   peerReviews?: PeerReviewSubmission[];
   onCheckIn?: (record: CheckInRecord) => void;
+  /** Published shift rows for the employee's schedule view. */
+  shifts?: Shift[];
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   currentUser,
   peerReviews = [],
-  onCheckIn
+  onCheckIn,
+  shifts = [],
 }) => {
   return (
     <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
@@ -45,7 +49,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {currentUser.role === 'employee' && (
-        <WorkSchedule employeeId={currentUser.id} employeeName={currentUser.name} />
+        <WorkSchedule employeeId={currentUser.id} employeeName={currentUser.name} shifts={shifts} />
       )}
 
       {currentUser.role === 'employee' && (

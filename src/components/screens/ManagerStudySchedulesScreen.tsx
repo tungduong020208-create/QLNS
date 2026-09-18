@@ -8,7 +8,8 @@ import {
 import { Shift } from './ManagerScheduleScreen';
 import { getShiftTimeRange } from '../../utils/constants';
 import { getSlotAvailability } from '../../utils/autoSchedule';
-import { computeBatchAutoSchedule, BatchAutoScheduleResult } from '../../utils/batchAutoSchedule';
+import { computeBatchAutoSchedule, BatchAutoScheduleResult, BatchSlotResult } from '../../utils/batchAutoSchedule';
+import { formatRejectionReason, RejectedCandidate } from '../../utils/priorityRanking';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -809,6 +810,62 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
                   </div>
                 </div>
               )}
+
+              {/* Rejected Candidates (oversubscription) */}
+              {(() => {
+                // Collect ALL rejected candidates across all slots
+                const allRejected: (RejectedCandidate & { shiftName: string; date: string })[] = [];
+                batchResult.slotResults.forEach(slot => {
+                  slot.rejectedCandidates.forEach(rc => {
+                    allRejected.push({ ...rc, shiftName: slot.shiftName, date: slot.date });
+                  });
+                });
+                if (allRejected.length === 0) return null;
+
+                // Group by userId to show consolidated info per employee
+                const byUser = new Map<string, {
+                  userName: string;
+                  rejections: { shiftName: string; date: string; reason: string }[];
+                }>();
+                allRejected.forEach(r => {
+                  const emp = allUsers.find(u => u.id === r.userId);
+                  const name = emp?.name || r.userId;
+                  if (!byUser.has(r.userId)) {
+                    byUser.set(r.userId, { userName: name, rejections: [] });
+                  }
+                  byUser.get(r.userId)!.rejections.push({
+                    shiftName: r.shiftName,
+                    date: r.date,
+                    reason: formatRejectionReason(r.reason),
+                  });
+                });
+
+                return (
+                  <div className="mt-4 p-4 bg-[#EFC14B]/10 border border-[#EFC14B]/40 rounded-xl">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="material-symbols-outlined text-[#D4A833] text-lg">person_off</span>
+                      <h4 className="text-sm font-bold text-[#D4A833]">Nhân viên chưa được xếp ca ({byUser.size} người)</h4>
+                    </div>
+                    <p className="text-[10px] text-[#7A829A] mb-3">
+                      Ưu tiên: đăng ký trước được xếp trước → ít giờ làm hơn được ưu tiên
+                    </p>
+                    <div className="space-y-3">
+                      {Array.from(byUser.entries()).map(([userId, data]) => (
+                        <div key={userId} className="bg-white rounded-lg p-3 border border-[#E8DFD0]">
+                          <p className="text-xs font-bold text-[#0F1E44] mb-1">{data.userName}</p>
+                          <div className="space-y-1">
+                            {data.rejections.map((rej, idx) => (
+                              <p key={idx} className="text-[10px] text-[#7A829A]">
+                                • {rej.shiftName} ngày {new Date(rej.date + 'T00:00:00').getDate()}/{new Date(rej.date + 'T00:00:00').getMonth() + 1}: <span className="text-[#D4A833] font-semibold">{rej.reason}</span>
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Modal Footer */}
@@ -823,7 +880,7 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
                 onClick={handleConfirmBatch}
                 className="flex-1 h-10 bg-[#4CAF72] text-white rounded-xl text-xs font-bold hover:bg-[#3D9B63]"
               >
-                Xác nhận & Áp dụng
+                Xác nhận & Áp dụng ({batchResult.summary.totalAssigned} ca)
               </button>
             </div>
           </div>

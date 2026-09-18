@@ -20,6 +20,7 @@ import {
 import { Shift } from '../components/screens/ManagerScheduleScreen';
 import { SHIFT_SLOT_TEMPLATES, getShiftTimeRange } from './constants';
 import { getCapacityForDate } from '../hooks/useShiftCapacity';
+import { rankCandidates, buildWorkHoursMap, getCurrentWeekRange, Candidate, RejectedCandidate } from './priorityRanking';
 
 // ─── Types ───────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface BatchSlotResult {
   capacity: number;            // max yêu cầu
   isUnderstaffed: boolean;     // true nếu assigned < capacity
   missingCount: number;        // số người thiếu (0 nếu đủ)
+  /** Candidates rejected from this slot with reasons (for manager UI). */
+  rejectedCandidates: RejectedCandidate[];
 }
 
 export interface BatchAutoScheduleResult {
@@ -142,6 +145,10 @@ export function computeBatchAutoSchedule(
     }
   });
 
+  // ── Tính tổng giờ làm cho fairness (priority ranking) ──
+  const weekRange = getCurrentWeekRange();
+  const workHoursMap = buildWorkHoursMap(existingShifts, weekRange.start, weekRange.end);
+
   // ── Bước 4: Xếp từng slot ──
   const allPlaced: Shift[] = [];
   const slotResults: BatchSlotResult[] = [];
@@ -175,10 +182,11 @@ export function computeBatchAutoSchedule(
         slotResults.push({
           date,
           shiftName,
-          assignedUsers: manualInSlot > 0 ? [] : [],
+          assignedUsers: [],
           capacity,
           isUnderstaffed: manualInSlot < capacity,
           missingCount: Math.max(0, capacity - manualInSlot),
+          rejectedCandidates: [],
         });
         continue;
       }
@@ -210,21 +218,27 @@ export function computeBatchAutoSchedule(
         return true;
       });
 
-      // Sắp xếp theo ưu tiên: ít ca nhất trong tuần → ưu tiên trước
-      candidates.sort((a, b) => {
-        const countA = weeklyAssignCount.get(a.id) || 0;
-        const countB = weeklyAssignCount.get(b.id) || 0;
-        if (countA !== countB) return countA - countB;
-        // Nếu bằng nhau → giữ nguyên thứ tự (first-come)
-        return 0;
+      // ── Priority ranking: timestamp + work hours fairness ──
+      const candidateInputs: Candidate[] = candidates.map(emp => {
+        const reg = regMap.get(emp.id);
+        return {
+          userId: emp.id,
+          submittedAt: reg?.submittedAt || new Date(0).toISOString(),
+        };
       });
 
-      // Chọn từ đầu danh sách cho đến khi đủ capacity
-      const selected = candidates.slice(0, availableSlots);
+      const { selected: rankedSelected, rejected: rankedRejected } = rankCandidates(
+        candidateInputs,
+        workHoursMap,
+        availableSlots
+      );
+
+      // Map ranked userId back to employee objects
+      const selectedEmps = rankedSelected.map(r => candidates.find(e => e.id === r.userId)!).filter(Boolean);
 
       // Ghi nhận kết quả
       const assignedIds: string[] = [];
-      for (const emp of selected) {
+      for (const emp of selectedEmps) {
         const empTr = getShiftTimeRange(slot, emp.employmentType);
         allPlaced.push({
           id: `batch-auto-${emp.id}-${date}-${slot}`,
@@ -245,7 +259,7 @@ export function computeBatchAutoSchedule(
         assignedToday.get(date)!.add(emp.id);
       }
 
-      const missingCount = Math.max(0, availableSlots - selected.length);
+      const missingCount = Math.max(0, availableSlots - selectedEmps.length);
       slotResults.push({
         date,
         shiftName,
@@ -253,6 +267,7 @@ export function computeBatchAutoSchedule(
         capacity,
         isUnderstaffed: missingCount > 0,
         missingCount,
+        rejectedCandidates: rankedRejected,
       });
     }
   }
