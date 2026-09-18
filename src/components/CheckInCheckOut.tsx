@@ -167,9 +167,16 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   );
 
   // ── Gate: Wi-Fi + GPS in parallel, decision in the pure gate ────────────
-  const runGateCheck = useCallback(async (type: ActionType) => {
+  /**
+   * BUG 8 FIX: Auto-retry once after 2s when the gate blocks.
+   * Transient network hiccups (DNS lag, API timeout, GPS cold start)
+   * are common — retrying once eliminates most false-positive blocks
+   * without adding noticeable delay (2s is barely perceptible during
+   * the loading spinner).
+   */
+  const runGateCheck = useCallback(async (type: ActionType, _retryCount = 0) => {
     setActionType(type);
-    setCameraRetryCount(0);
+    if (_retryCount === 0) setCameraRetryCount(0);
 
     const [wifiSettled, gpsSettled] = await Promise.allSettled([
       validateWifiConnection(),
@@ -186,7 +193,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         localIP: null,
         error: 'Lỗi kiểm tra kết nối Wi-Fi',
         useFallback: OFFICE_WIFI.fallbackEnabled,
-        details: { publicIPValid: false, localIPValid: false },
+        details: { publicIPValid: false, localIPValid: false, publicIPUnknown: true },
       };
     }
 
@@ -213,6 +220,17 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       officeRadiusMeters: DEFAULT_STORE.radius,
       distanceToOffice: getDistanceToOffice,
     });
+
+    // Auto-retry once on transient failures (WiFi API timeout, GPS cold
+    // start). Skip retry for 'pass' and 'fallback' — those are final.
+    const shouldRetry = _retryCount === 0 &&
+      (gate.verdict === 'wifi-invalid' ||
+       gate.verdict === 'gps-unavailable' ||
+       gate.verdict === 'gps-too-far');
+    if (shouldRetry) {
+      await new Promise(r => setTimeout(r, 2000));
+      return runGateCheck(type, _retryCount + 1);
+    }
 
     const wifi: WifiSnapshot | null =
       gate.verdict === 'wifi-invalid' ? toWifiSnapshot(wifiResult) : null;
@@ -262,6 +280,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setTimeout(() => dispatchFlow({ type: 'smile-captured', photo }), 500);
   }, []);
 
+  // BUG 10 FIX: Limit camera retry to 3 attempts before auto-switching
+  // to GPS/PIN fallback. Without a limit, repeated denial creates an
+  // infinite retry loop that frustrates the user.
+  const MAX_CAMERA_RETRIES = 3;
+
   const handlePermissionAllow = async () => {
     // Real getUserMedia probe lives in the hook (reusable, testable seam).
     const result = await camera.probe();
@@ -269,7 +292,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       dispatchFlow({ type: 'camera-allowed' });
     } else {
       // Permission denied or camera unavailable
-      setCameraRetryCount((prev) => prev + 1);
+      setCameraRetryCount((prev) => {
+        const next = prev + 1;
+        if (next >= MAX_CAMERA_RETRIES) {
+          // Auto-switch to fallback after max retries
+          setTimeout(() => dispatchFlow({ type: 'open-fallback' }), 500);
+        }
+        return next;
+      });
       dispatchFlow({ type: 'camera-denied' });
     }
   };
@@ -317,6 +347,12 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   // ── Fallback: PIN ────────────────────────────────────────────────────────
   const handlePinSubmit = async () => {
     if (pin.locked) return;
+
+    const pinInput = flow.view === 'pin' ? flow.input : '';
+    if (!pinInput || pinInput.length < 4) {
+      dispatchFlow({ type: 'pin-error', message: 'Vui lòng nhập mã PIN.' });
+      return;
+    }
 
     const today = new Date().toISOString().split('T')[0];
     const shiftType = getCurrentShiftType();

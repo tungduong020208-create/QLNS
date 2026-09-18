@@ -79,12 +79,23 @@ export function resolveAttendanceGate(input: GateInput): GateOutcome {
   const distance = Math.round(
     distanceToOffice(gpsPosition.coords.latitude, gpsPosition.coords.longitude)
   );
-  if (distance > officeRadiusMeters) {
+
+  // BUG 4 FIX: Dynamic radius — add GPS accuracy as a buffer so employees
+  // at the physical store aren't blocked by normal indoor GPS drift.
+  // A phone reporting accuracy=50m means the real position could be up to
+  // 50m in any direction from the reported point. Without this buffer,
+  // employees inside the store but near the edge of the 150m radius get
+  // false "too far" blocks.
+  const accuracyBuffer = gpsPosition.coords.accuracy ?? 0;
+  const effectiveRadius = officeRadiusMeters + accuracyBuffer;
+
+  if (distance > effectiveRadius) {
     return {
       verdict: 'gps-too-far',
       distance,
       message:
-        `Bạn đang cách văn phòng ${distance}m (giới hạn ${officeRadiusMeters}m). ` +
+        `Bạn đang cách văn phòng ${distance}m (giới hạn ${Math.round(effectiveRadius)}m, ` +
+        `GPS chính xác ~${Math.round(accuracyBuffer)}m). ` +
         'Wi-Fi hợp lệ nhưng vị trí GPS lệch xa — nghi ngờ giả mạo Wi-Fi hoặc dùng VPN. ' +
         'Vui lòng đến văn phòng để chấm công.',
     };

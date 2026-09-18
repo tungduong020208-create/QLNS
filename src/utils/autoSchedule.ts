@@ -31,7 +31,7 @@
  * map 1:1 onto that RPC.
  */
 
-import { ShiftSlot, WeeklyShiftRegistration, EmploymentType } from '../types';
+import { ShiftSlot, WeeklyShiftRegistration, EmploymentType, ShiftCapacityOverride } from '../types';
 import { Shift } from '../components/screens/ManagerScheduleScreen';
 import { SHIFT_SLOT_TEMPLATES, getShiftTimeRange } from './constants';
 import { getCapacityForDate } from '../hooks/useShiftCapacity';
@@ -60,6 +60,59 @@ export const isManualShift = (s: Shift): boolean => s.origin === 'manual';
 /** Optional capacity resolver injected by the caller (per-date overrides). */
 export type CapacityResolver = (date: string, shiftName: string) => number;
 
+/** Last day (Sunday, local-date string) of the week that starts on `weekStart`. */
+const weekEndStrOf = (weekStart: string): string => {
+  const d = new Date(weekStart + 'T00:00:00');
+  d.setDate(d.getDate() + 6);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export interface SlotAvailability {
+  date: string;
+  shiftName: string;
+  /** Non-cancelled rows currently occupying the slot (any origin). */
+  taken: number;
+  /** Per-(date, shift) max — defaults + manager overrides. */
+  max: number;
+  /** max - taken, floored at 0. */
+  remaining: number;
+  isFull: boolean;
+}
+
+/**
+ * getSlotAvailability — single read-model for "ca này còn chỗ không?".
+ *
+ * The auto-scheduler enforces capacity at WRITE time; this helper exposes
+ * the SAME numbers for READ time (employee form hints, manager panels).
+ * Both sides read one function so the hint can never disagree with the
+ * rule that will actually be enforced on submit.
+ */
+export function getSlotAvailability(
+  shifts: Shift[],
+  date: string,
+  shiftName: string,
+  overrides?: ShiftCapacityOverride[],
+  /** Viewer's own AUTO rows don't occupy a seat from their point of view:
+   *  resubmitting replaces them (the exact rule the engine enforces), so a
+   *  hint must not say "đầy" because of the viewer's own row. Own MANUAL
+   *  rows still count — a manager placement really holds the seat. */
+  viewerEmployeeId?: string
+): SlotAvailability {
+  const taken = shifts.filter(
+    (s) =>
+      s.date === date &&
+      s.shiftName === shiftName &&
+      s.status !== 'cancelled' &&
+      !(viewerEmployeeId && s.employeeId === viewerEmployeeId && !isManualShift(s))
+  ).length;
+  const max = getCapacityForDate(overrides ?? [], date, shiftName);
+  const remaining = Math.max(0, max - taken);
+  return { date, shiftName, taken, max, remaining, isFull: remaining === 0 };
+}
+
 /**
  * Apply an employee's registration to the official schedule.
  *
@@ -80,9 +133,7 @@ export function computeAutoSchedule(
   employmentType?: EmploymentType,
   getCapacity?: CapacityResolver
 ): AutoScheduleResult {
-  const weekEnd = new Date(reg.weekStart + 'T00:00:00');
-  weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  const weekEndStr = weekEndStrOf(reg.weekStart);
 
   // Keep everything OUTSIDE this employee+week, plus this employee's MANUAL
   // rows inside the week (manual beats auto — see module doc).
@@ -94,14 +145,21 @@ export function computeAutoSchedule(
 
   // Manual rows of OTHER employees for the same week still count against
   // capacity — capacity is a property of the schedule, not of the writer.
+  // The employee's own AUTO rows do NOT count: this submission replaces them
+  // (resubmission = new intent), so counting them would block the employee
+  // from keeping/adjusting their own previously-registered shifts.
   const sameWeek = allShifts.filter(
-    (s) => s.date >= reg.weekStart && s.date <= weekEndStr && s.status !== 'cancelled'
+    (s) =>
+      s.date >= reg.weekStart &&
+      s.date <= weekEndStr &&
+      s.status !== 'cancelled' &&
+      !(s.employeeId === reg.userId && !isManualShift(s))
   );
 
   const placed: Shift[] = [];
   const conflicts: AutoScheduleConflict[] = [];
 
-  for (const day of reg.days) {
+  for (const day of (reg.days ?? [])) {
     if (day.shift === 'off') continue;
 
     // Duplicate guard: the employee already holds a non-cancelled shift

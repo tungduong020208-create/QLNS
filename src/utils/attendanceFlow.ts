@@ -159,6 +159,8 @@ export interface WifiSnapshot {
   localIP: string | null;
   publicIPValid: boolean;
   localIPValid: boolean;
+  /** true when public IP could not be fetched (firewall/captive portal). */
+  publicIPUnknown?: boolean;
 }
 
 export type AttendanceFlowState =
@@ -342,12 +344,13 @@ export const initialPinState: PinState = { locked: false, attempts: 0, lockTimer
 export function toWifiSnapshot(result: {
   publicIP: string | null;
   localIP: string | null;
-  details?: { publicIPValid: boolean; localIPValid: boolean } | null;
+  details?: { publicIPValid: boolean; localIPValid: boolean; publicIPUnknown?: boolean } | null;
 }): WifiSnapshot {
   return {
     publicIP: result.publicIP,
     localIP: result.localIP,
     publicIPValid: !!result.details?.publicIPValid,
     localIPValid: !!result.details?.localIPValid,
+    publicIPUnknown: !!result.details?.publicIPUnknown,
   };
 }

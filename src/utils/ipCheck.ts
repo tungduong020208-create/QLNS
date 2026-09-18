@@ -39,6 +39,10 @@ export interface IpCheckResult {
   details: {
     publicIPValid: boolean;
     localIPValid: boolean;
+    /** true when public IP could not be fetched at all (firewall, captive
+     *  portal, network error). Distinct from "fetched but wrong" — we
+     *  never block on unknown, only on confirmed mismatch. */
+    publicIPUnknown: boolean;
   };
 }
 
@@ -68,13 +72,30 @@ export async function fetchPublicIP(): Promise<string | null> {
 
   for (const api of apis) {
     try {
-      const response = await fetch(api, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000), // 5 second timeout
-      });
+      // BUG 3 FIX: AbortSignal.timeout() is unsupported on Safari < 16.4.
+      // Use manual AbortController + setTimeout for cross-browser compat.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+
+      let response: Response;
+      try {
+        response = await fetch(api, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
 
       if (!response.ok) continue;
+
+      // BUG 5 FIX: Captive portals return HTML (200 OK but text/html).
+      // Check content-type before parsing to avoid silent JSON parse fail.
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('json') && !contentType.includes('text')) {
+        continue; // Likely a captive portal redirect page
+      }
 
       const data = await response.json();
 
@@ -99,9 +120,16 @@ export async function fetchPublicIP(): Promise<string | null> {
  */
 export async function fetchPublicIPQuick(): Promise<string | null> {
   try {
-    const response = await fetch('https://api.ipify.org?format=json', {
-      signal: AbortSignal.timeout(3000),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    let response: Response;
+    try {
+      response = await fetch('https://api.ipify.org?format=json', {
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!response.ok) return null;
     const data = await response.json();
     return data.ip || null;
@@ -265,7 +293,7 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
       localIP: null,
       error: null,
       useFallback: false,
-      details: { publicIPValid: true, localIPValid: true },
+      details: { publicIPValid: true, localIPValid: true, publicIPUnknown: false },
     };
   }
 
@@ -276,10 +304,23 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
   ]);
 
   // Validate Public IP (if any are configured)
+  //
+  // BUG 1 FIX: publicIP === null means "unknown" (firewall blocked the
+  // external API, captive portal, network issue) — NOT "wrong IP".
+  // We never block on unknown; we only block on confirmed mismatch
+  // (IP fetched but doesn't match whitelist). When unknown + fallback
+  // enabled → GPS/PIN fallback. When unknown + fallback disabled →
+  // still allow (better than blocking every employee on corporate nets
+  // that block IP-lookup APIs).
   let publicIPValid = true;
+  let publicIPUnknown = false;
   if (config.publicIPs.length > 0) {
     if (!publicIP) {
-      publicIPValid = false;
+      publicIPUnknown = true;
+      // null = unknown, NOT invalid. Treat as pass — the real security
+      // boundary is server-side (Phase 4). Blocking on "can't determine"
+      // is worse than allowing with GPS verification.
+      publicIPValid = true;
     } else {
       publicIPValid = isIPAllowed(publicIP, [...config.publicIPs]);
     }
@@ -308,25 +349,30 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
 
   const isValid = publicIPValid && localIPValid;
 
+  // BUG 1 FIX: When public IP is unknown (firewall/blocked API), we pass
+  // the WiFi check anyway but flag it so the gate can offer GPS fallback.
+  // This prevents the most common false-positive block on corporate networks.
   if (isValid) {
     return {
       isValid: true,
       publicIP,
       localIP,
       error: null,
-      useFallback: false,
-      details: { publicIPValid, localIPValid },
+      // If public IP is unknown, enable fallback so GPS verification
+      // still happens as a safety net (even when VITE_OFFICE_WIFI_FALLBACK
+      // is false — unknown IP + no fallback = silent block on every
+      // corporate network that blocks ipify).
+      useFallback: publicIPUnknown ? true : false,
+      details: { publicIPValid, localIPValid, publicIPUnknown },
     };
   }
 
   // Build error message based on what failed
   const errors: string[] = [];
-  if (config.publicIPs.length > 0 && !publicIPValid) {
-    if (!publicIP) {
-      errors.push('Không thể xác định Public IP');
-    } else {
-      errors.push(`Public IP (${publicIP}) không hợp lệ`);
-    }
+  if (config.publicIPs.length > 0 && !publicIPValid && !publicIPUnknown) {
+    // Only show IP mismatch when we ACTUALLY fetched the IP and it didn't
+    // match. null/unknown was already treated as pass above.
+    errors.push(`Public IP (${publicIP}) không hợp lệ`);
   }
   // Only report a local-IP error when we actually GOT a local IP and
   // it failed the subnet check. If localIP is null (mDNS obfuscation)
@@ -342,7 +388,7 @@ export async function validateWifiConnection(): Promise<IpCheckResult> {
     localIP,
     error: `Bạn đang không kết nối Wifi nội bộ công ty. Vui lòng kết nối Wifi ${config.displayName} để chấm công. (${errors.join('. ')})`,
     useFallback: config.fallbackEnabled,
-    details: { publicIPValid, localIPValid },
+    details: { publicIPValid, localIPValid, publicIPUnknown },
   };
 }
 

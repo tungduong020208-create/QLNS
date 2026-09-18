@@ -143,6 +143,10 @@ export default function App() {
   const handleReviewEvidence = (evidenceId: string, status: 'good' | 'bad', points: number, note: string) => {
     if (!currentUser) return;
     const target = evidences.find(e => e.id === evidenceId);
+    if (target && target.employeeId === currentUser.id) {
+      addToast('error', 'Không thể duyệt', 'Bạn không thể duyệt minh chứng của chính mình');
+      return;
+    }
     reviewEvidence({ evidenceId, status, points, note, reviewerName: currentUser.name });
     if (target) {
       const notifItem: NotificationItem = {
@@ -718,9 +722,7 @@ export default function App() {
           />
           <EmployeeDetailModal
             employee={selectedEmployee}
-            evidences={evidences}
             onClose={() => setSelectedEmployee(null)}
-            onNavigateToReview={() => goTo('review')}
           />
           {currentUser.role === 'manager' && (
             <AddEmployeeModal

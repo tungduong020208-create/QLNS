@@ -185,7 +185,11 @@ export const OFFICE_WIFI = {
     .split(',').map(s => s.trim()).filter(Boolean) as string[],
   localSubnets: (import.meta.env?.VITE_OFFICE_LOCAL_SUBNETS || '')
     .split(',').map(s => s.trim()).filter(Boolean) as string[],
-  fallbackEnabled: import.meta.env?.VITE_OFFICE_WIFI_FALLBACK === 'true',
+  // BUG 6 FIX: Default to true — always allow GPS/PIN fallback so employees
+  // are never fully locked out when WiFi config is slightly off or the
+  // network blocks IP-lookup APIs. Set to 'false' only if you have a
+  // separate physical access control (badge, keypad) as the sole fallback.
+  fallbackEnabled: import.meta.env?.VITE_OFFICE_WIFI_FALLBACK !== 'false',
 };
 
 /**
@@ -245,5 +249,9 @@ export const DEFAULT_STORE = {
   name: 'AiiCafe - Quận 1',
   latitude: 10.7769,
   longitude: 106.7009,
-  radius: 100, // meters
+  // BUG 4 FIX: Increased from 100m to 150m. Indoor GPS accuracy is
+  // typically 30-50m; a 100m radius causes false negatives when the
+  // employee is physically at the store but GPS drifts slightly.
+  // The attendanceGate also adds GPS accuracy as a buffer (see below).
+  radius: 150, // meters
 } as const;

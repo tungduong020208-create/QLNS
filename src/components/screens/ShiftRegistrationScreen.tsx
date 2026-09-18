@@ -202,7 +202,7 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
 
     const now = new Date().toISOString();
     const reg: WeeklyShiftRegistration = {
-      id: existingReg?.id || `reg-${Date.now()}-${currentUser.id}`,
+      id: existingReg?.id || `reg-${crypto.randomUUID()}-${currentUser.id}`,
       userId: currentUser.id,
       userName: currentUser.name,
       userAvatar: currentUser.avatar,

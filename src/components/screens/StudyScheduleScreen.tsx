@@ -220,7 +220,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
 
     // Submit study schedule
     const studySchedule: StudySchedule = {
-      id: existingSchedule?.id || `study-${Date.now()}-${currentUser.id}`,
+      id: existingSchedule?.id || `study-${crypto.randomUUID()}-${currentUser.id}`,
       userId: currentUser.id,
       userName: currentUser.name,
       userAvatar: currentUser.avatar,
@@ -255,7 +255,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
     });
 
     const reg: WeeklyShiftRegistration = {
-      id: existingReg?.id || `reg-${Date.now()}-${currentUser.id}`,
+      id: existingReg?.id || `reg-${crypto.randomUUID()}-${currentUser.id}`,
       userId: currentUser.id,
       userName: currentUser.name,
       userAvatar: currentUser.avatar,
@@ -516,7 +516,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
                             const count = av.taken;
                             const max = av.max;
                             const isFull = av.isFull;
-                            const disabled = isFull && selectedShift !== slot.value;
+                            const disabled = (isFull && selectedShift !== slot.value) || isPast;
                             const tr = getShiftTimeRange(slot.value, currentUser.employmentType);
                             return (
                               <button

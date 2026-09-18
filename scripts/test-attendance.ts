@@ -55,7 +55,7 @@ const wifi = (over: Partial<IpCheckResult> = {}): IpCheckResult => ({
   localIP: null,
   error: '',
   useFallback: false,
-  details: { publicIPValid: true, localIPValid: false },
+  details: { publicIPValid: true, localIPValid: false, publicIPUnknown: false },
   ...over,
 });
 
@@ -237,8 +237,8 @@ eq('gate pass → permission',
   flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'pass' }),
   { view: 'permission' });
 eq('wifi-blocked carries wifi snapshot',
-  flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false } }),
-  { view: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false } });
+  flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false } }),
+  { view: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false } });
 eq('fallback verdict → fallback-select',
   flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'fallback' }),
   { view: 'fallback-select' });
@@ -303,7 +303,7 @@ eq('deriveInitialSessionState restores on-state',
   deriveInitialSessionState({ employeeId: 'e1', hasCheckedIn: true, checkInTime: '08:00', checkInTimestamp: 1000, checkInMethod: 'gps', address: 'a' }).status,
   'on');
 
-eq('toWifiSnapshot reads details safely', toWifiSnapshot({ publicIP: 'p', localIP: null, details: null }), { publicIP: 'p', localIP: null, publicIPValid: false, localIPValid: false });
+eq('toWifiSnapshot reads details safely', toWifiSnapshot({ publicIP: 'p', localIP: null, details: null }), { publicIP: 'p', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false });
 
 // ═══════════════════════════════ summary ═════════════════════════════════════
 console.log(`\nAttendance rules: ${pass} passed, ${fail} failed`);

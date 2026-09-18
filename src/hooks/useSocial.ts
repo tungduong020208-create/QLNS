@@ -36,7 +36,7 @@ export function useSocial(user: User | null) {
         return prev.map(r => (r.postId === postId && r.userId === user.id) ? { ...r, type } : r);
       }
       const reaction: PostReaction = {
-        id: `pr-${Date.now()}`,
+        id: `pr-${crypto.randomUUID()}`,
         postId,
         userId: user.id,
         userName: user.name,
@@ -50,7 +50,7 @@ export function useSocial(user: User | null) {
   const addComment = (postId: string, content: string) => {
     if (!user || !content.trim()) return;
     const comment: PostComment = {
-      id: `pc-${Date.now()}`,
+      id: `pc-${crypto.randomUUID()}`,
       postId,
       userId: user.id,
       userName: user.name,
