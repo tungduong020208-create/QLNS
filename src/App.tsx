@@ -39,7 +39,6 @@ import { Sidebar } from './components/Sidebar';
 import { LoginScreen } from './components/screens/LoginScreen';
 import { HomeScreen } from './components/screens/HomeScreen';
 import { ReviewScreen } from './components/screens/ReviewScreen';
-import { ApprovalsScreen } from './components/screens/ApprovalsScreen';
 import { ProfileScreen } from './components/screens/ProfileScreen';
 import { EvidenceDetailModal } from './components/modals/EvidenceDetailModal';
 import { ToastNotification } from './components/modals/ToastNotification';
@@ -399,7 +398,6 @@ export default function App() {
         study_schedules: ROUTES.MANAGER_SCHEDULE + '/study',
         // 'review' (the Bảng Tin entry) now lands the manager on the APPROVAL
         // queue — the social feed keeps its own entry ('feed').
-        review: ROUTES.MANAGER_APPROVALS,
         feed: ROUTES.MANAGER_HANDOVER,
         peer_review: ROUTES.MANAGER_PEER_REVIEW,
         export_report: ROUTES.MANAGER_EXPORT,
@@ -419,7 +417,6 @@ export default function App() {
     if (route) navigate(route);
   };
 
-  const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
 
   // ─── Layout wrapper for authenticated pages ───
   // The wrapper reads its latest values through a ref so the component's
@@ -427,11 +424,8 @@ export default function App() {
   // state change (e.g. reacting/commenting on the news feed) re-created the
   // component type and remounted the whole page subtree, resetting local UI
   // state such as open comment sections and the feed's date filter.
-  const layoutDepsRef = useRef({ currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount });
-  layoutDepsRef.current = { currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount };
 
   const AuthenticatedLayout = useMemo(() => ({ children }: { children: React.ReactNode }) => {
-    const { currentUser, notifications, markRead, markAllRead, goTo, handleLogout, pendingReviewCount } = layoutDepsRef.current;
     if (!currentUser) return null;
     return (
       <div className="min-h-screen bg-[#FDF8EE] text-[#3D4663] flex flex-col md:flex-row">
@@ -445,7 +439,6 @@ export default function App() {
         />
         <Sidebar
           currentUser={currentUser}
-          pendingReviewCount={pendingReviewCount}
           onNavigate={goTo}
         />
         <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-0">
@@ -453,7 +446,6 @@ export default function App() {
         </main>
         <BottomNav
           currentUser={currentUser}
-          pendingReviewCount={pendingReviewCount}
           onNavigate={goTo}
         />
       </div>
@@ -489,7 +481,6 @@ export default function App() {
                           allUsers={auth.users}
                           shifts={shifts}
                           onSelectEmployee={setSelectedEmployee}
-                          onNavigateReview={() => goTo('review')}
                           onNavigateSchedule={() => goTo('manager_schedule')}
                           onCheckIn={handleCheckInOutRecord}
                         />
@@ -592,7 +583,6 @@ export default function App() {
                         allUsers={auth.users}
                         shifts={shifts}
                         onSelectEmployee={setSelectedEmployee}
-                        onNavigateReview={() => goTo('review')}
                         onNavigateSchedule={() => goTo('manager_schedule')}
                       />
                     } />
@@ -672,17 +662,6 @@ export default function App() {
                         onTogglePostReaction={toggleReaction}
                         onAddPostComment={addComment}
                         onDeletePostComment={deleteComment}
-                      />
-                    } />
-                    {/* Manager-only: approval queue for feed posts — SEPARATE
-                        route from the social feed. Posts land here as
-                        'pending'; the feed itself stays a social space. */}
-                    <Route path="approvals" element={
-                      <ApprovalsScreen
-                        currentUser={currentUser}
-                        evidences={evidences}
-                        onEvaluate={handleReviewEvidence}
-                        onOpenDetail={setSelectedEvidence}
                       />
                     } />
                     <Route path="peer-review" element={

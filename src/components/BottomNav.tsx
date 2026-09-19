@@ -3,13 +3,11 @@ import { useLocation } from 'react-router-dom';
 import { User } from '../types';
 
 interface BottomNavProps {
-  pendingReviewCount?: number;
   currentUser?: User;
   onNavigate: (tab: string) => void;
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({
-  pendingReviewCount = 0,
   currentUser,
   onNavigate,
 }) => {
@@ -24,9 +22,6 @@ export const BottomNav: React.FC<BottomNavProps> = ({
     if (pathname.includes('/work-hours')) return 'work_hours';
     if (pathname.includes('/export')) return 'export_report';
     // Single "Bảng Tin" entry for both roles (points at the social feed).
-    // The manager approval queue (/admin/approvals) still exists — reached
-    // from the dashboard's pending-approvals card — and highlights this tab.
-    if (pathname.includes('/approvals')) return 'feed';
     if (pathname.includes('/handover')) return 'feed';
     if (pathname.includes('/peer-review')) return 'peer_review';
     if (pathname.includes('/shift-registration')) return 'study_schedule';
@@ -153,11 +148,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
               {moreOpen ? 'close' : 'apps'}
             </span>
 
-            {moreActive && pendingReviewCount > 0 && (
-              <span className="absolute -top-1 -right-2 bg-[#FF3131] text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {pendingReviewCount > 9 ? '9+' : pendingReviewCount}
-              </span>
-            )}
+
           </div>
           <span className={`text-[11px] tracking-wide mt-0.5 whitespace-nowrap ${moreActive ? 'font-bold' : 'font-medium'}`}>
             Khác

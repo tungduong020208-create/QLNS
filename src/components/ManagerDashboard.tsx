@@ -17,7 +17,6 @@ interface ManagerDashboardProps {
   allUsers: User[];
   shifts: Shift[];
   onSelectEmployee: (user: User) => void;
-  onNavigateReview: () => void;
   onNavigateSchedule: () => void;
   onCheckIn?: (record: CheckInRecord) => void;
 }
@@ -35,7 +34,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   allUsers,
   shifts,
   onSelectEmployee,
-  onNavigateReview,
   onNavigateSchedule,
   onCheckIn
 }) => {
@@ -122,7 +120,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
 
   const totalEmployees = allUsers.filter(u => u.role === 'employee').length;
   const checkedInCount = employeeStatuses.filter(s => s.hasCheckedIn).length;
-  const pendingReviewCount = evidences.filter(e => e.status === 'pending').length;
 
   // ── "Ca còn trống" — số slot chưa ai lấp trong TUẦN LÀM VIỆC hiện tại.
   // WHY this replaced "Điểm TB team": averaging evidence points per person
@@ -231,22 +228,6 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
           <div className="text-xs text-[#767683] mt-1">
             {checkedInCount}/{totalEmployees} đã vào{notCheckedInCount > 0 ? ` · ${notCheckedInCount} chưa` : ''}
           </div>
-        </div>
-
-        {/* Pending approvals — 0 renders quiet: nothing to act on. */}
-        <div
-          className={`bg-white border border-[#c6c5d4]/60 rounded-xl p-4 shadow-sm ${pendingReviewCount > 0 ? 'cursor-pointer hover:border-[#000666]/50 transition-colors' : 'opacity-70'}`}
-          onClick={pendingReviewCount > 0 ? onNavigateReview : undefined}
-          title={pendingReviewCount > 0 ? 'Xử lý phê duyệt' : undefined}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`material-symbols-outlined text-[20px] ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-[#767683]'}`}>pending</span>
-            <span className="text-xs text-[#454652] font-medium">Phê duyệt chờ</span>
-          </div>
-          <div className={`font-headline text-2xl font-bold ${pendingReviewCount > 0 ? 'text-amber-500' : 'text-[#767683]'}`}>{pendingReviewCount}</div>
-          {pendingReviewCount > 0 && (
-            <div className="text-xs text-[#000666] mt-1 font-medium">Xử lý →</div>
-          )}
         </div>
 
         {/* Open Shift Slots — replaced the meaningless "team average score"

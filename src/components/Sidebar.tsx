@@ -5,13 +5,11 @@ import { ROUTES } from '../routes';
 
 interface SidebarProps {
   currentUser: User;
-  pendingReviewCount?: number;
   onNavigate: (tab: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentUser,
-  pendingReviewCount = 0,
   onNavigate,
 }) => {
   const location = useLocation();
@@ -26,9 +24,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (pathname.includes('/work-hours')) return 'work_hours';
     if (pathname.includes('/export')) return 'export_report';
     // Single "Bảng Tin" entry for both roles (points at the social feed).
-    // The manager approval queue (/admin/approvals) still exists — reached
-    // from the dashboard's pending-approvals card — and highlights this tab.
-    if (pathname.includes('/approvals')) return 'feed';
     if (pathname.includes('/handover')) return 'feed';
     if (pathname.includes('/peer-review')) return 'peer_review';
     if (pathname.includes('/shift-registration')) return 'study_schedule';
@@ -166,11 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span className="text-sm font-medium">{tab.label}</span>
               </div>
 
-              {tab.id === 'feed' && currentUser.role === 'manager' && pendingReviewCount > 0 && (
-                <span className="bg-[#FF3131] text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                  {pendingReviewCount}
-                </span>
-              )}
+
             </button>
           );
         })}
