@@ -63,7 +63,7 @@ export const WorkHoursScreen: React.FC<WorkHoursScreenProps> = ({
   const employees = allUsers.filter(u => u.role !== 'manager');
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-4xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-4xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-6">
         <h1 className="font-heading text-xl md:text-2xl font-bold text-[#0F1E44] mb-1">

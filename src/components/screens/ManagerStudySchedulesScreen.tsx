@@ -4,6 +4,7 @@ import {
   StudySchedule,
   ManualShiftAssignment,
   WeeklyShiftRegistration,
+  NotificationItem,
 } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import { getShiftTimeRange } from '../../utils/constants';
@@ -60,7 +61,7 @@ interface ManagerStudySchedulesScreenProps {
    *  separate manager-only assignment history. */
   shifts: Shift[];
   onPublishSchedule: (assignment: ManualShiftAssignment) => void;
-  onAddNotification: (notification: any) => void;
+  onAddNotification: (notification: NotificationItem) => void;
   /** Apply batch auto-schedule result directly to the shifts store. */
   onApplyBatchShifts: (shifts: Shift[]) => void;
 }
@@ -287,7 +288,7 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-4xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-4xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between">

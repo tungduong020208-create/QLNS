@@ -98,9 +98,9 @@ const SmileDetector: React.FC<{
         };
 
         animFrameRef.current = requestAnimationFrame(detect);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (mounted) {
-          const errorMsg = err?.message || 'Không thể truy cập camera';
+          const errorMsg = err instanceof Error ? err.message : 'Không thể truy cập camera';
           setError(errorMsg);
           onCameraError?.(errorMsg);
         }

@@ -319,7 +319,7 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
 
   // ─── Render ───
   return (
-    <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-5">
         <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đánh giá</h2>

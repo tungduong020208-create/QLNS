@@ -30,9 +30,9 @@ export function useCameraPermission(): CameraPermission {
       stream.getTracks().forEach((t) => t.stop());
       setState('granted');
       return 'granted';
-    } catch (err: any) {
+    } catch (err: unknown) {
       const next: CameraPermissionState =
-        err?.name === 'NotAllowedError' ? 'denied' : 'unavailable';
+        err instanceof DOMException && err.name === 'NotAllowedError' ? 'denied' : 'unavailable';
       setState(next);
       return next;
     } finally {

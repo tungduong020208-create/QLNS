@@ -404,7 +404,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const dayNames = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-6xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-6xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

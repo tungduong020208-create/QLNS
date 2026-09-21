@@ -109,7 +109,7 @@ export const SubmitEvidenceScreen: React.FC<SubmitEvidenceScreenProps> = ({
   };
 
   return (
-    <div className="bg-[#FDF8EE] text-[#0F1E44] min-h-screen pb-28 pt-20 px-4">
+    <div className="bg-[#FDF8EE] text-[#0F1E44] min-h-screen pb-safe-bottom pt-safe-top px-4">
       <div className="max-w-2xl mx-auto">
         {/* Page Title */}
         <div className="mb-6">

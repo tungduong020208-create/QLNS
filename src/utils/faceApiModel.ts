@@ -114,9 +114,9 @@ class FaceApiModelManager {
       this.state = 'loaded';
       this.errorMessage = '';
       return true;
-    } catch (err: any) {
+    } catch (err: unknown) {
       this.state = 'error';
-      this.errorMessage = err?.message || 'Failed to load face detection models';
+      this.errorMessage = err instanceof Error ? err.message : 'Failed to load face detection models';
       console.error('[FaceAPI] Model loading failed:', this.errorMessage);
       return false;
     }

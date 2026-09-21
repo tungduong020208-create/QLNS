@@ -160,7 +160,7 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
       <div className="mb-5">
         <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Xuất Báo Cáo</h2>
         <p className="text-xs text-[#7A829A] mt-0.5">Tải dữ liệu vận hành ra file Excel</p>

@@ -17,5 +17,6 @@
 - Vite reads `.env*` at STARTUP ONLY — restart the server after editing `.env.local`.
 - Vite auto-selects the next free port (3004+) when 3000–3003 are occupied.
 - Server logs go to `.freebuff/preview-*.log` (stdout) and `.freebuff/preview-*.log.err` (stderr).
-- Current port: 3000 (was free this run).
-- PowerShell `Start-Process` hangs in this shell — use `nohup npm run dev > /dev/null 2> /dev/null &` (bash) instead.
+- Current port: 3001 (was free this run).
+- PowerShell `Start-Process` hangs in this shell — use `nohup npm run dev > <log> 2> <log>.err &` (bash) instead.
+- Windows PID for register_preview: use `wmic process where "name='node.exe'" get ProcessId` to find the right one (bash PIDs ≠ Windows PIDs).

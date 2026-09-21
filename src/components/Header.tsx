@@ -26,7 +26,7 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadCount = managementNotifications.filter(n => !n.read).length;
 
   return (
-    <header className="fixed top-0 left-0 w-full z-40 bg-[#FDF8EE] border-b border-[#E8DFD0] flex justify-between items-center px-4 h-16">
+    <header className="fixed top-0 left-0 w-full z-40 bg-[#FDF8EE] border-b border-[#E8DFD0] flex justify-between items-center px-4 pt-[max(0px,env(safe-area-inset-top))] h-[max(3.5rem,calc(3.5rem+env(safe-area-inset-top)))]">
       <div className="flex items-center gap-3">
         <img
           src="/aiicafe-logo-blue.png"

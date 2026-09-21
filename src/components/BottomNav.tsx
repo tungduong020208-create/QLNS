@@ -118,13 +118,13 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       )}
 
       {/* Compact bottom bar: home inline + everything else in the "Khác" cluster */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-2 py-2 bg-[#0F1E44] border-t border-[#1A2D5A] rounded-t-xl shadow-lg md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-[#0F1E44] rounded-t-2xl border-t border-[#1A2D5A] shadow-lg md:hidden">
         <button
           onClick={() => handleTabClick(homeTab.id)}
-          className={`flex flex-col items-center justify-center transition-all duration-200 relative group ${
+          className={`flex flex-col items-center justify-center transition-all duration-200 relative group flex-1 max-w-[100px] ${
             activeTab === homeTab.id
-              ? 'bg-[#EFC14B] text-[#0F1E44] rounded-full px-4 py-1.5 scale-95 font-semibold shadow-golden'
-              : 'text-white/60 hover:text-white rounded-full px-3.5 py-1.5'
+              ? 'bg-[#EFC14B] text-[#0F1E44] rounded-xl px-3 py-1.5 font-semibold shadow-golden'
+              : 'text-white/60 hover:text-white rounded-xl px-3 py-1.5'
           }`}
         >
           <span className={`material-symbols-outlined text-[24px] ${activeTab === homeTab.id ? 'fill' : ''}`}>
@@ -137,18 +137,16 @@ export const BottomNav: React.FC<BottomNavProps> = ({
 
         <button
           onClick={() => setMoreOpen(prev => !prev)}
-          className={`flex flex-col items-center justify-center transition-all duration-200 relative group ${
+          className={`flex flex-col items-center justify-center transition-all duration-200 relative group flex-1 max-w-[100px] ${
             moreActive
-              ? 'bg-[#EFC14B] text-[#0F1E44] rounded-full px-4 py-1.5 scale-95 font-semibold shadow-golden'
-              : 'text-white/60 hover:text-white rounded-full px-3.5 py-1.5'
+              ? 'bg-[#EFC14B] text-[#0F1E44] rounded-xl px-3 py-1.5 font-semibold shadow-golden'
+              : 'text-white/60 hover:text-white rounded-xl px-3 py-1.5'
           }`}
         >
           <div className="relative">
             <span className={`material-symbols-outlined text-[24px] ${moreActive ? 'fill' : ''}`}>
               {moreOpen ? 'close' : 'apps'}
             </span>
-
-
           </div>
           <span className={`text-[11px] tracking-wide mt-0.5 whitespace-nowrap ${moreActive ? 'font-bold' : 'font-medium'}`}>
             Khác

@@ -24,7 +24,7 @@
  * evidence also creates a notification and a toast).
  */
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, EvidenceItem, CheckInRecord, NotificationItem, GeofenceEvent } from './types';
 import { ROUTES, getDefaultHomeRoute } from './routes';
@@ -62,6 +62,51 @@ import { useScheduling } from './hooks/useScheduling';
 import { useSocial } from './hooks/useSocial';
 import { useReviews } from './hooks/useReviews';
 import { WorkHoursSummary } from './types';
+
+interface AuthenticatedLayoutProps {
+  children: React.ReactNode;
+  currentUser: User | null;
+  notifications: NotificationItem[];
+  markRead: (id: string) => void;
+  markAllRead: () => void;
+  goTo: (tab: string) => void;
+  handleLogout: () => void;
+}
+
+function AuthenticatedLayout({
+  children,
+  currentUser,
+  notifications,
+  markRead,
+  markAllRead,
+  goTo,
+  handleLogout,
+}: AuthenticatedLayoutProps) {
+  if (!currentUser) return null;
+  return (
+    <div className="min-h-screen bg-[#FDF8EE] text-[#3D4663] flex flex-col md:flex-row">
+      <Header
+        currentUser={currentUser}
+        notifications={notifications}
+        onMarkNotificationRead={markRead}
+        onClearAllNotifications={markAllRead}
+        onNavigateToProfile={() => goTo('profile')}
+        onLogout={handleLogout}
+      />
+      <Sidebar
+        currentUser={currentUser}
+        onNavigate={goTo}
+      />
+      <main className="flex-1 md:ml-64 min-h-screen pb-28 md:pb-0">
+        {children}
+      </main>
+      <BottomNav
+        currentUser={currentUser}
+        onNavigate={goTo}
+      />
+    </div>
+  );
+}
 
 export default function App() {
   const navigate = useNavigate();
@@ -419,38 +464,14 @@ export default function App() {
 
 
   // ─── Layout wrapper for authenticated pages ───
-  // The wrapper reads its latest values through a ref so the component's
-  // identity stays STABLE across App renders. Without this, every App-level
-  // state change (e.g. reacting/commenting on the news feed) re-created the
-  // component type and remounted the whole page subtree, resetting local UI
-  // state such as open comment sections and the feed's date filter.
-
-  const AuthenticatedLayout = useMemo(() => ({ children }: { children: React.ReactNode }) => {
-    if (!currentUser) return null;
-    return (
-      <div className="min-h-screen bg-[#FDF8EE] text-[#3D4663] flex flex-col md:flex-row">
-        <Header
-          currentUser={currentUser}
-          notifications={notifications}
-          onMarkNotificationRead={markRead}
-          onClearAllNotifications={markAllRead}
-          onNavigateToProfile={() => goTo('profile')}
-          onLogout={handleLogout}
-        />
-        <Sidebar
-          currentUser={currentUser}
-          onNavigate={goTo}
-        />
-        <main className="flex-1 md:ml-64 min-h-screen pb-20 md:pb-0">
-          {children}
-        </main>
-        <BottomNav
-          currentUser={currentUser}
-          onNavigate={goTo}
-        />
-      </div>
-    );
-  }, []);
+  const layoutProps = {
+    currentUser,
+    notifications,
+    markRead,
+    markAllRead,
+    goTo,
+    handleLogout,
+  };
 
   return (
     <div className="min-h-screen bg-[#FDF8EE]">
@@ -467,11 +488,11 @@ export default function App() {
 
         {/* Root: Redirect based on role */}
         <Route
-          path={ROUTES.HOME}
+          path="/*"
           element={
             <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn}>
               {currentUser ? (
-                <AuthenticatedLayout>
+                <AuthenticatedLayout {...layoutProps}>
                   <Routes>
                     {currentUser.role === 'manager' ? (
                       <Route index element={
@@ -508,7 +529,7 @@ export default function App() {
           element={
             <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn} requiredRole="employee">
               {currentUser && (
-                <AuthenticatedLayout>
+                <AuthenticatedLayout {...layoutProps}>
                   <Routes>
                     <Route path="home" element={
                       <HomeScreen
@@ -574,7 +595,7 @@ export default function App() {
           element={
             <ProtectedRoute currentUser={currentUser} isLoggedIn={auth.isLoggedIn} requiredRole="manager">
               {currentUser && (
-                <AuthenticatedLayout>
+                <AuthenticatedLayout {...layoutProps}>
                   <Routes>
                     <Route path="dashboard" element={
                       <ManagerDashboard

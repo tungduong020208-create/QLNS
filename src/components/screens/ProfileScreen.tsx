@@ -108,7 +108,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Profile Header */}
       <section className="flex flex-col items-center mb-8 text-center">
         <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-4 border-[#EFC14B] shadow-golden mb-3 bg-[#F5EDDF] group">

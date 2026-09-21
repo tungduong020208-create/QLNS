@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
-import { CheckInRecord, CheckInMethod } from '../types';
+import { CheckInRecord, CheckInMethod, CheckInLocation } from '../types';
 import {
   getCurrentPosition,
   isWithinStoreRadius,
@@ -60,18 +60,6 @@ const formatElapsed = (startTimestamp: number, nowMs: number): string => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
-const formatElapsedVerbose = (startTimestamp: number, nowMs: number): string => {
-  const diff = Math.floor((nowMs - startTimestamp) / 1000);
-  const h = Math.floor(diff / 3600);
-  const m = Math.floor((diff % 3600) / 60);
-  const s = diff % 60;
-  const parts: string[] = [];
-  if (h > 0) parts.push(`${h} giờ`);
-  if (m > 0) parts.push(`${m} phút`);
-  if (s > 0 || parts.length === 0) parts.push(`${s} giây`);
-  return parts.join(' ');
-};
-
 /**
  * CheckInCheckOut — presentation only.
  *
@@ -113,7 +101,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
   // ── Capture → record (compression + hash + persistence via reducer) ────
   const commitRecord = useCallback(
-    async (method: CheckInMethod, photo: string = '', loc?: any, pinAttempt?: number, fallbackReason?: string) => {
+    async (method: CheckInMethod, photo: string = '', loc?: CheckInLocation, pinAttempt?: number, fallbackReason?: string) => {
       const ts = new Date();
       const timestamp = ts.getTime();
 
@@ -199,7 +187,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
     let gpsErrorMessage: string | null = null;
     if (gpsSettled.status === 'rejected') {
-      const reason: any = gpsSettled.reason;
+      const reason = gpsSettled.reason as { code?: number; message?: string } | undefined;
       gpsErrorMessage = typeof reason?.code === 'number'
         ? getLocationErrorMessage(reason as GeolocationPositionError)
         : (reason?.message || 'Không thể xác định vị trí GPS');
@@ -339,8 +327,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
           message: `Bạn đang cách cửa hàng ${distance}m. Vui lòng đến trong phạm vi 100m.`,
         });
       }
-    } catch (err: any) {
-      dispatchFlow({ type: 'gps-locate-phase', phase: 'error', message: getLocationErrorMessage(err) });
+    } catch (err: unknown) {
+      dispatchFlow({ type: 'gps-locate-phase', phase: 'error', message: getLocationErrorMessage(err as GeolocationPositionError) });
     }
   };
 
@@ -425,23 +413,23 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
 
         {/* Action */}
-        <div className="px-5 py-4">
+        <div className="px-4 py-4 sm:px-5">
           {session.status !== 'on' ? (
             <>
               <button
                 onClick={() => handleCaptureClick('checkin')}
                 disabled={busy}
-                className="w-full bg-[#0F1E44] text-white rounded-xl h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#1A2D5A] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-[#0F1E44] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#1A2D5A] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined fill text-[22px]">add_a_photo</span>
-                <span className="font-semibold text-base">Check-in ngay</span>
+                <span className="material-symbols-outlined fill text-[24px]">add_a_photo</span>
+                <span className="font-semibold text-[15px]">Check-in ngay</span>
               </button>
-              <p className="text-[11px] text-[#7A829A] text-center mt-2">
+              <p className="text-xs text-[#7A829A] text-center mt-2">
                 📸 Chụp ảnh nụ cười để xác nhận điểm danh
               </p>
-              <p className="text-[10px] text-[#7A829A]/80 text-center mt-1 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">shield</span>
-                Vị trí chỉ được theo dõi trong giờ làm việc (từ lúc check-in) và dừng ngay khi check-out
+              <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">shield</span>
+                Vị trí chỉ được theo dõi trong giờ làm việc
               </p>
 
               {/* Show fallback button after 2 camera failures */}
@@ -475,7 +463,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                   <div className="bg-white rounded-xl p-3 border border-[#4CAF72]/20">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold mb-0.5">Thời gian đang làm</p>
+                        <p className="text-[11px] text-[#7A829A] uppercase tracking-wider font-semibold mb-0.5">Thời gian đang làm</p>
                         <p className="text-2xl font-heading font-bold text-[#2E7D52] tabular-nums tracking-tight">
                           {formatElapsed(session.checkInTimestamp, now.getTime())}
                         </p>
@@ -484,25 +472,24 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                         <div className="w-3 h-3 bg-[#4CAF72] rounded-full animate-pulse" />
                       </div>
                     </div>
-                    <p className="text-[10px] text-[#4CAF72] mt-1 text-center">Đang trong ca làm việc</p>
-                    <p className="text-[10px] text-[#7A829A] mt-0.5 text-center">{formatElapsedVerbose(session.checkInTimestamp, now.getTime())}</p>
+                    <p className="text-[11px] text-[#4CAF72] mt-1 text-center">Đang trong ca làm việc</p>
                   </div>
                 )}
               </div>
               <button
                 onClick={() => handleCaptureClick('checkout')}
                 disabled={busy}
-                className="w-full bg-[#FF3131] text-white rounded-xl h-[52px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#D42C2C] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-[#FF3131] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#D42C2C] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined fill text-[22px]">logout</span>
-                <span className="font-semibold text-base">Check-out</span>
+                <span className="material-symbols-outlined fill text-[24px]">logout</span>
+                <span className="font-semibold text-[15px]">Check-out</span>
               </button>
-              <p className="text-[11px] text-[#7A829A] text-center mt-2">
+              <p className="text-xs text-[#7A829A] text-center mt-2">
                 📸 Chụp ảnh để xác nhận kết thúc ca làm việc
               </p>
-              <p className="text-[10px] text-[#7A829A]/80 text-center mt-1 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-[12px]">shield</span>
-                Vị trí chỉ được theo dõi trong giờ làm việc và dừng ngay khi check-out
+              <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">shield</span>
+                Vị trí chỉ được theo dõi trong giờ làm việc
               </p>
             </>
           )}

@@ -62,7 +62,7 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
   ];
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-4xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-4xl mx-auto w-full antialiased">
       {/* Sub-tab navigation */}
       <div className="flex gap-2 mb-5 bg-[#F5EDDF] rounded-xl p-1">
         {subTabs.map((tab) => (

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useLayoutEffect } from 'react';
 import { Shift } from './screens/ManagerScheduleScreen';
 
 export interface WorkSession {
@@ -110,6 +110,57 @@ const buildWeekSchedule = (employeeId: string, weekMonday: Date, allShifts: Shif
 const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, shifts }) => {
   // Current week offset (0 = this week, -1 = last week, +1 = next week)
   const [weekOffset, setWeekOffset] = useState(0);
+  // Selected day for the detail popover
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // Animation direction for week transitions
+  const [slideDir, setSlideDir] = useState<'left' | 'right' | null>(null);
+  // Flip popover upward when it would overflow the viewport bottom
+  const [flipUp, setFlipUp] = useState(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // --- Swipe gesture for week navigation ---
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    const dy = e.changedTouches[0].clientY - touchStartY.current;
+    // Only trigger if horizontal swipe > 50px and more horizontal than vertical
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) {
+        // Swipe left → next week
+        setSlideDir('left');
+        setWeekOffset((w) => w + 1);
+      } else {
+        // Swipe right → previous week
+        setSlideDir('right');
+        setWeekOffset((w) => w - 1);
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, []);
+
+  // Reset slide animation after it plays
+  const handleAnimEnd = useCallback(() => setSlideDir(null), []);
+
+  // Measure popover after render; flip upward if it would overflow viewport
+  useLayoutEffect(() => {
+    if (selectedDay && popoverRef.current) {
+      const rect = popoverRef.current.getBoundingClientRect();
+      // 80 px margin accounts for BottomNav + safe-area
+      setFlipUp(rect.bottom > window.innerHeight - 80);
+    } else {
+      setFlipUp(false);
+    }
+  }, [selectedDay]);
 
   // The Monday of the currently displayed week
   const currentMonday = useMemo(() => {
@@ -202,7 +253,7 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
   const isCurrentWeek = weekOffset === 0;
 
   return (
-    <div className="bg-white rounded-2xl border border-[#E8DFD0] shadow-navy overflow-hidden mb-6">
+    <div className="bg-white rounded-2xl border border-[#E8DFD0] shadow-navy mb-6">
       {/* Header */}
       <div className="px-5 py-4 border-b border-[#F5EDDF]">
         <div className="flex items-center justify-between">
@@ -221,7 +272,7 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
       {/* Week Navigation */}
       <div className="px-5 py-3 border-b border-[#F5EDDF] flex items-center justify-between">
         <button
-          onClick={() => setWeekOffset((w) => w - 1)}
+          onClick={() => { setSlideDir('right'); setWeekOffset((w) => w - 1); }}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#FDF8EE] transition-colors"
         >
           <span className="material-symbols-outlined text-[#0F1E44] text-xl">chevron_left</span>
@@ -242,7 +293,7 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
         </div>
 
         <button
-          onClick={() => setWeekOffset((w) => w + 1)}
+          onClick={() => { setSlideDir('left'); setWeekOffset((w) => w + 1); }}
           className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-[#FDF8EE] transition-colors"
         >
           <span className="material-symbols-outlined text-[#0F1E44] text-xl">chevron_right</span>
@@ -251,27 +302,62 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
 
       {/* Weekly Stats Summary */}
       <div className="px-5 py-3 bg-[#EFC14B]/10 border-b border-[#EFC14B]/20">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-3">
           <div className="text-center">
-            <p className="text-2xl font-heading font-bold text-[#0F1E44]">{weekStats.completedShifts}/{weekStats.totalShifts}</p>
-            <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Ca đã hoàn thành</p>
+            <p className="text-xl font-heading font-bold text-[#0F1E44]">{weekStats.completedShifts}/{weekStats.totalShifts}</p>
+            <p className="text-[9px] text-[#7A829A] uppercase tracking-wider font-semibold">Ca hoàn thành</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-heading font-bold text-[#0F1E44]">{weekStats.totalHours}h</p>
-            <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Giờ làm tuần này</p>
+            <p className="text-xl font-heading font-bold text-[#0F1E44]">{weekStats.totalHours}h</p>
+            <p className="text-[9px] text-[#7A829A] uppercase tracking-wider font-semibold">Giờ tuần này</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-heading font-bold text-[#0F1E44]">
+            <p className="text-xl font-heading font-bold text-[#0F1E44]">
+              {weekStats.totalWorkDays > 0 ? (weekStats.totalHours / weekStats.totalWorkDays).toFixed(1) : '0'}h
+            </p>
+            <p className="text-[9px] text-[#7A829A] uppercase tracking-wider font-semibold">TB giờ/ngày</p>
+          </div>
+          <div className="text-center">
+            <p className="text-xl font-heading font-bold text-[#0F1E44]">
               {weekStats.totalShifts > 0 ? Math.round((weekStats.completedShifts / weekStats.totalShifts) * 100) : 0}%
             </p>
-            <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Tỷ lệ hoàn thành</p>
+            <p className="text-[9px] text-[#7A829A] uppercase tracking-wider font-semibold">Hoàn thành</p>
           </div>
         </div>
       </div>
 
-      {/* 7-Day Week Grid */}
-      <div className="px-4 py-4">
-        <div className="grid grid-cols-7 gap-2">
+      {/* Mini Legend — above the calendar grid */}
+      <div className="px-5 pt-3 pb-1 flex items-center gap-4 flex-wrap">
+        <span className="text-[10px] font-semibold text-[#7A829A] uppercase tracking-wider">Chú giải:</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-green-500 rounded-full" />
+            <span className="text-[10px] text-[#7A829A]">Hoàn thành</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-blue-500 rounded-full" />
+            <span className="text-[10px] text-[#7A829A]">Đang làm</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="w-2 h-2 bg-gray-300 rounded-full" />
+            <span className="text-[10px] text-[#7A829A]">Sắp tới</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-semibold text-[#7A829A] bg-[#E8DFD0] px-1.5 py-0.5 rounded-full leading-none">Nghỉ</span>
+            <span className="text-[10px] text-[#7A829A]">Không có ca</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 7-Day Week Grid — swipeable */}
+      <div
+        ref={gridRef}
+        className={`px-4 py-3 ${slideDir === 'left' ? 'animate-slide-left' : slideDir === 'right' ? 'animate-slide-right' : ''}`}
+        onAnimationEnd={handleAnimEnd}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="grid grid-cols-7 gap-1.5">
           {weekDays.map((date, idx) => {
             const dateStr = toDateStr(date);
             const dayNum = date.getDate();
@@ -280,55 +366,94 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
             const isWeekend = date.getDay() === 0 || date.getDay() === 6;
             const sessions = getSessionsForDate(dateStr);
             const hasSessions = sessions.length > 0;
+            const isSelected = selectedDay === dateStr;
 
             return (
-              <div
-                key={dateStr}
-                className={`flex flex-col items-center rounded-xl py-2 transition-all ${
-                  isTodayDate
-                    ? 'bg-[#EFC14B] text-[#0F1E44] shadow-golden font-bold'
-                    : isWeekend && !hasSessions
-                    ? 'bg-[#F5EDDF] text-[#7A829A]'
-                    : 'bg-[#FDF8EE] text-[#3D4663] hover:bg-[#EFC14B]/10'
-                }`}
-              >
-                <span className={`text-[10px] font-semibold uppercase ${
-                  isTodayDate ? 'text-[#0F1E44]/70' : 'text-[#7A829A]'
-                }`}>
-                  {dayName}
-                </span>
-                <span className={`text-lg font-bold mt-0.5 ${
-                  isTodayDate ? 'text-[#0F1E44]' : ''
-                }`}>
-                  {dayNum}
-                </span>
-                {isTodayDate && (
-                  <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5">
-                    Hôm nay
+              <div key={dateStr} className="flex flex-col items-center relative">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDay(isSelected ? null : dateStr)}
+                  className={`w-full flex flex-col items-center rounded-xl py-2 transition-all ${
+                    isSelected
+                      ? 'ring-2 ring-[#EFC14B] ring-offset-1 '
+                      : ''
+                  } ${
+                    isTodayDate
+                      ? 'bg-[#EFC14B] text-[#0F1E44] shadow-golden font-bold'
+                      : isWeekend && !hasSessions
+                      ? 'bg-[#F5EDDF] text-[#7A829A]'
+                      : 'bg-[#FDF8EE] text-[#3D4663] hover:bg-[#EFC14B]/10'
+                  }`}
+                >
+                  <span className={`text-[10px] font-semibold uppercase ${
+                    isTodayDate ? 'text-[#0F1E44]/70' : 'text-[#7A829A]'
+                  }`}>
+                    {dayName}
                   </span>
-                )}
-                {/* Status indicator — “Nghỉ” only when the day truly has
-                    NO scheduled shift (data-driven, not day-of-week based). */}
-                <div className="mt-1.5">
-                  {!hasSessions ? (
-                    <span className="text-[9px] font-semibold text-[#7A829A] bg-[#E8DFD0] px-1.5 py-0.5 rounded-full">
-                      Nghỉ
+                  <span className={`text-lg font-bold mt-0.5 ${
+                    isTodayDate ? 'text-[#0F1E44]' : ''
+                  }`}>
+                    {dayNum}
+                  </span>
+                  {isTodayDate && (
+                    <span className="text-[8px] font-bold uppercase tracking-wider mt-0.5">
+                      Hôm nay
                     </span>
-                  ) : (
-                    <div className="flex gap-0.5">
+                  )}
+                  {/* Shift count badge — replaces cryptic dots */}
+                  <div className="mt-1.5">
+                    {!hasSessions ? (
+                      <span className="text-[9px] font-semibold text-[#7A829A] bg-[#E8DFD0] px-1.5 py-0.5 rounded-full">
+                        Nghỉ
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-[#3D4663] bg-white/70 px-1.5 py-0.5 rounded-full shadow-sm">
+                        {sessions.length} ca
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {/* Day detail popover */}
+                {isSelected && hasSessions && (
+                  <div
+                    ref={popoverRef}
+                    className={`absolute min-w-[150px] max-w-[180px] bg-white rounded-lg border border-[#E8DFD0] shadow-md p-2 text-left z-20 animate-popover-in ${
+                      // Horizontal: first column → left-0, last → right-0, else centered
+                      idx === 0 ? 'left-0' :
+                      idx === 6 ? 'right-0' :
+                      'left-1/2 -translate-x-1/2'
+                    } ${
+                      // Vertical: flip above when near viewport bottom
+                      flipUp ? 'bottom-full mb-1' : 'top-[calc(100%+2px)]'
+                    }`}
+                  >
+                    <p className="text-[9px] font-bold text-[#0F1E44] mb-1.5">
+                      {dayName} {dayNum} — {sessions.length} ca
+                    </p>
+                    <div className="space-y-1">
                       {sessions.map((s, i) => (
-                        <div
-                          key={i}
-                          className={`w-1.5 h-1.5 rounded-full ${
+                        <div key={i} className="flex items-center gap-1.5 text-[9px]">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
                             s.status === 'completed' ? 'bg-green-500' :
                             s.status === 'in-progress' ? 'bg-blue-500' :
                             'bg-gray-300'
-                          }`}
-                        />
+                          }`} />
+                          <span className="text-[#3D4663] truncate">
+                            {s.shiftName} {s.startTime}–{s.endTime}
+                          </span>
+                          <span className={`ml-auto flex-shrink-0 text-[8px] font-semibold ${
+                            s.status === 'completed' ? 'text-green-600' :
+                            s.status === 'in-progress' ? 'text-blue-600' :
+                            'text-gray-400'
+                          }`}>
+                            {s.status === 'completed' ? '✓' : s.status === 'in-progress' ? '●' : '○'}
+                          </span>
+                        </div>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -427,25 +552,11 @@ const WorkSchedule: React.FC<WorkScheduleProps> = ({ employeeId, employeeName, s
         })()}
       </div>
 
-      {/* Footer Legend */}
-      <div className="px-5 py-3 bg-[#FDF8EE] border-t border-[#E8DFD0]">
-        <div className="flex items-center justify-between text-xs text-[#7A829A]">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full" />
-              <span>Hoàn thành</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-blue-500 rounded-full" />
-              <span>Đang làm</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-gray-300 rounded-full" />
-              <span>Sắp tới</span>
-            </div>
-          </div>
-          <span className="font-medium">
-            {isCurrentWeek ? 'Tuần hiện tại' : weekLabel}
+      {/* Footer — compact week label only */}
+      <div className="px-5 py-2 bg-[#FDF8EE] border-t border-[#E8DFD0]">
+        <div className="flex items-center justify-end">
+          <span className="text-[10px] font-medium text-[#7A829A]">
+            {isCurrentWeek ? 'Tuần hiện tại' : weekLabel} — Chạm vào ngày để xem chi tiết
           </span>
         </div>
       </div>

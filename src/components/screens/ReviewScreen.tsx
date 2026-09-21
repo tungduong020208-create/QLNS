@@ -226,7 +226,7 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Submit Evidence Form (shown when toggle is active) */}
       {showSubmitForm && (
         <section className="mb-6 bg-white rounded-2xl border border-[#E8DFD0]/60 shadow-sm p-5">

@@ -1,4 +1,4 @@
-import { User, EvidenceItem, NotificationItem, CustomerRating, QRReview } from '../types';
+import { User, EvidenceItem, NotificationItem, CustomerRating, QRReview, ShiftHandover } from '../types';
 
 /**
  * SECURITY FIX: Passwords are now stored as SHA-256 hashes.
@@ -135,7 +135,7 @@ export const INITIAL_USERS: User[] = [
 
 
 // Shift Handover data
-export const INITIAL_HANDOVERS: any[] = [
+export const INITIAL_HANDOVERS: ShiftHandover[] = [
   {
     id: 'HO-001',
     shiftName: 'Ca sáng',

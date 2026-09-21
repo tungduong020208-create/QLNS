@@ -92,52 +92,8 @@ export function getCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
-/**
- * Simple hash function for PIN generation
- */
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString(16);
-}
-
-/**
- * Generate shift PIN based on date and shift type
- * @param date - Date string YYYY-MM-DD
- * @param shiftType - 'morning' | 'afternoon' | 'evening'
- * @param secret - Server-side secret key
- * @returns 6-digit PIN string
- */
-export function generateShiftPin(
-  date: string,
-  shiftType: 'morning' | 'afternoon' | 'evening',
-  secret: string = 'aiicafe-2024'
-): string {
-  const payload = `${date}-${shiftType}-${secret}`;
-  const hash = simpleHash(payload);
-  // Extract 6 digits from hash
-  const pin = (parseInt(hash.substring(0, 8), 16) % 1000000)
-    .toString()
-    .padStart(6, '0');
-  return pin;
-}
-
-/**
- * Validate shift PIN
- */
-export function validateShiftPin(
-  enteredPin: string,
-  date: string,
-  shiftType: 'morning' | 'afternoon' | 'evening',
-  secret: string = 'aiicafe-2024'
-): boolean {
-  const expectedPin = generateShiftPin(date, shiftType, secret);
-  return enteredPin === expectedPin;
-}
+// Re-export secure PIN functions from auth.ts (derived secret, constant-time validation)
+export { generateShiftPin, validateShiftPin } from './auth';
 
 /**
  * Get current shift type based on time

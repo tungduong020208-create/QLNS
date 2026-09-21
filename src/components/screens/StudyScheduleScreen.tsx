@@ -8,6 +8,7 @@ import {
   WeeklyShiftRegistration,
   DayOfWeek,
   ShiftCapacityOverride,
+  ShiftSlot,
 } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import { getShiftTimeRange } from '../../utils/constants';
@@ -121,8 +122,8 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
   });
 
   // Shift preferences
-  const [shiftPreferences, setShiftPreferences] = useState<Record<string, string>>(() => {
-    const initial: Record<string, string> = {};
+  const [shiftPreferences, setShiftPreferences] = useState<Record<string, ShiftSlot>>(() => {
+    const initial: Record<string, ShiftSlot> = {};
     if (existingReg) {
       existingReg.days.forEach((d) => {
         initial[d.date] = d.shift;
@@ -206,10 +207,10 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
   };
 
   // Set shift preference for a date
-  const setShiftPreference = (date: string, shift: string) => {
+  const setShiftPreference = (date: string, shift: ShiftSlot) => {
     setShiftPreferences((prev) => ({
       ...prev,
-      [date]: prev[date] === shift ? '' : shift,
+      [date]: prev[date] === shift ? 'off' : shift,
     }));
   };
 
@@ -249,7 +250,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
         date: dateStr,
         dayLabel: DAY_LABELS[idx],
         // Leave days carry NO time slot — shift stays 'off' by contract.
-        shift: pref as any,
+        shift: pref as ShiftSlot,
         type: isLeave ? 'leave' : 'shift',
       });
     });
@@ -283,7 +284,7 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-3xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
       {/* Header */}
       <div className="mb-5">
         <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đăng ký lịch</h2>

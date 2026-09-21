@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole, EmploymentType } from '../../types';
+import { hashPassword } from '../../utils/auth';
 
 interface AddEmployeeModalProps {
   isOpen: boolean;
@@ -51,7 +52,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
 
   const employeeCode = generateEmployeeCode(existingUsers);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -74,6 +75,9 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
       return;
     }
 
+    // Hash password with SHA-256 for consistent verification in LoginScreen
+    const hashedPassword = await hashPassword(tempPassword);
+
     const newEmployee: User = {
       id: `usr-${Date.now()}`,
       name: name.trim(),
@@ -83,7 +87,7 @@ export const AddEmployeeModal: React.FC<AddEmployeeModalProps> = ({
       avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name.trim())}&backgroundColor=EFC14B`,
       email: email.trim().toLowerCase(),
       phone: phone.trim() || undefined,
-      password: tempPassword,
+      password: hashedPassword,
       mustChangePassword: true,
       isAccountActive: true,
     };

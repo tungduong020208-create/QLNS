@@ -184,7 +184,7 @@ export const ManagerDashboard: React.FC<ManagerDashboardProps> = ({
   };
 
   return (
-    <div className="pb-28 pt-20 px-4 max-w-5xl mx-auto w-full antialiased">
+    <div className="pb-safe-bottom pt-safe-top px-4 max-w-5xl mx-auto w-full antialiased">
       {/* Greeting + dashboard collapse toggle */}
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
