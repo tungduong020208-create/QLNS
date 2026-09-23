@@ -1,73 +1,70 @@
 /**
- * auth.ts unit tests
- * Run: npx tsx src/utils/auth.test.ts
+ * auth.ts unit tests (vitest)
+ * Run: npm test
  */
 
+import { describe, it, expect, beforeAll } from 'vitest';
 import { hashPassword, verifyPassword, generateShiftPin, validateShiftPin } from './auth';
 
-// Mock browser globals needed by auth.ts
-if (typeof globalThis.screen === 'undefined') {
-  (globalThis as any).screen = { width: 1920, height: 1080 };
-}
-
-let passed = 0;
-let failed = 0;
-
-function assert(condition: boolean, label: string) {
-  if (condition) {
-    passed++;
-    console.log(`  ✅ ${label}`);
-  } else {
-    failed++;
-    console.error(`  ❌ ${label}`);
+// Mock browser globals needed by auth.ts (device fingerprint source)
+beforeAll(() => {
+  if (typeof globalThis.screen === 'undefined') {
+    (globalThis as any).screen = { width: 1920, height: 1080 };
   }
-}
+});
 
-// ═══════════════════════════════════════════════════
-// hashPassword
-// ═══════════════════════════════════════════════════
-console.log('\n── hashPassword ──');
+describe('hashPassword', () => {
+  it('returns a 64-char SHA-256 hex string', async () => {
+    const h = await hashPassword('aiicafe');
+    expect(typeof h).toBe('string');
+    expect(h.length).toBe(64);
+  });
 
-{
-  const h = await hashPassword('aiicafe');
-  assert(typeof h === 'string', 'returns a string');
-  assert(h.length === 64, 'SHA-256 hex is 64 chars');
-  assert(h === (await hashPassword('aiicafe')), 'same input → same hash (deterministic)');
-  assert(h !== (await hashPassword('AIICAFE')), 'different case → different hash');
-  assert(h !== (await hashPassword('')), 'empty string has a hash');
-}
+  it('is deterministic for the same input', async () => {
+    expect(await hashPassword('aiicafe')).toBe(await hashPassword('aiicafe'));
+  });
 
-// ═══════════════════════════════════════════════════
-// verifyPassword
-// ═══════════════════════════════════════════════════
-console.log('\n── verifyPassword ──');
+  it('differentiates case and hashes empty strings', async () => {
+    const h = await hashPassword('aiicafe');
+    expect(h).not.toBe(await hashPassword('AIICAFE'));
+    expect(await hashPassword('')).not.toBe('');
+  });
+});
 
-{
-  const stored = await hashPassword('test123');
-  assert(await verifyPassword('test123', stored), 'correct password verifies');
-  assert(!(await verifyPassword('wrong', stored)), 'wrong password fails');
-  assert(!(await verifyPassword('test1234', stored)), 'superset password fails');
-  assert(!(await verifyPassword('test12', stored)), 'subset password fails');
-}
+describe('verifyPassword', () => {
+  it('verifies the correct password', async () => {
+    const stored = await hashPassword('test123');
+    expect(await verifyPassword('test123', stored)).toBe(true);
+  });
 
-// ═══════════════════════════════════════════════════
-// generateShiftPin + validateShiftPin
-// ═══════════════════════════════════════════════════
-console.log('\n── generateShiftPin / validateShiftPin ──');
+  it('rejects wrong, superset and subset passwords', async () => {
+    const stored = await hashPassword('test123');
+    expect(await verifyPassword('wrong', stored)).toBe(false);
+    expect(await verifyPassword('test1234', stored)).toBe(false);
+    expect(await verifyPassword('test12', stored)).toBe(false);
+  });
+});
 
-{
-  const pin = generateShiftPin('2026-09-21', 'morning');
-  assert(typeof pin === 'string', 'pin is a string');
-  assert(/^\d{6}$/.test(pin), 'pin is 6 digits');
-  assert(validateShiftPin(pin, '2026-09-21', 'morning'), 'valid pin validates');
-  assert(!validateShiftPin('000000', '2026-09-21', 'morning'), 'wrong pin fails');
-  assert(!validateShiftPin(pin, '2026-09-22', 'morning'), 'wrong date fails');
-  assert(!validateShiftPin(pin, '2026-09-21', 'afternoon'), 'wrong shift fails');
-  assert(generateShiftPin('2026-09-21', 'morning') === generateShiftPin('2026-09-21', 'morning'), 'same input → same pin');
-}
+describe('generateShiftPin / validateShiftPin', () => {
+  it('generates a 6-digit pin', () => {
+    const pin = generateShiftPin('2026-09-21', 'morning');
+    expect(typeof pin).toBe('string');
+    expect(pin).toMatch(/^\d{6}$/);
+  });
 
-// ═══════════════════════════════════════════════════
-// Summary
-// ═══════════════════════════════════════════════════
-console.log(`\n━━━ ${passed} passed, ${failed} failed ━━━`);
-if (failed > 0) process.exit(1);
+  it('validates the correct pin', () => {
+    const pin = generateShiftPin('2026-09-21', 'morning');
+    expect(validateShiftPin(pin, '2026-09-21', 'morning')).toBe(true);
+  });
+
+  it('rejects wrong pin, date and shift', () => {
+    const pin = generateShiftPin('2026-09-21', 'morning');
+    expect(validateShiftPin('000000', '2026-09-21', 'morning')).toBe(false);
+    expect(validateShiftPin(pin, '2026-09-22', 'morning')).toBe(false);
+    expect(validateShiftPin(pin, '2026-09-21', 'afternoon')).toBe(false);
+  });
+
+  it('is deterministic for the same input', () => {
+    expect(generateShiftPin('2026-09-21', 'morning')).toBe(generateShiftPin('2026-09-21', 'morning'));
+  });
+});

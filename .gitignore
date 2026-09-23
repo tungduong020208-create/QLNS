@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Freebuff runtime artifacts (dev server logs, pid, scripts)
+.freebuff/
+
+# Codebuff agent config/skills
+.agents/
+skills-lock.json
