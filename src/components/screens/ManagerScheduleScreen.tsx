@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { User, NotificationItem, ShiftCapacityOverride } from '../../types';
 import { SHIFT_SLOT_TEMPLATES, SHIFT_NAME_TO_SLOT, getShiftTimeRange } from '../../utils/constants';
 import { getCapacityForDate } from '../../hooks/useShiftCapacity';
@@ -97,7 +97,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 }) => {
   // View state
   const [weekOffset, setWeekOffset] = useState(0);
-  const [viewMode, setViewMode] = useState<'week' | 'list'>('week');
+  const [viewMode, setViewMode] = useState<'week' | 'list' | 'shifts'>('week');
   const [selectedDate, setSelectedDate] = useState<string>(() => toDateStr(new Date()));
   // Panel "số người mỗi ca" — mở khi manager muốn xem/điều chỉnh capacity
   const [showCapacityPanel, setShowCapacityPanel] = useState(false);
@@ -122,6 +122,10 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   const [formStartTime, setFormStartTime] = useState('');
   const [formEndTime, setFormEndTime] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  // Số người trong ca (tối đa) — manager chỉnh ngay trong form Thêm ca mới.
+  // null = dùng mặc định/override hiện có; đặt giá trị mới sẽ ghi override
+  // cho (ngày, ca) khi lưu ca.
+  const [formCapacity, setFormCapacity] = useState<number | null>(null);
 
 
 
@@ -187,7 +191,14 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     setFormStartTime('');
     setFormEndTime('');
     setFormNotes('');
+    setFormCapacity(null);
   };
+
+  // Đổi ngày hoặc loại ca → capacity cũ của cặp (ngày, ca) trước không còn
+  // đúng nữa, reset về mặc định để không ghi nhầm override.
+  useEffect(() => {
+    setFormCapacity(null);
+  }, [formDate, formShiftName]);
 
   // Loại NV đang thao tác trong form (add: nhân viên đang chọn;
   // edit: nhân viên của row đang sửa) — quyết định khung giờ tự map.
@@ -260,6 +271,12 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     };
 
     onAddShift(newShift);
+
+    // Áp dụng số người trong ca do manager đặt (ghi đè capacity mặc định
+    // của cặp ngày + loại ca này). null = giữ nguyên cấu hình hiện có.
+    if (formCapacity !== null) {
+      onSetCapacity(formDate, formShiftName, formCapacity);
+    }
 
     // Notify employee
     onAddNotification({
@@ -614,7 +631,110 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
             <span className="material-symbols-outlined text-[14px] mr-1">view_list</span>
             Danh sách
           </button>
+          <button
+            onClick={() => setViewMode('shifts')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+              viewMode === 'shifts' ? 'bg-[#0F1E44] text-white' : 'bg-[#FDF8EE] text-[#7A829A] hover:bg-[#EFC14B]/20'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[14px] mr-1">groups</span>
+            Theo ca
+          </button>
         </div>
+
+        {/* Shifts View — mỗi ngày nhóm theo ca: ai làm, bao nhiêu người, giờ vào/ra */}
+        {viewMode === 'shifts' && (
+          <div className="p-4 space-y-4">
+            {weekDays.map((date) => {
+              const dateStr = toDateStr(date);
+              const isTodayDate = dateStr === todayStr;
+              const dayShifts = getShiftsForDate(dateStr).filter((s) => s.status !== 'cancelled');
+
+              return (
+                <div key={dateStr} className={`rounded-2xl border overflow-hidden ${isTodayDate ? 'border-[#EFC14B]' : 'border-[#E8DFD0]'}`}>
+                  {/* Day header */}
+                  <div className={`px-4 py-2.5 flex items-center justify-between ${isTodayDate ? 'bg-[#EFC14B]/10' : 'bg-[#FDF8EE]'}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-bold ${isTodayDate ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
+                        {date.toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric' })}
+                      </span>
+                      {isTodayDate && (
+                        <span className="text-[9px] font-bold bg-[#EFC14B] text-[#0F1E44] px-1.5 py-0.5 rounded">HÔM NAY</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => openAddModal(dateStr)}
+                      className="text-[10px] font-semibold text-[#EFC14B] hover:underline"
+                    >
+                      + Thêm ca
+                    </button>
+                  </div>
+
+                  {dayShifts.length === 0 ? (
+                    <div className="px-4 py-4 text-center text-xs text-[#7A829A]">Chưa có ca nào</div>
+                  ) : (
+                    <div className="p-3 space-y-2">
+                      {SHIFT_NAMES.map((name) => {
+                        const rows = dayShifts.filter((s) => s.shiftName === name);
+                        if (rows.length === 0) return null;
+                        // Giờ của nhóm ca: lấy từ row đầu (cùng ca có thể lệch giờ
+                        // theo loại NV — hiển thị cả hai nếu khác nhau).
+                        const times = Array.from(new Set(rows.map((r) => `${r.startTime} - ${r.endTime}`)));
+                        const max = getCapacityForDate(capacityOverrides, dateStr, name);
+                        const isFull = rows.length >= max;
+
+                        return (
+                          <div
+                            key={name}
+                            className={`rounded-xl p-3 border ${
+                              isFull ? 'bg-[#4CAF72]/5 border-[#4CAF72]/25' : 'bg-white border-[#E8DFD0]'
+                            }`}
+                          >
+                            {/* Tên ca + giờ + số người */}
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <h5 className="font-bold text-[#0F1E44] text-sm">{name}</h5>
+                                {times.map((t) => (
+                                  <span key={t} className="text-[11px] text-[#7A829A] flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[13px]">schedule</span>
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                isFull ? 'bg-[#4CAF72]/15 text-[#4CAF72]' : 'bg-[#EFC14B]/15 text-[#D4A833]'
+                              }`}>
+                                {rows.length}/{max} người
+                              </span>
+                            </div>
+
+                            {/* Danh sách nhân viên trong ca */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {rows.map((s) => (
+                                <div
+                                  key={s.id}
+                                  className="flex items-center gap-1.5 bg-[#FDF8EE] rounded-full pl-0.5 pr-2.5 py-0.5"
+                                >
+                                  <img
+                                    src={s.employeeAvatar}
+                                    alt={s.employeeName}
+                                    className="w-6 h-6 rounded-full object-cover border border-[#E8DFD0]"
+                                  />
+                                  <span className="text-[11px] font-semibold text-[#0F1E44]">{s.employeeName}</span>
+                                  <span className="text-[10px] text-[#7A829A]">{s.startTime}–{s.endTime}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Week Grid View */}
         {viewMode === 'week' && (
@@ -847,6 +967,41 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
                   className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none resize-none"
                 />
               </div>
+              {/* Số người trong ca — stepper Min/Max theo mẫu thiết kế */}
+              {(() => {
+                const defCap = formShiftName ? getCapacityForDate(capacityOverrides, formDate, formShiftName) : 3;
+                const cap = formCapacity ?? defCap;
+                const changed = formCapacity !== null && formCapacity !== defCap;
+                return (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-[#7A829A]">Số người trong ca</label>
+                      {changed && <span className="text-[10px] font-bold text-[#1D4ED8] bg-[#1D4ED8]/10 px-1.5 py-0.5 rounded-full">Đã chỉnh</span>}
+                    </div>
+                    <div className="flex items-center justify-between rounded-xl border border-[#E8DFD0] bg-[#FDFBF6] px-3 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setFormCapacity(Math.max(1, cap - 1))}
+                        className="w-9 h-9 rounded-full bg-[#F1F4FB] text-[#0F1E44] text-lg font-bold flex items-center justify-center hover:bg-[#E5EAF6] active:scale-95 transition"
+                      >
+                        −
+                      </button>
+                      <div className="text-center leading-tight">
+                        <div className="text-xl font-extrabold text-[#0F1E44]">{cap}</div>
+                        <div className="text-[10px] text-[#7A829A]">tối đa (Max)</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormCapacity(Math.min(9, cap + 1))}
+                        className="w-9 h-9 rounded-full bg-[#F1F4FB] text-[#0F1E44] text-lg font-bold flex items-center justify-center hover:bg-[#E5EAF6] active:scale-95 transition"
+                      >
+                        +
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-[#7A829A] mt-1">Giới hạn số nhân viên đăng ký được vào ca này (1–9). Mặc định: {defCap}.</p>
+                  </div>
+                );
+              })()}
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setShowAddModal(false)} className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]">

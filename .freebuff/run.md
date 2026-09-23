@@ -17,6 +17,12 @@
 - Vite reads `.env*` at STARTUP ONLY — restart the server after editing `.env.local`.
 - Vite auto-selects the next free port (3004+) when 3000–3003 are occupied.
 - Server logs go to `.freebuff/preview-*.log` (stdout) and `.freebuff/preview-*.log.err` (stderr).
-- Current port: 3001 (was free this run).
-- PowerShell `Start-Process` hangs in this shell — use `nohup npm run dev > <log> 2> <log>.err &` (bash) instead.
-- Windows PID for register_preview: use `wmic process where "name='node.exe'" get ProcessId` to find the right one (bash PIDs ≠ Windows PIDs).
+- Current port: 3000 (was free this run).
+- The PowerShell `Start-Process` detach recipe DOES start the server, but the
+  command never returns in this shell — run it with a ~40s timeout and expect
+  the timeout, then verify via the log file + `netstat -ano | findstr :3000`.
+- Windows PID for register_preview: from `netstat -ano` (LISTENING on the
+  chosen port), confirm alive with `Get-Process -Id <pid>`.
+- Note: `preview_screenshot` may fail with "capturePage returned an empty
+  image" on this app; `preview_snapshot` (accessibility tree) works fine for
+  verifying the render.

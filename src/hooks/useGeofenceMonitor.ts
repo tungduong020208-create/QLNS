@@ -18,7 +18,7 @@
 
 import { useEffect } from 'react';
 import { GeofenceEvent } from '../types';
-import { getCurrentPosition, getDistanceToOffice } from '../utils/checkin';
+import { getCurrentPosition, getDistanceToOffice, isGeolocationGranted } from '../utils/checkin';
 import {
   STORAGE_KEY_CHECKIN_SESSION,
   STORAGE_KEY_GEOFENCE_EVENTS,
@@ -145,6 +145,12 @@ export function useGeofenceMonitor(
 
     const checkDistance = async () => {
       if (cancelled || !hasActiveSession()) return;
+
+      // Anti-prompt-spam gate: while permission is still 'prompt' (the user
+      // never answered the dialog), auto-polling would pop the "Allow
+      // geolocation?" dialog every interval. Skip silently — monitoring
+      // resumes automatically the moment permission becomes 'granted'.
+      if (!(await isGeolocationGranted())) return;
 
       try {
         const position = await getCurrentPosition();

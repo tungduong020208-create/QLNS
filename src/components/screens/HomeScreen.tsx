@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { User, CheckInRecord, PeerReviewSubmission } from '../../types';
+import { User, CheckInRecord, PeerReviewSubmission, ShiftCapacityOverride } from '../../types';
 import { Shift } from './ManagerScheduleScreen';
 import { ManagerCheckInToggle } from '../ManagerCheckInToggle';
 import WorkSchedule from '../WorkSchedule';
@@ -16,6 +16,8 @@ interface HomeScreenProps {
   onCheckIn?: (record: CheckInRecord) => void;
   /** Published shift rows for the employee's schedule view. */
   shifts?: Shift[];
+  /** Capacity per (date, shift) — manager-adjustable, cho tỷ lệ "x/y Đủ người". */
+  capacityOverrides?: ShiftCapacityOverride[];
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
@@ -23,6 +25,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   peerReviews = [],
   onCheckIn,
   shifts = [],
+  capacityOverrides = [],
 }) => {
   return (
     <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
@@ -49,7 +52,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       )}
 
       {currentUser.role === 'employee' && (
-        <WorkSchedule employeeId={currentUser.id} employeeName={currentUser.name} shifts={shifts} />
+        <WorkSchedule
+          employeeId={currentUser.id}
+          employeeName={currentUser.name}
+          shifts={shifts}
+          capacityOverrides={capacityOverrides}
+        />
       )}
 
       {currentUser.role === 'employee' && (

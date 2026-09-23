@@ -92,6 +92,26 @@ export function getCurrentPosition(): Promise<GeolocationPosition> {
   });
 }
 
+/**
+ * True only when geolocation permission is ALREADY granted.
+ *
+ * Background callers (display hooks, geofence polling) must use this gate:
+ * calling getCurrentPosition while the permission is in 'prompt' state makes
+ * the host webview pop the "Allow geolocation?" dialog — and in embedded
+ * webviews the answer isn't persisted, so it re-prompts endlessly. Only an
+ * explicit user action (the check-in button) may trigger the prompt.
+ */
+export async function isGeolocationGranted(): Promise<boolean> {
+  if (!('geolocation' in navigator)) return false;
+  if (!navigator.permissions?.query) return true; // API unavailable — legacy behavior
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return status.state === 'granted';
+  } catch {
+    return true; // query unsupported — legacy behavior
+  }
+}
+
 // Re-export secure PIN functions from auth.ts (derived secret, constant-time validation)
 export { generateShiftPin, validateShiftPin } from './auth';
 

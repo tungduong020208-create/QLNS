@@ -513,6 +513,7 @@ export default function App() {
                           peerReviews={peerReviews}
                           onCheckIn={handleCheckInOutRecord}
                           shifts={shifts}
+                          capacityOverrides={capacityOverrides}
                         />
                       } />
                     )}
@@ -537,6 +538,7 @@ export default function App() {
                         peerReviews={peerReviews}
                         onCheckIn={handleCheckInOutRecord}
                         shifts={shifts}
+                        capacityOverrides={capacityOverrides}
                       />
                     } />
                     <Route path="handover" element={

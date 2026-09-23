@@ -18,6 +18,8 @@ import {
 import { getCapacityForDate } from '../../hooks/useShiftCapacity';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+/** Nhãn ngắn cho bảng đăng ký: T2…T7, CN. */
+const DAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const DAY_KEYS: ('monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday')[] = [
   'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
 ];
@@ -67,6 +69,15 @@ const formatWeekRange = (monday: Date): string => {
   sunday.setDate(monday.getDate() + 6);
   const fmt = (d: Date) => d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
   return `${fmt(monday)} – ${fmt(sunday)}`;
+};
+
+/** "Tuần 28/09 - 04/10/2026" — đầu tuần → cuối tuần (kèm năm). */
+const formatWeekFull = (monday: Date): string => {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d: Date) =>
+    `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `Tuần ${fmt(monday)} - ${fmt(sunday)}/${sunday.getFullYear()}`;
 };
 
 interface StudyScheduleScreenProps {
@@ -285,13 +296,20 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
 
   return (
     <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
-      {/* Header */}
-      <div className="mb-5">
-        <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đăng ký lịch</h2>
-        <p className="text-xs text-[#7A829A] mt-0.5">
-          Gửi lịch học bận và đăng ký ca làm việc cho tuần tiếp theo
-        </p>
+      {/* Header — thanh tuần + trạng thái mở/khóa (theo mẫu thiết kế) */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="font-heading text-xl font-bold text-[#0F1E44]">
+          {formatWeekFull(targetWeekMonday)}
+        </h2>
+        <span className="flex-shrink-0 px-3 py-1 rounded-full text-[11px] font-bold bg-[#4CAF72]/15 text-[#4CAF72]">
+          Đang mở
+        </span>
       </div>
+      <p className="text-xs text-[#7A829A] mb-4 leading-relaxed">
+        Không cần giải thích lý do nghỉ. Chọn{' '}
+        <strong className="text-[#FF3131]">OFF</strong> để nghỉ trọn ngày, hoặc
+        chọn các khung giờ bạn muốn đi làm — kể cả cuối tuần.
+      </p>
 
       {/* Success message */}
       {showSuccess && (
@@ -436,152 +454,114 @@ export const StudyScheduleScreen: React.FC<StudyScheduleScreenProps> = ({
         </div>
       )}
 
-      {/* Shift Registration Tab */}
+      {/* Shift Registration Tab — bảng lưới theo mẫu: hàng = ngày, cột = Sáng/Chiều/Tối/Off */}
       {activeTab === 'shifts' && (
-        <div className="space-y-3 mb-4">
-          <p className="text-xs text-[#7A829A]">
-            Chọn ca làm việc bạn muốn đăng ký cho tuần tới.
-          </p>          {DAY_KEYS.map((day, idx) => {
-            const date = new Date(targetWeekMonday);
-            date.setDate(targetWeekMonday.getDate() + idx);
-            const dateStr = toDateStr(date);
-            const isToday = toDateStr(new Date()) === dateStr;
-            const isPast = dateStr < toDateStr(new Date());
-            const daySchedule = daySchedules.find(d => d.day === day);
-            const isBusy = daySchedule?.isBusy || false;
-            const selectedShift = shiftPreferences[dateStr] || '';
-            const isLeave = selectedShift === 'off' && leaveDays.has(dateStr);
-            // Giờ hiển thị = map (ca đã chọn, loại NV) — nhân viên KHÔNG
-            // chọn giờ, chỉ được xem khung giờ hệ thống sẽ xếp (mục 4).
-            const selectedTime =
-              selectedShift && selectedShift !== 'off'
-                ? getShiftTimeRange(selectedShift as 'morning' | 'afternoon' | 'evening', currentUser.employmentType)
-                : null;
+        <div className="bg-white rounded-2xl border border-[#E8DFD0] p-3 mb-4">
+          {/* Header row */}
+          <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 mb-2">
+            <span className="text-[10px] font-bold text-[#7A829A] uppercase flex items-center">Thứ / Ngày</span>
+            {SHIFT_SLOTS.map((slot) => (
+              <span key={slot.value} className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">
+                {slot.short}
+              </span>
+            ))}
+            <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#FF3131]">
+              Nghỉ Off
+            </span>
+          </div>
 
-            return (
-              <div
-                key={dateStr}
-                className={`bg-white rounded-xl border p-3 transition-all ${
-                  isBusy
-                    ? 'border-[#FF3131]/30 opacity-60'
-                    : isLeave
-                    ? 'border-[#D4A833]/60 bg-[#EFC14B]/10'
-                    : isToday
-                    ? 'border-[#EFC14B]' 
-                    : 'border-[#E8DFD0]'
-                }`}
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className={`w-14 text-center ${isToday ? 'text-[#EFC14B]' : ''}`}>
-                    <p className="text-[10px] text-[#7A829A] uppercase">{DAY_LABELS[idx]}</p>
-                    <p className={`text-sm font-bold ${isToday ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
-                      {date.getDate()}/{date.getMonth() + 1}
-                    </p>
+          {/* Day rows */}
+          <div className="space-y-1.5">
+            {DAY_KEYS.map((day, idx) => {
+              const date = new Date(targetWeekMonday);
+              date.setDate(targetWeekMonday.getDate() + idx);
+              const dateStr = toDateStr(date);
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+              const isToday = toDateStr(new Date()) === dateStr;
+              const daySchedule = daySchedules.find(d => d.day === day);
+              const isBusy = daySchedule?.isBusy || false;
+              const selectedShift = shiftPreferences[dateStr] || '';
+              const isLeave = leaveDays.has(dateStr);
+              // Chỉ ngày bận học mới khóa hàng — cuối tuần chọn ca bình thường
+              // (nhãn T7/CN vẫn đỏ để nhận biết cuối tuần).
+              const rowLocked = isBusy;
+
+              return (
+                <div
+                  key={dateStr}
+                  className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 rounded-xl px-1 py-1.5"
+                >
+                  {/* Ngày */}
+                  <div className="flex flex-col justify-center px-1">
+                    <span className={`text-xs font-bold leading-tight ${
+                      isWeekend ? 'text-[#FF3131]' : isToday ? 'text-[#EFC14B]' : 'text-[#0F1E44]'
+                    }`}>
+                      {DAY_SHORT[idx]}
+                    </span>
+                    <span className="text-[10px] text-[#7A829A] leading-tight">
+                      {String(date.getDate()).padStart(2, '0')}/{String(date.getMonth() + 1).padStart(2, '0')}
+                      {isBusy ? ' 📚' : ''}
+                    </span>
                   </div>
-                  <div className="flex-1">
-                    {isBusy ? (
-                      <p className="text-xs text-[#FF3131] font-semibold">📚 Bận học</p>
-                    ) : (
-                      <>
-                        {/* XIN NGHỈ — loại trừ lẫn nhau với mọi ca trong ngày:
-                            chọn Nghỉ → bỏ chọn ca đã chọn; chọn ca → gỡ Nghỉ.
-                            Ngày quá khứ không cho xin nghỉ (cùng rule với ca). */}
-                        <div className="flex gap-1.5 mb-1.5">
-                          <button
-                            onClick={() => toggleLeave(dateStr)}
-                            disabled={isPast}
-                            title={isPast ? 'Không thể xin nghỉ cho ngày đã qua' : 'Xin nghỉ cả ngày — các ca đã chọn sẽ bị gỡ'}
-                            className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all flex items-center justify-center gap-1 ${
-                              isLeave
-                                ? 'bg-[#D4A833] text-white border-[#D4A833]'
-                                : isPast
-                                ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                                : 'bg-white text-[#D4A833] border-[#D4A833]/40 hover:bg-[#EFC14B]/10'
-                            }`}
-                          >
-                            <span className="material-symbols-outlined text-[12px]">{isLeave ? 'beach_access' : 'event_busy'}</span>
-                            {isLeave ? 'Đã xin nghỉ ngày này' : 'Nghỉ (xin nghỉ ngày này)'}
-                          </button>
-                        </div>
-                        <div className="flex gap-1.5">
-                          {SHIFT_SLOTS.map((slot) => {
-                            // Hint dùng CHÍNH getSlotAvailability — hàm duy nhất
-                            // mà engine dùng để chặn khi lưu. Hint và luật không
-                            // thể lệch nhau vì là CÙNG một phép tính; own auto
-                            // rows không chiếm chỗ của chính mình (đúng luật
-                            // resubmission của engine).
-                            const av = getSlotAvailability(
-                              shifts, dateStr, slot.name, capacityOverrides,
-                              currentUser.id
-                            );
-                            const count = av.taken;
-                            const max = av.max;
-                            const isFull = av.isFull;
-                            const disabled = (isFull && selectedShift !== slot.value) || isPast;
-                            const tr = getShiftTimeRange(slot.value, currentUser.employmentType);
-                            return (
-                              <button
-                                key={slot.value}
-                                onClick={() => {
-                                  if (disabled) return;
-                                  // Chọn ca → gỡ trạng thái Nghỉ của ngày (mutual exclusion)
-                                  setLeaveDays(prev => { const n = new Set(prev); n.delete(dateStr); return n; });
-                                  setShiftPreference(dateStr, slot.value);
-                                }}
-                                disabled={disabled}
-                                title={isFull ? 'Ca đã đầy' : `${slot.name}: ${tr.start}–${tr.end}`}
-                                className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                                  selectedShift === slot.value
-                                    ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                                    : disabled
-                                    ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                                    : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                                }`}
-                              >
-                                <span className="leading-none">{slot.icon} {slot.short}</span>
-                                <span className={`text-[8px] leading-none ${
-                                  selectedShift === slot.value
-                                    ? 'text-white/70'
-                                    : isFull
-                                    ? 'text-[#FF3131]/70'
-                                    : av.remaining === 1
-                                    ? 'text-[#D4A833]'
-                                    : 'text-[#4CAF72]'
-                                }`}>
-                                  {isFull ? 'Đầy' : `Còn ${av.remaining}/${av.max}`}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {isLeave ? (
-                          <p className="text-[9px] text-[#D4A833] mt-1">
-                            🏖️ Đã chọn nghỉ cả ngày — không đăng ký ca nào cho ngày này.
-                          </p>
-                        ) : selectedTime && (
-                          <p className="text-[9px] text-[#7A829A] mt-1">
-                            Giờ của bạn: <strong className="text-[#0F1E44]">{selectedTime.start}–{selectedTime.end}</strong>
-                          </p>
-                        )}
-                        {/* Chỗ cuối cùng sắp mất: nhấn mạnh để NV tự quyết
-                            trước khi submit thay vì phát hiện conflict sau. */}
-                        {SHIFT_SLOTS.some((slot) => {
-                          const s = shiftPreferences[dateStr];
-                          return s && s !== 'off' &&
-                            s !== slot.value &&
-                            getSlotAvailability(shifts, dateStr, slot.name, capacityOverrides, currentUser.id).isFull;
-                        }) && (
-                          <p className="text-[9px] text-[#FF3131] mt-1">
-                            Một số ca trong ngày này đã đủ người — hệ thống xếp theo thứ tự đăng ký trước.
-                          </p>
-                        )}
-                      </>
-                    )}
-                  </div>
+
+                  {/* 3 nút ca */}
+                  {SHIFT_SLOTS.map((slot) => {
+                    // Dùng CHÍNH getSlotAvailability — cùng phép tính với engine
+                    // khi lưu; ca đầy bị khóa (trừ ca đang chọn).
+                    const av = getSlotAvailability(
+                      shifts, dateStr, slot.name, capacityOverrides,
+                      currentUser.id
+                    );
+                    const active = selectedShift === slot.value;
+                    const disabled = rowLocked || (av.isFull && !active);
+                    const tr = getShiftTimeRange(slot.value, currentUser.employmentType);
+                    return (
+                      <button
+                        key={slot.value}
+                        type="button"
+                        onClick={() => {
+                          if (disabled) return;
+                          // Chọn ca → gỡ trạng thái Nghỉ của ngày (mutual exclusion)
+                          setLeaveDays(prev => { const n = new Set(prev); n.delete(dateStr); return n; });
+                          setShiftPreference(dateStr, slot.value);
+                        }}
+                        disabled={disabled}
+                        aria-pressed={active}
+                        title={av.isFull ? `${slot.name}: đã đầy` : `${slot.name}: ${tr.start}–${tr.end} (còn ${av.remaining}/${av.max})`}
+                        className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                          active
+                            ? 'bg-[#1D4ED8] text-white border-[#1D4ED8] shadow-sm'
+                            : disabled
+                            ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                            : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#1D4ED8]/50'
+                        }`}
+                      >
+                        {av.isFull && !active ? 'Đầy' : slot.short}
+                      </button>
+                    );
+                  })}
+
+                  {/* Off — xin nghỉ trọn ngày (tự nguyện, mọi ngày trong tuần) */}
+                  <button
+                    type="button"
+                    onClick={() => { if (!rowLocked) toggleLeave(dateStr); }}
+                    disabled={rowLocked}
+                    aria-pressed={isLeave}
+                    title="Nghỉ trọn ngày — các ca đã chọn sẽ bị gỡ"
+                    className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                      isLeave
+                        ? 'bg-[#FF3131] text-white border-[#FF3131] shadow-sm'
+                        : rowLocked
+                        ? 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                        : 'bg-white text-[#FF3131]/80 border-[#FF3131]/30 hover:bg-[#FF3131]/5'
+                    }`}
+                  >
+                    Off
+                  </button>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       )}
 

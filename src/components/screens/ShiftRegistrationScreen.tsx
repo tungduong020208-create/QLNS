@@ -9,12 +9,22 @@ import {
 
 // ─── Constants ───
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+/** Nhãn ngắn cho bảng lưới: T2…T7, CN. */
+const DAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
 const SHIFT_OPTIONS: { value: ShiftSlot; label: string; color: string; icon: string }[] = [
   { value: 'morning', label: 'Ca sáng', color: 'bg-blue-100 text-blue-700 border-blue-200', icon: 'wb_sunny' },
   { value: 'afternoon', label: 'Ca chiều', color: 'bg-amber-100 text-amber-700 border-amber-200', icon: 'wb_twilight' },
   { value: 'evening', label: 'Ca tối', color: 'bg-purple-100 text-purple-700 border-purple-200', icon: 'dark_mode' },
   { value: 'off', label: 'Nghỉ', color: 'bg-gray-100 text-gray-500 border-gray-200', icon: 'event_busy' },
+];
+
+/** 4 nút của bảng đăng ký — đúng thứ tự cột mẫu: Sáng · Chiều · Tối · Nghỉ Off. */
+const SHIFT_BUTTONS: { value: ShiftSlot; label: string }[] = [
+  { value: 'morning', label: 'Sáng' },
+  { value: 'afternoon', label: 'Chiều' },
+  { value: 'evening', label: 'Tối' },
+  { value: 'off', label: 'Nghỉ Off' },
 ];
 
 // ─── Helpers ───
@@ -102,6 +112,15 @@ const formatWeekRange = (monday: Date): string => {
   const fmt = (d: Date) =>
     d.toLocaleDateString('vi-VN', { day: 'numeric', month: 'numeric' });
   return `${fmt(monday)} – ${fmt(sunday)}`;
+};
+
+/** "Tuần 28/09 - 04/10/2026" — đầu tuần → cuối tuần (kèm năm, đủ 2 chữ số). */
+const formatWeekFull = (monday: Date): string => {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const fmt = (d: Date) =>
+    `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `Tuần ${fmt(monday)} - ${fmt(sunday)}/${sunday.getFullYear()}`;
 };
 
 // ─── Props ───
@@ -268,13 +287,26 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
   if (!isManager) {
     return (
       <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
-        {/* Header */}
-        <div className="mb-5">
-          <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Đăng ký lịch tuần</h2>
-          <p className="text-xs text-[#7A829A] mt-0.5">
-            Đăng ký ca làm việc cho tuần tiếp theo
-          </p>
+        {/* Header — thanh tuần + trạng thái mở/khóa (theo mẫu thiết kế) */}
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-heading text-xl font-bold text-[#0F1E44]">
+            {formatWeekFull(targetWeekMonday)}
+          </h2>
+          <span
+            className={`flex-shrink-0 px-3 py-1 rounded-full text-[11px] font-bold ${
+              formCheck.open
+                ? 'bg-[#4CAF72]/15 text-[#4CAF72]'
+                : 'bg-[#FF3131]/10 text-[#FF3131]'
+            }`}
+          >
+            {formCheck.open ? 'Đang mở' : 'Đã khóa'}
+          </span>
         </div>
+        <p className="text-xs text-[#7A829A] mb-4 leading-relaxed">
+          Không cần giải thích lý do nghỉ. Chọn{' '}
+          <strong className="text-[#FF3131]">OFF</strong> để nghỉ trọn ngày (bao gồm
+          cuối tuần), hoặc chọn các khung giờ bạn muốn đi làm.
+        </p>
 
         {/* Success message */}
         {showSuccess && (
@@ -310,23 +342,23 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
           </div>
         </div>
 
-        {/* Form locked message */}
+        {/* Form locked — giải thích khung thời gian mở */}
         {!formCheck.open && (
           <div className="bg-[#FF3131]/10 border border-[#FF3131]/30 rounded-2xl p-4 mb-4 flex items-start gap-3">
             <span className="material-symbols-outlined text-[#FF3131] text-xl mt-0.5">lock</span>
             <div>
-              <h4 className="text-sm font-bold text-[#FF3131] mb-1">Form bị khóa</h4>
+              <h4 className="text-sm font-bold text-[#FF3131] mb-1">Form đã khóa</h4>
               <p className="text-xs text-[#7A829A]">{formCheck.message}</p>
             </div>
           </div>
         )}
 
-        {/* Form open indicator */}
+        {/* Form open — nhãn khung giờ gọn */}
         {formCheck.open && (
-          <div className="bg-[#4CAF72]/10 border border-[#4CAF72]/30 rounded-2xl p-3 mb-4 flex items-center gap-2">
+          <div className="bg-[#4CAF72]/10 border border-[#4CAF72]/30 rounded-2xl px-3 py-2 mb-4 flex items-center gap-2">
             <span className="material-symbols-outlined text-[#4CAF72] text-lg">check_circle</span>
             <p className="text-xs font-semibold text-[#4CAF72]">
-              Form đang mở — bạn có thể đăng ký lịch tuần tới
+              Đang mở — Thứ 6 đến Chủ nhật, đăng ký lịch tuần tới
             </p>
           </div>
         )}
@@ -376,58 +408,95 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
           </div>
         )}
 
-        {/* Day selection grid */}
-        <div className="space-y-2 mb-4">
-          <h3 className="text-sm font-bold text-[#0F1E44] mb-2">Chọn ca làm việc</h3>
-          {targetWeekDays.map((day, idx) => {
-            const dateStr = toDateStr(day);
-            const isToday = toDateStr(new Date()) === dateStr;
-            const selected = daySelections.find((d) => d.date === dateStr)?.shift || 'off';
-            const shiftInfo = getShiftInfo(selected);
-
-            return (
-              <div
-                key={dateStr}
-                className={`bg-white rounded-xl border p-3 flex items-center gap-3 transition-all ${
-                  isToday ? 'border-[#EFC14B] shadow-sm' : 'border-[#E8DFD0]'
+        {/* Bảng đăng ký theo lưới — hàng: ngày, cột: Sáng/Chiều/Tối/Off */}
+        <div className="bg-white rounded-2xl border border-[#E8DFD0] p-3 mb-4">
+          {/* Header row */}
+          <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 mb-2">
+            <span className="text-[10px] font-bold text-[#7A829A] uppercase flex items-center">Thứ / Ngày</span>
+            {SHIFT_BUTTONS.map((b) => (
+              <span
+                key={b.value}
+                className={`text-[10px] font-bold uppercase text-center flex items-center justify-center ${
+                  b.value === 'off' ? 'text-[#FF3131]' : 'text-[#7A829A]'
                 }`}
               >
-                {/* Day label */}
-                <div className={`w-14 flex-shrink-0 text-center ${isToday ? 'text-[#EFC14B]' : ''}`}>
-                  <p className="text-[10px] text-[#7A829A] uppercase">{DAY_LABELS[idx]}</p>
-                  <p className={`text-sm font-bold ${isToday ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
-                    {day.getDate()}/{day.getMonth() + 1}
-                  </p>
-                  {isToday && (
-                    <p className="text-[8px] text-[#EFC14B] font-bold">HÔM NAY</p>
-                  )}
-                </div>
+                {b.label}
+              </span>
+            ))}
+          </div>
 
-                {/* Shift selector buttons */}
-                <div className="flex-1 grid grid-cols-4 gap-1.5">
-                  {SHIFT_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      onClick={() => !formCheck.open && !isManager ? undefined : handleShiftChange(dateStr, opt.value)}
-                      disabled={!formCheck.open}
-                      className={`py-2 rounded-lg text-[10px] font-bold border transition-all flex flex-col items-center gap-0.5 ${
-                        selected === opt.value
-                          ? opt.value === 'off'
-                            ? 'bg-gray-200 text-gray-600 border-gray-300'
-                            : 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                          : formCheck.open
-                          ? 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                          : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[12px]">{opt.icon}</span>
-                      <span className="leading-none">{opt.label}</span>
-                    </button>
-                  ))}
+          {/* Day rows */}
+          <div className="space-y-1.5">
+            {targetWeekDays.map((day, idx) => {
+              const dateStr = toDateStr(day);
+              const isWeekend = day.getDay() === 0 || day.getDay() === 6;
+              const locked = isWeekend || !formCheck.open; // cuối tuần luôn Off
+              const selected = daySelections.find((d) => d.date === dateStr)?.shift || 'off';
+
+              return (
+                <div
+                  key={dateStr}
+                  className={`grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 rounded-xl px-1 py-1.5 ${
+                    isWeekend ? 'bg-[#FF3131]/5' : ''
+                  }`}
+                >
+                  {/* Ngày */}
+                  <div className="flex flex-col justify-center px-1">
+                    <span className={`text-xs font-bold leading-tight ${
+                      isWeekend ? 'text-[#FF3131]' : 'text-[#0F1E44]'
+                    }`}>
+                      {DAY_SHORT[idx]}
+                    </span>
+                    <span className="text-[10px] text-[#7A829A] leading-tight">
+                      {String(day.getDate()).padStart(2, '0')}/{String(day.getMonth() + 1).padStart(2, '0')}
+                    </span>
+                  </div>
+
+                  {/* 4 nút ca */}
+                  {SHIFT_BUTTONS.map((b) => {
+                    const active = selected === b.value;
+                    if (locked) {
+                      // Ô khóa: nút Off ép active (cuối tuần), còn lại mờ đi
+                      return (
+                        <button
+                          key={b.value}
+                          type="button"
+                          disabled
+                          tabIndex={-1}
+                          className={`py-2 rounded-lg text-[11px] font-bold border transition-all ${
+                            isWeekend && b.value === 'off'
+                              ? 'bg-[#FF3131] text-white border-[#FF3131]'
+                              : 'bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed'
+                          }`}
+                        >
+                          {b.label}
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        key={b.value}
+                        type="button"
+                        onClick={() => handleShiftChange(dateStr, b.value)}
+                        aria-pressed={active}
+                        className={`py-2 rounded-lg text-[11px] font-bold border transition-all ${
+                          b.value === 'off'
+                            ? active
+                              ? 'bg-[#FF3131] text-white border-[#FF3131] shadow-sm'
+                              : 'bg-white text-[#FF3131]/70 border-[#FF3131]/30 hover:bg-[#FF3131]/5'
+                            : active
+                            ? 'bg-[#1D4ED8] text-white border-[#1D4ED8] shadow-sm'
+                            : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#1D4ED8]/50'
+                        }`}
+                      >
+                        {b.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {/* Submit button */}
@@ -662,37 +731,72 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
               </div>
             </div>
 
-            {/* Day editing */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-2">
-              {editDaySelections.map((day, idx) => {
-                const si = getShiftInfo(day.shift);
-                return (
-                  <div key={day.date} className="flex items-center gap-3">
-                    <div className="w-16 flex-shrink-0">
-                      <p className="text-[10px] text-[#7A829A] uppercase">{DAY_LABELS[idx]}</p>
-                      <p className="text-xs font-bold text-[#0F1E44]">
-                        {day.date.split('-')[2]}/{day.date.split('-')[1]}
-                      </p>
+            {/* Day editing — bảng lưới giống form nhân viên */}
+            <div className="flex-1 overflow-y-auto p-5">
+              {/* Header row */}
+              <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 mb-2">
+                <span className="text-[10px] font-bold text-[#7A829A] uppercase flex items-center">Thứ / Ngày</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Sáng</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Chiều</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Tối</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#FF3131]">Nghỉ Off</span>
+              </div>
+
+              <div className="space-y-1.5">
+                {editDaySelections.map((day, idx) => {
+                  const d = new Date(`${day.date}T00:00:00`);
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  return (
+                    <div key={day.date} className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 rounded-xl px-1 py-1.5">
+                      {/* Ngày */}
+                      <div className="flex flex-col justify-center px-1">
+                        <span className={`text-xs font-bold leading-tight ${
+                          isWeekend ? 'text-[#FF3131]' : 'text-[#0F1E44]'
+                        }`}>
+                          {DAY_SHORT[idx]}
+                        </span>
+                        <span className="text-[10px] text-[#7A829A] leading-tight">
+                          {day.date.split('-')[2]}/{day.date.split('-')[1]}
+                        </span>
+                      </div>
+
+                      {/* 3 nút ca */}
+                      {SHIFT_BUTTONS.filter((b) => b.value !== 'off').map((b) => {
+                        const active = day.shift === b.value;
+                        return (
+                          <button
+                            key={b.value}
+                            type="button"
+                            onClick={() => handleManagerDayChange(day.date, b.value)}
+                            aria-pressed={active}
+                            className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                              active
+                                ? 'bg-[#1D4ED8] text-white border-[#1D4ED8] shadow-sm'
+                                : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#1D4ED8]/50'
+                            }`}
+                          >
+                            {b.label}
+                          </button>
+                        );
+                      })}
+
+                      {/* Off */}
+                      <button
+                        type="button"
+                        onClick={() => handleManagerDayChange(day.date, 'off')}
+                        aria-pressed={day.shift === 'off'}
+                        className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                          day.shift === 'off'
+                            ? 'bg-[#FF3131] text-white border-[#FF3131] shadow-sm'
+                            : 'bg-white text-[#FF3131]/80 border-[#FF3131]/30 hover:bg-[#FF3131]/5'
+                        }`}
+                      >
+                        Off
+                      </button>
                     </div>
-                    <div className="flex-1 grid grid-cols-4 gap-1.5">
-                      {SHIFT_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          onClick={() => handleManagerDayChange(day.date, opt.value)}
-                          className={`py-2 rounded-lg text-[10px] font-bold border transition-all flex flex-col items-center gap-0.5 ${
-                            day.shift === opt.value
-                              ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                              : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                          }`}
-                        >
-                          <span className="material-symbols-outlined text-[12px]">{opt.icon}</span>
-                          <span className="leading-none">{opt.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Modal footer */}

@@ -13,6 +13,8 @@ import { computeBatchAutoSchedule, BatchAutoScheduleResult, BatchSlotResult } fr
 import { formatRejectionReason, RejectedCandidate } from '../../utils/priorityRanking';
 
 const DAY_LABELS = ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ nhật'];
+/** Nhãn ngắn cho bảng xếp ca: T2…T7, CN. */
+const DAY_SHORT = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 const DAY_KEYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
 // 3 ca cố định — KHUNG GIỜ map động qua getShiftTimeRange() theo loại
@@ -568,120 +570,121 @@ export const ManagerStudySchedulesScreen: React.FC<ManagerStudySchedulesScreenPr
               </div>
             </div>
 
-            {/* Shift Assignment */}
+            {/* Shift Assignment — bảng lưới thống nhất với form nhân viên */}
             <div className="flex-1 overflow-y-auto p-4">
               <p className="text-xs text-[#7A829A] mb-3">
-                Chọn ca làm việc cho từng ngày trong tuần:
+                Chọn ca cho từng ngày — ô trống coi như nghỉ. Bận học / NV xin nghỉ chỉ mang tính tham khảo.
               </p>
 
-              {DAY_KEYS.map((day, idx) => {
-                const date = new Date(currentMonday);
-                date.setDate(currentMonday.getDate() + idx);
-                const dateStr = toDateStr(date);
-                const isToday = toDateStr(new Date()) === dateStr;
-                const selectedShift = assignShifts[dateStr] || '';
+              {/* Header row */}
+              <div className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 mb-2">
+                <span className="text-[10px] font-bold text-[#7A829A] uppercase flex items-center">Thứ / Ngày</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Sáng</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Chiều</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#7A829A]">Tối</span>
+                <span className="text-[10px] font-bold uppercase text-center flex items-center justify-center text-[#FF3131]">Nghỉ Off</span>
+              </div>
 
-                // Study-busy info is ADVISORY only: the manager decides.
-                const schedule = weekSchedules.find((s) => s.userId === showAssignModal);
-                const daySchedule = schedule?.days.find((d) => d.day === day);
-                const isBusy = daySchedule?.isBusy || false;
+              <div className="space-y-1.5">
+                {DAY_KEYS.map((day, idx) => {
+                  const date = new Date(currentMonday);
+                  date.setDate(currentMonday.getDate() + idx);
+                  const dateStr = toDateStr(date);
+                  const isToday = toDateStr(new Date()) === dateStr;
+                  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                  const selectedShift = assignShifts[dateStr] || '';
+                  const hasOff = selectedShift === '';
 
-                // Đăng ký XIN NGHỈ của NV (type 'leave') — cũng chỉ mang tính
-                // tham khảo: quản lý vẫn có thể gán ca, nhưng UI phải nói rõ
-                // để quyết định là có chủ ý, không phải nhìn lộn ô trống.
-                const regLeave = weekRegistrations
-                  .find((r) => r.userId === showAssignModal)
-                  ?.days.find((d) => d.date === dateStr)?.type === 'leave';
+                  // Study-busy info is ADVISORY only: the manager decides.
+                  const schedule = weekSchedules.find((s) => s.userId === showAssignModal);
+                  const daySchedule = schedule?.days.find((d) => d.day === day);
+                  const isBusy = daySchedule?.isBusy || false;
 
-                return (
-                  <div
-                    key={dateStr}
-                    className={`mb-3 p-3 rounded-xl border ${
-                      isBusy
-                        ? 'bg-[#FF3131]/5 border-[#FF3131]/30'
-                        : isToday
-                        ? 'bg-[#EFC14B]/10 border-[#EFC14B]'
-                        : 'bg-white border-[#E8DFD0]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold ${isToday ? 'text-[#EFC14B]' : 'text-[#0F1E44]'}`}>
-                          {DAY_LABELS[idx]}
+                  // Đăng ký XIN NGHỈ của NV (type 'leave') — cũng chỉ mang tính
+                  // tham khảo: quản lý vẫn có thể gán ca, nhưng UI phải nói rõ
+                  // để quyết định là có chủ ý, không phải nhìn lộn ô trống.
+                  const regLeave = weekRegistrations
+                    .find((r) => r.userId === showAssignModal)
+                    ?.days.find((d) => d.date === dateStr)?.type === 'leave';
+
+                  return (
+                    <div key={dateStr} className="grid grid-cols-[52px_repeat(4,1fr)] gap-1.5 rounded-xl px-1 py-1.5">
+                      {/* Ngày + cảnh báo tham khảo */}
+                      <div className="flex flex-col justify-center px-1">
+                        <span className={`text-xs font-bold leading-tight ${
+                          isWeekend ? 'text-[#FF3131]' : isToday ? 'text-[#EFC14B]' : 'text-[#0F1E44]'
+                        }`}>
+                          {DAY_SHORT[idx]}
                         </span>
-                        <span className="text-xs text-[#7A829A]">
-                          {date.getDate()}/{date.getMonth() + 1}
+                        <span className="text-[10px] text-[#7A829A] leading-tight">
+                          {String(date.getDate()).padStart(2, '0')}/{String(date.getMonth() + 1).padStart(2, '0')}
+                          {isBusy ? ' 📚' : ''}
+                          {regLeave ? ' 🏖' : ''}
                         </span>
-                        {isBusy && (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FF3131]/15 text-[#FF3131]">
-                            📚 Bận học
-                          </span>
-                        )}
                       </div>
-                      {selectedShift ? (
-                        <>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#4CAF72]/15 text-[#4CAF72]">
-                            ✓ {selectedShift}
-                          </span>
-                          {(() => {
-                            // Sức chứa còn lại của ca đang chọn — cùng nguồn số
-                            // với engine (không truyền viewerId: manager nhìn
-                            // tổng quan ghế thật, gồm cả hàng của nhân viên).
-                            const av = getSlotAvailability(shifts, dateStr, selectedShift);
-                            return (
-                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                av.remaining === 0
-                                  ? 'bg-[#FF3131]/15 text-[#FF3131]'
-                                  : 'bg-[#0F1E44]/10 text-[#0F1E44]'
-                              }`}>
-                                {av.remaining}/{av.max} chỗ
-                              </span>
-                            );
-                          })()}
-                        </>
-                      ) : regLeave ? (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EFC14B]/25 text-[#D4A833]">
-                          🏖 NV xin nghỉ
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-[#7A829A]">
-                          Nghỉ
-                        </span>
+
+                      {/* 3 nút ca */}
+                      {SHIFT_NAMES.map((name) => {
+                        const active = selectedShift === name;
+                        // Sức chứa của ca — cùng nguồn số với engine (không
+                        // truyền viewerId: manager nhìn tổng quan ghế thật).
+                        const av = getSlotAvailability(shifts, dateStr, name);
+                        return (
+                          <button
+                            key={name}
+                            type="button"
+                            onClick={() => toggleAssignShift(dateStr, name)}
+                            aria-pressed={active}
+                            title={active ? `${name} — ${av.remaining}/${av.max} chỗ còn` : `${name}: ${av.max} chỗ tối đa`}
+                            className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                              active
+                                ? 'bg-[#1D4ED8] text-white border-[#1D4ED8] shadow-sm'
+                                : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#1D4ED8]/50'
+                            }`}
+                          >
+                            {name.replace('Ca ', '')}
+                          </button>
+                        );
+                      })}
+
+                      {/* Off — không gán ca (mặc định) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedShift) toggleAssignShift(dateStr, selectedShift);
+                        }}
+                        aria-pressed={hasOff}
+                        title="Không gán ca — nhân viên nghỉ ngày này"
+                        className={`py-2.5 rounded-lg text-[11px] font-bold border transition-all ${
+                          hasOff
+                            ? 'bg-[#FF3131] text-white border-[#FF3131] shadow-sm'
+                            : 'bg-white text-[#FF3131]/80 border-[#FF3131]/30 hover:bg-[#FF3131]/5'
+                        }`}
+                      >
+                        Off
+                      </button>
+
+                      {/* Cảnh báo tham khảo dưới hàng */}
+                      {(isBusy || regLeave) && (
+                        <div className="col-span-5 -mt-0.5">
+                          {isBusy && (
+                            <p className="text-[10px] text-[#FF3131]">
+                              ⚠️ Nhân viên đăng ký bận học ngày này
+                            </p>
+                          )}
+                          {regLeave && (
+                            <p className={`text-[10px] font-semibold ${selectedShift ? 'text-[#D4A833]' : 'text-[#7A829A]'}`}>
+                              {selectedShift
+                                ? '⚠️ NV đã xin nghỉ ngày này — gán ca là ghi đè có chủ ý của quản lý.'
+                                : 'NV đã xin nghỉ ngày này.'}
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
-
-                    {/* All 7 days assignable — rest day is whatever the manager
-                        leaves unselected, not a hard-coded Sat/Sun. */}
-                    <div className="flex gap-1.5">
-                      {SHIFT_NAMES.map((name) => (
-                        <button
-                          key={name}
-                          onClick={() => toggleAssignShift(dateStr, name)}
-                          className={`flex-1 py-2 rounded-lg text-[10px] font-bold border transition-all ${
-                            selectedShift === name
-                              ? 'bg-[#0F1E44] text-white border-[#0F1E44]'
-                              : 'bg-white text-[#7A829A] border-[#E8DFD0] hover:border-[#EFC14B]'
-                          }`}
-                        >
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-
-                    {isBusy && (
-                      <p className="text-[10px] text-[#7A829A] mt-2">
-                        ⚠️ Nhân viên đăng ký bận học ngày này
-                      </p>
-                    )}
-
-                    {regLeave && selectedShift && (
-                      <p className="text-[10px] text-[#D4A833] mt-2 font-semibold">
-                        ⚠️ NV đã xin nghỉ ngày này — gán ca là ghi đè có chủ ý của quản lý.
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Modal Footer */}

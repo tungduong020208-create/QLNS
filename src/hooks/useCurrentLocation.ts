@@ -19,6 +19,12 @@ export interface CurrentLocationState {
  *
  * Runs once on mount; listens for permission changes so the address
  * refreshes if the user flips location access while the screen is open.
+ *
+ * NEVER auto-prompts: sampling only happens when geolocation permission is
+ * already 'granted'. Calling getCurrentPosition while the permission is still
+ * 'prompt' makes the host webview show the "Allow geolocation?" dialog on
+ * every screen mount (reported as permission-dialog spam) — the prompt must
+ * only ever be triggered by an explicit user action (the check-in flow).
  */
 export function useCurrentLocation(): CurrentLocationState {
   const [state, setState] = useState<CurrentLocationState>({
@@ -34,6 +40,7 @@ export function useCurrentLocation(): CurrentLocationState {
     }
 
     let cancelled = false;
+    let perm: PermissionStatus | null = null;
 
     const lookup = () => {
       navigator.geolocation.getCurrentPosition(
@@ -62,29 +69,41 @@ export function useCurrentLocation(): CurrentLocationState {
       );
     };
 
-    lookup();
+    // Auto-sample only when permission is already granted (checked below);
+    // otherwise show a passive status and wait — the 'change' listener below
+    // picks up the moment the user grants (e.g. via the check-in flow's prompt).
+    // NOTE: no unconditional lookup() here — that was the prompt-spam source.
+    const onPermChange = () => {
+      if (cancelled) return;
+      if (perm?.state === 'granted') lookup();
+    };
 
-    // Re-resolve if the user flips the permission switch mid-session.
     if (navigator.permissions?.query) {
-      let perm: PermissionStatus | null = null;
-      const onPermChange = () => lookup();
       navigator.permissions
         .query({ name: 'geolocation' as PermissionName })
         .then((status) => {
+          if (cancelled) return;
           perm = status;
-          perm.addEventListener('change', onPermChange);
+          if (status.state === 'granted') {
+            lookup();
+          } else if (status.state === 'denied') {
+            setState({ address: 'Quyền vị trí bị từ chối — hãy cấp quyền trong cài đặt', coords: null, ready: true });
+          } else {
+            setState({ address: 'Chưa cấp quyền vị trí', coords: null, ready: true });
+          }
+          status.addEventListener('change', onPermChange);
         })
         .catch(() => {
-          /* some browsers reject the query — non-fatal */
+          // Permissions API unavailable — fall back to the legacy auto lookup
+          lookup();
         });
-      return () => {
-        cancelled = true;
-        perm?.removeEventListener('change', onPermChange);
-      };
+    } else {
+      lookup();
     }
 
     return () => {
       cancelled = true;
+      perm?.removeEventListener('change', onPermChange);
     };
   }, []);
 
