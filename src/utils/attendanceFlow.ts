@@ -168,37 +168,42 @@ export type AttendanceFlowState =
   | { view: 'idle' }
   /** Wi-Fi/GPS checks are running (loading overlay). */
   | { view: 'checking' }
-  /** Gate blocked: Wi-Fi invalid and no fallback → hard-block modal. */
-  | { view: 'wifi-blocked'; message: string; wifi: WifiSnapshot | null }
+  /** Gate blocked: Wi-Fi invalid. canVerifyGps = GPS fallback available. */
+  | { view: 'wifi-blocked'; message: string; wifi: WifiSnapshot | null; canVerifyGps?: boolean }
   /** Gate blocked: GPS unavailable (no position at all). */
   | { view: 'gps-unavailable'; message: string }
   /** Gate blocked: GPS too far while Wi-Fi valid (anti-spoof). */
   | { view: 'gps-too-far'; message: string; distance: number }
   /** Gate passed via fallback → choose GPS vs PIN. */
   | { view: 'fallback-select' }
-  /** Camera permission prompt. */
+  /** Legacy one-tap confirm (superseded by the camera flow, kept for compat). */
+  | { view: 'confirm' }
+  /** Camera consent → smile capture → photo review (restored 2026-09-24:
+   *  the photo proves the EMPLOYEE is present, the Wi-Fi check proves WHERE). */
   | { view: 'permission' }
-  /** SmileDetector camera is open. */
   | { view: 'camera' }
-  /** Photo captured, awaiting confirm/retake. */
   | { view: 'review'; photo: string }
   /** Record persisted successfully. */
   | { view: 'success' }
   /** GPS fallback is locating/verifying. */
   | { view: 'gps-locate'; phase: 'loading' | 'success' | 'error'; message?: string; distance?: number }
+  /** User-initiated GPS verification after a Wi-Fi failure (loading state). */
+  | { view: 'gps-verify'; phase: 'loading' | 'success' | 'error'; message?: string }
   /** PIN fallback entry. Lock/attempts live in `pinReducer`; only typing lives here. */
   | { view: 'pin'; input: string; error: string | null };
 
 export type AttendanceFlowAction =
   | { type: 'attempt'; action: 'checkin' | 'checkout' }
-  | { type: 'gate-verdict'; verdict: 'pass' | 'wifi-blocked' | 'fallback' | 'gps-unavailable' | 'gps-too-far'; message?: string; distance?: number; wifi?: WifiSnapshot | null }
+  | { type: 'gate-verdict'; verdict: 'pass' | 'wifi-blocked' | 'fallback' | 'gps-unavailable' | 'gps-too-far'; message?: string; distance?: number; wifi?: WifiSnapshot | null; canVerifyGps?: boolean }
   | { type: 'camera-allowed' }
   | { type: 'camera-denied' }
-  | { type: 'smile-captured'; photo: string }
+  | { type: 'photo-captured'; photo: string }
   | { type: 'retake' }
   | { type: 'confirmed' }
   | { type: 'fallback-gps' }
   | { type: 'fallback-pin' }
+  | { type: 'gps-verify-start' }
+  | { type: 'gps-verify-result'; ok: boolean; message: string }
   | { type: 'gps-locate-phase'; phase: 'loading' | 'success' | 'error'; message?: string; distance?: number }
   | { type: 'pin-typing'; value: string }
   | { type: 'pin-error'; message: string }
@@ -256,11 +261,16 @@ export function flowReducer(state: AttendanceFlowState, action: AttendanceFlowAc
       if (state.view !== 'checking') return state; // stale verdict — ignore
       switch (action.verdict) {
         case 'pass':
+          // Wi-Fi verified → camera consent, then the smile capture step.
+          // (Restored 2026-09-24: Wi-Fi proves the place, the photo proves the
+          // person. The permission prompt fires only from this user path.)
           return { view: 'permission' };
-        case 'fallback':
-          return { view: 'fallback-select' };
         case 'wifi-blocked':
-          return { view: 'wifi-blocked', message: action.message ?? '', wifi: action.wifi ?? null };
+          return { view: 'wifi-blocked', message: action.message ?? '', wifi: action.wifi ?? null, canVerifyGps: action.canVerifyGps ?? false };
+        case 'fallback':
+          // Wi-Fi failed but GPS fallback is available → same blocked modal,
+          // with the "Verify by GPS" action enabled.
+          return { view: 'wifi-blocked', message: action.message ?? '', wifi: action.wifi ?? null, canVerifyGps: true };
         case 'gps-unavailable':
           return { view: 'gps-unavailable', message: action.message ?? '' };
         case 'gps-too-far':
@@ -274,7 +284,7 @@ export function flowReducer(state: AttendanceFlowState, action: AttendanceFlowAc
     case 'camera-denied':
       return state.view === 'permission' ? { view: 'fallback-select' } : state;
 
-    case 'smile-captured':
+    case 'photo-captured':
       if (state.view !== 'camera' && state.view !== 'review') return state;
       return { view: 'review', photo: action.photo };
 
@@ -282,13 +292,24 @@ export function flowReducer(state: AttendanceFlowState, action: AttendanceFlowAc
       return state.view === 'review' ? { view: 'camera' } : state;
 
     case 'confirmed':
-      // Capture accepted for ALL methods (photo review, GPS fallback, PIN).
-      // The persistence side effects happen in sessionReducer, not here.
-      if (state.view !== 'review' && state.view !== 'gps-locate' && state.view !== 'pin') return state;
+      // Capture accepted for ALL methods (one-tap Wi-Fi confirm, photo review,
+      // GPS fallback, PIN). Persistence side effects happen in sessionReducer.
+      if (state.view !== 'confirm' && state.view !== 'review' && state.view !== 'gps-locate' && state.view !== 'pin') return state;
       return { view: 'success' };
 
     case 'fallback-gps':
       return state.view === 'fallback-select' ? { view: 'gps-locate', phase: 'loading' } : state;
+
+    case 'gps-verify-start':
+      return { view: 'gps-verify', phase: 'loading' };
+
+    case 'gps-verify-result':
+      if (state.view !== 'gps-verify') return state;
+      return {
+        view: 'gps-verify',
+        phase: action.ok ? 'success' : 'error',
+        message: action.message,
+      };
 
     case 'fallback-pin':
       return state.view === 'fallback-select' ? { view: 'pin', input: '', error: null } : state;

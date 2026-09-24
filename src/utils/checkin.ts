@@ -112,6 +112,28 @@ export async function isGeolocationGranted(): Promise<boolean> {
   }
 }
 
+/** Fine-grained geolocation permission state for the check-in flow. */
+export type GeolocationPermissionState = 'granted' | 'denied' | 'prompt' | 'unsupported';
+
+/**
+ * Current geolocation permission state without triggering any prompt.
+ *
+ * The check-in flow uses this to short-circuit when permission is
+ * definitively DENIED: calling getCurrentPosition then would fail instantly
+ * with code 1 and add nothing but confusion (and in some webviews, a
+ * duplicate permission dialog from the auto-retry).
+ */
+export async function getGeolocationState(): Promise<GeolocationPermissionState> {
+  if (!('geolocation' in navigator)) return 'unsupported';
+  if (!navigator.permissions?.query) return 'prompt';
+  try {
+    const status = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+    return status.state as GeolocationPermissionState;
+  } catch {
+    return 'prompt';
+  }
+}
+
 // Re-export secure PIN functions from auth.ts (derived secret, constant-time validation)
 export { generateShiftPin, validateShiftPin } from './auth';
 
@@ -148,6 +170,8 @@ export function getLocationErrorMessage(error: GeolocationPositionError): string
  */
 export function getCheckInMethodLabel(method: string): string {
   switch (method) {
+    case 'wifi':
+      return '📶 Wi-Fi quán';
     case 'photo':
       return '📸 Ảnh';
     case 'gps':
@@ -166,6 +190,8 @@ export function getCheckInMethodLabel(method: string): string {
  */
 export function getCheckInMethodColor(method: string): string {
   switch (method) {
+    case 'wifi':
+      return 'text-blue-600 bg-blue-50';
     case 'photo':
       return 'text-green-600 bg-green-50';
     case 'gps':

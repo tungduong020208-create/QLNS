@@ -148,7 +148,7 @@ export interface QRReview {
   sentToGoogle: boolean;
 }
 
-export type CheckInMethod = 'photo' | 'gps' | 'pin' | 'toggle'; // 'toggle' = manager check-in switch
+export type CheckInMethod = 'wifi' | 'photo' | 'gps' | 'pin' | 'toggle'; // 'toggle' = manager check-in switch; 'wifi' = one-tap office Wi-Fi confirmed check-in
 
 export interface CheckInLocation {
   latitude: number;

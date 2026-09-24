@@ -2,32 +2,33 @@ import React, { useCallback, useEffect, useMemo, useReducer, useState } from 're
 import { CheckInRecord, CheckInMethod, CheckInLocation } from '../types';
 import {
   getCurrentPosition,
-  isWithinStoreRadius,
   getDistanceToOffice,
   getLocationErrorMessage,
   getCheckInMethodLabel,
   getCheckInMethodColor,
+  getCurrentShiftType,
+  isWithinStoreRadius,
 } from '../utils/checkin';
 import { compressImage, generatePhotoHash } from '../utils/imageCompress';
-import { validateShiftPin, getCurrentShiftType } from '../utils/auth';
 import { validateWifiConnection, IpCheckResult, OFFICE_WIFI_NAME } from '../utils/ipCheck';
-import { resolveAttendanceGate } from '../utils/attendanceGate';
+import { resolveAttendanceGate, resolveGpsFallback } from '../utils/attendanceGate';
 import { makeAttendanceStore } from '../utils/attendanceStore';
 import {
   attendanceFlowReducer,
   attendanceSessionReducer,
   deriveInitialSessionState,
-  initialPinState,
+  toWifiSnapshot,
   pinReducer,
   sanitizePinInput,
   shouldLockPin,
-  toWifiSnapshot,
+  initialPinState,
   WifiSnapshot,
 } from '../utils/attendanceFlow';
+import { validateShiftPin } from '../utils/checkin';
 import { DEFAULT_STORE, OFFICE_WIFI } from '../utils/constants';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useCameraPermission } from '../hooks/useCameraPermission';
-import SmileDetector from './SmileDetector';
+import CameraCapture from './CameraCapture';
 
 interface CheckInCheckOutProps {
   employeeId: string;
@@ -81,11 +82,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     undefined,
     () => deriveInitialSessionState(attendance.readActiveSession(employeeId))
   );
-  const [pin, dispatchPin] = useReducer(pinReducer, initialPinState);
-
   // ── Presentation-only leftovers ─────────────────────────────────────────
   const [actionType, setActionType] = useState<ActionType>('checkin');
   const [cameraRetryCount, setCameraRetryCount] = useState(0);
+  const [pin, dispatchPin] = useReducer(pinReducer, initialPinState);
   const now = useNow();
   const location = useCurrentLocation();
   const camera = useCameraPermission();
@@ -166,10 +166,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     setActionType(type);
     if (_retryCount === 0) setCameraRetryCount(0);
 
-    const [wifiSettled, gpsSettled] = await Promise.allSettled([
-      validateWifiConnection(),
-      getCurrentPosition(),
-    ]);
+    // GPS REMOVED from the check-in path (product decision 2026-09-24):
+    // in embedded webviews the geolocation permission isn't persisted and
+    // the "Allow geolocation?" dialog kept blocking check-in entirely.
+    // Attendance is now validated by the office Wi-Fi/IP check alone —
+    // NO geolocation call here means NO permission dialog, ever.
+    const wifiSettled = await validateWifiConnection()
+      .then((value) => ({ status: 'fulfilled' as const, value }))
+      .catch((value) => ({ status: 'rejected' as const, value }));
 
     let wifiResult: IpCheckResult;
     if (wifiSettled.status === 'fulfilled') {
@@ -185,43 +189,27 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       };
     }
 
-    let gpsErrorMessage: string | null = null;
-    if (gpsSettled.status === 'rejected') {
-      const reason = gpsSettled.reason as { code?: number; message?: string } | undefined;
-      gpsErrorMessage = typeof reason?.code === 'number'
-        ? getLocationErrorMessage(reason as GeolocationPositionError)
-        : (reason?.message || 'Không thể xác định vị trí GPS');
-    }
-
+    // GPS is no longer part of the gate — no position, no error message.
     const gate = resolveAttendanceGate({
       wifi: wifiResult,
-      gpsPosition: gpsSettled.status === 'fulfilled'
-        ? {
-            coords: {
-              latitude: gpsSettled.value.coords.latitude,
-              longitude: gpsSettled.value.coords.longitude,
-              accuracy: gpsSettled.value.coords.accuracy,
-            },
-          }
-        : null,
-      gpsErrorMessage,
+      gpsPosition: null,
+      gpsErrorMessage: null,
       officeRadiusMeters: DEFAULT_STORE.radius,
       distanceToOffice: getDistanceToOffice,
     });
 
-    // Auto-retry once on transient failures (WiFi API timeout, GPS cold
-    // start). Skip retry for 'pass' and 'fallback' — those are final.
+    // Auto-retry ONCE on Wi-Fi check failures (transient API timeouts).
     const shouldRetry = _retryCount === 0 &&
-      (gate.verdict === 'wifi-invalid' ||
-       gate.verdict === 'gps-unavailable' ||
-       gate.verdict === 'gps-too-far');
+      gate.verdict === 'wifi-invalid' && wifiResult.publicIP === null;
     if (shouldRetry) {
       await new Promise(r => setTimeout(r, 2000));
       return runGateCheck(type, _retryCount + 1);
     }
 
     const wifi: WifiSnapshot | null =
-      gate.verdict === 'wifi-invalid' ? toWifiSnapshot(wifiResult) : null;
+      gate.verdict === 'wifi-invalid' || gate.verdict === 'wifi-fallback'
+        ? toWifiSnapshot(wifiResult)
+        : null;
     dispatchFlow({
       type: 'gate-verdict',
       verdict:
@@ -233,6 +221,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       message: 'message' in gate ? gate.message : undefined,
       distance: 'distance' in gate ? gate.distance : undefined,
       wifi,
+      canVerifyGps: OFFICE_WIFI.fallbackEnabled,
     });
   }, []);
 
@@ -243,7 +232,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
   // ── Camera frame capture (presentation-level glue) ──────────────────────
   const captureCurrentFrame = useCallback(() => {
-    const video = document.querySelector('#smile-video video') as HTMLVideoElement;
+    const video = document.querySelector('#camera-video video') as HTMLVideoElement | null;
     let photo: string;
     if (!video) {
       const canvas = document.createElement('canvas');
@@ -252,10 +241,6 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, 640, 480);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '24px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('📸 Smile Detected!', 320, 240);
       photo = canvas.toDataURL('image/jpeg', 0.8);
     } else {
       const canvas = document.createElement('canvas');
@@ -265,25 +250,23 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
       ctx.drawImage(video, 0, 0);
       photo = canvas.toDataURL('image/jpeg', 0.8);
     }
-    setTimeout(() => dispatchFlow({ type: 'smile-captured', photo }), 500);
+    setTimeout(() => dispatchFlow({ type: 'photo-captured', photo }), 500);
   }, []);
 
-  // BUG 10 FIX: Limit camera retry to 3 attempts before auto-switching
-  // to GPS/PIN fallback. Without a limit, repeated denial creates an
-  // infinite retry loop that frustrates the user.
+  // Camera consent → real getUserMedia probe lives in the hook (reusable,
+  // testable seam). Denial NEVER blocks attendance: the GPS/PIN fallback
+  // absorbs it (retry-capped to avoid an infinite denial loop).
   const MAX_CAMERA_RETRIES = 3;
 
   const handlePermissionAllow = async () => {
-    // Real getUserMedia probe lives in the hook (reusable, testable seam).
     const result = await camera.probe();
     if (result === 'granted') {
       dispatchFlow({ type: 'camera-allowed' });
     } else {
-      // Permission denied or camera unavailable
+      // Permission denied or camera unavailable/unmounted
       setCameraRetryCount((prev) => {
         const next = prev + 1;
         if (next >= MAX_CAMERA_RETRIES) {
-          // Auto-switch to fallback after max retries
           setTimeout(() => dispatchFlow({ type: 'open-fallback' }), 500);
         }
         return next;
@@ -292,7 +275,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     }
   };
 
-  // ── Fallback: GPS locate ─────────────────────────────────────────────────
+  // ── Fallback: GPS locate ─────────────────────────────────────────────
   const handleGPSCheckIn = async () => {
     dispatchFlow({ type: 'fallback-gps' });
     try {
@@ -324,7 +307,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         dispatchFlow({
           type: 'gps-locate-phase',
           phase: 'error',
-          message: `Bạn đang cách cửa hàng ${distance}m. Vui lòng đến trong phạm vi 100m.`,
+          message: `Bạn đang cách cửa hàng ${distance}m. Vui lòng đến trong phạm vi ${DEFAULT_STORE.radius}m.`,
         });
       }
     } catch (err: unknown) {
@@ -332,7 +315,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     }
   };
 
-  // ── Fallback: PIN ────────────────────────────────────────────────────────
+  // ── Fallback: PIN ────────────────────────────────────────────────────
   const handlePinSubmit = async () => {
     if (pin.locked) return;
 
@@ -344,7 +327,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
     const today = new Date().toISOString().split('T')[0];
     const shiftType = getCurrentShiftType();
-    const isValid = validateShiftPin(flow.view === 'pin' ? flow.input : '', today, shiftType);
+    const isValid = validateShiftPin(pinInput, today, shiftType);
 
     if (isValid) {
       await commitRecord('pin', '', undefined, pin.attempts + 1, 'user_choice');
@@ -361,6 +344,52 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     }
   };
 
+  // ── GPS fallback (user-initiated ONLY, after a Wi-Fi failure) ────────────
+  // Covers: store Wi-Fi down, employee on mobile data at the store, ISP
+  // changed the public IP. The geolocation prompt fires HERE, from this
+  // button press — never on screen mount, never while Wi-Fi already passed.
+  const handleGpsFallback = async () => {
+    dispatchFlow({ type: 'gps-verify-start' });
+    try {
+      const position = await getCurrentPosition();
+      const outcome = resolveGpsFallback({
+        gpsPosition: {
+          coords: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          },
+        },
+        gpsErrorMessage: null,
+        officeRadiusMeters: DEFAULT_STORE.radius,
+        distanceToOffice: getDistanceToOffice,
+      });
+
+      if (outcome.verdict === 'pass') {
+        await commitRecord('gps', '', {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          distanceFromStore: outcome.distance,
+        }, undefined, 'wifi_unavailable_gps_verified');
+        dispatchFlow({ type: 'gps-verify-result', ok: true, message: `📍 Xác nhận vị trí: cách cửa hàng ${outcome.distance}m` });
+        setTimeout(() => dispatchFlow({ type: 'confirmed' }), 1200);
+      } else {
+        dispatchFlow({ type: 'gps-verify-result', ok: false, message: outcome.message });
+      }
+    } catch (err: unknown) {
+      const msg = typeof (err as { code?: number })?.code === 'number'
+        ? getLocationErrorMessage(err as GeolocationPositionError)
+        : 'Không thể xác định vị trí GPS';
+      dispatchFlow({ type: 'gps-verify-result', ok: false, message: msg });
+    }
+  };
+
+  // ── Fallback GPS/PIN REMOVED (product decision 2026-09-24) ──────────────
+  // Check-in is Wi-Fi-or-nothing: the office Wi-Fi/IP check is the single
+  // attendance signal. When it fails, the Wi-Fi-blocked modal guides the
+  // employee to connect to the store network.
+
   const onClose = () => {
     dispatchFlow({ type: 'close' });
     dispatchPin({ type: 'reset' });
@@ -371,6 +400,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
   const capturedPhoto = flow.view === 'review' ? flow.photo : null;
   const pinInput = flow.view === 'pin' ? flow.input : '';
   const pinError = flow.view === 'pin' ? flow.error : null;
+
 
   return (
     <>
@@ -425,23 +455,12 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <span className="font-semibold text-[15px]">Check-in ngay</span>
               </button>
               <p className="text-xs text-[#7A829A] text-center mt-2">
-                📸 Chụp ảnh nụ cười để xác nhận điểm danh
+                📶 Wi-Fi quán + 📸 ảnh nụ cười xác nhận điểm danh
               </p>
               <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
                 <span className="material-symbols-outlined text-[14px]">shield</span>
-                Vị trí chỉ được theo dõi trong giờ làm việc
+                Wi-Fi quán được dùng để xác nhận điểm danh
               </p>
-
-              {/* Show fallback button after 2 camera failures */}
-              {cameraRetryCount >= 2 && (
-                <button
-                  onClick={() => dispatchFlow({ type: 'open-fallback' })}
-                  className="w-full mt-3 bg-[#FDF8EE] border border-[#E8DFD0] text-[#0F1E44] rounded-xl h-10 flex items-center justify-center gap-2 text-sm font-medium hover:bg-[#EFC14B]/10 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
-                  Dùng phương án dự phòng
-                </button>
-              )}
             </>
           ) : (
             <>
@@ -485,12 +504,23 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <span className="font-semibold text-[15px]">Check-out</span>
               </button>
               <p className="text-xs text-[#7A829A] text-center mt-2">
-                📸 Chụp ảnh để xác nhận kết thúc ca làm việc
+                📶 Wi-Fi quán + 📸 ảnh xác nhận điểm danh
               </p>
               <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
                 <span className="material-symbols-outlined text-[14px]">shield</span>
-                Vị trí chỉ được theo dõi trong giờ làm việc
+                Wi-Fi & camera chỉ dùng để xác nhận điểm danh
               </p>
+
+              {/* Show fallback button after 2 camera failures */}
+              {cameraRetryCount >= 2 && (
+                <button
+                  onClick={() => dispatchFlow({ type: 'open-fallback' })}
+                  className="w-full mt-3 bg-[#FDF8EE] border border-[#E8DFD0] text-[#0F1E44] rounded-xl h-10 flex items-center justify-center gap-2 text-sm font-medium hover:bg-[#EFC14B]/10 transition-all"
+                >
+                  <span className="material-symbols-outlined text-[18px]">swap_horiz</span>
+                  Dùng phương án dự phòng
+                </button>
+              )}
             </>
           )}
         </div>
@@ -544,10 +574,19 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <div className="flex items-start gap-2">
                 <span className="material-symbols-outlined text-[#EFC14B] text-lg mt-0.5">wifi</span>
                 <p className="text-xs text-[#7A829A]">
-                  Wifi cần kết nối: <span className="font-bold text-[#0F1E44]">{OFFICE_WIFI_NAME}</span>. Nếu quán mất mạng, liên hệ Quản lý để bật chế độ dự phòng.
+                  Wifi cần kết nối: <span className="font-bold text-[#0F1E44]">{OFFICE_WIFI_NAME}</span>. Đang dùng dữ liệu 4G? Dùng xác minh GPS bên dưới.
                 </p>
               </div>
             </div>
+            {flow.canVerifyGps && (
+              <button
+                onClick={handleGpsFallback}
+                className="w-full h-12 mb-2 bg-[#EFC14B] text-[#0F1E44] rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#EFC14B]/80 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-lg">location_on</span>
+                Xác minh bằng GPS
+              </button>
+            )}
             <button
               onClick={() => handleCaptureClick(actionType)}
               className="w-full h-12 bg-[#0F1E44] text-white rounded-xl font-semibold text-sm flex items-center justify-center gap-2 shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
@@ -562,6 +601,57 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               <span className="material-symbols-outlined text-lg">close</span>
               Đóng
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* GPS fallback verify modal (state: gps-verify) — user-initiated only */}
+      {flow.view === 'gps-verify' && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
+            {flow.phase === 'loading' && (
+              <>
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
+                </div>
+                <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-2">Đang kiểm tra vị trí...</h3>
+                <p className="text-sm text-[#7A829A]">Cho phép truy cập vị trí nếu trình duyệt hỏi</p>
+              </>
+            )}
+
+            {flow.phase === 'success' && (
+              <>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="material-symbols-outlined text-green-600 text-3xl fill">check_circle</span>
+                </div>
+                <h3 className="font-heading text-lg font-bold text-green-700 mb-2">Xác nhận thành công!</h3>
+                <p className="text-sm text-[#7A829A]">{flow.message}</p>
+              </>
+            )}
+
+            {flow.phase === 'error' && (
+              <>
+                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="material-symbols-outlined text-[#FF3131] text-3xl">location_off</span>
+                </div>
+                <h3 className="font-heading text-lg font-bold text-[#FF3131] mb-2">Không xác nhận được</h3>
+                <p className="text-sm text-[#7A829A] mb-4">{flow.message}</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-[#7A829A] hover:bg-[#FDF8EE]"
+                  >
+                    Đóng
+                  </button>
+                  <button
+                    onClick={handleGpsFallback}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[#0F1E44] text-white hover:bg-[#1A2D5A]"
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -627,7 +717,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Permission Dialog (state: permission) */}
+      {/* Camera Consent Dialog (state: permission) */}
       {flow.view === 'permission' && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -638,21 +728,21 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               Cho phép truy cập Camera
             </h3>
             <p className="text-sm text-[#7A829A] text-center mb-4">
-              Ứng dụng cần quyền truy cập camera để chụp ảnh xác nhận check-in. Sau khi check-in, vị trí của bạn sẽ được theo dõi định kỳ trong giờ làm việc (dừng ngay khi check-out).
+              Ứng dụng cần quyền truy cập camera để chụp ảnh xác nhận bạn đang có mặt tại quán. Wi-Fi đã được xác nhận — chỉ còn bước chụp ảnh.
             </p>
 
             <div className="bg-[#FDF8EE] rounded-xl p-4 mb-6 space-y-3">
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                <p className="text-sm text-[#3D4663]">Chụp ảnh selfie để điểm danh</p>
+                <p className="text-sm text-[#3D4663]">Chụp ảnh xác nhận có mặt</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                <p className="text-sm text-[#3D4663]">AI nhận diện nụ cười tự động</p>
+                <p className="text-sm text-[#3D4663]">Bạn chủ động bấm nút chụp</p>
               </div>
               <div className="flex items-center gap-3">
                 <span className="material-symbols-outlined text-green-500 text-xl">check_circle</span>
-                <p className="text-sm text-[#3D4663]">Ghi lại thời gian & vị trí</p>
+                <p className="text-sm text-[#3D4663]">Wi-Fi đã xác nhận bạn ở quán ✓</p>
               </div>
             </div>
 
@@ -683,16 +773,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <button onClick={onClose} className="text-white p-1">
               <span className="material-symbols-outlined">close</span>
             </button>
-            <p className="text-white text-sm font-semibold">{actionType === 'checkin' ? 'Check-in' : 'Check-out'} - Chụp ảnh nụ cười</p>
+            <p className="text-white text-sm font-semibold">{actionType === 'checkin' ? 'Check-in' : 'Check-out'} - Chụp ảnh xác nhận</p>
             <div className="w-8" />
           </div>
 
           <div className="flex-1 flex items-center justify-center px-4">
             <div className="w-full max-w-md">
-              <div id="smile-video">
-                <SmileDetector
-                  onDetected={captureCurrentFrame}
-                  onManualCapture={captureCurrentFrame}
+              <div id="camera-video">
+                <CameraCapture
+                  onCapture={captureCurrentFrame}
                   onCameraError={() => setCameraRetryCount((prev) => prev + 1)}
                 />
               </div>
@@ -702,7 +791,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
           <div className="px-4 py-4 bg-black">
             <div className="flex items-center gap-2 text-white/60 text-xs mb-3">
               <span className="material-symbols-outlined text-sm">info</span>
-              <p>Nụ cười được AI nhận diện tự động khi đạt ngưỡng 50%+</p>
+              <p>Đặt khuôn mặt vào khung rồi bấm nút chụp — không cần cười</p>
             </div>
             {cameraRetryCount >= 1 && (
               <button
@@ -862,7 +951,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         </div>
       )}
 
-      {/* Review Modal (state: review) */}
+      {/* Photo Review Modal (state: review) */}
       {flow.view === 'review' && capturedPhoto && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom">
@@ -883,7 +972,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
               <div className="flex items-center gap-2 mt-2 bg-green-50 rounded-lg px-3 py-2">
                 <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>
-                <p className="text-green-700 text-xs font-semibold">Nụ cười đã được xác nhận bởi AI ✓</p>
+                <p className="text-green-700 text-xs font-semibold">Ảnh xác nhận đã được chụp ✓</p>
               </div>
             </div>
 

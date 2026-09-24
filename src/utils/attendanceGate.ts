@@ -56,36 +56,63 @@ export interface GateInput {
 
 /**
  * Decide whether check-in may proceed. Order matters and is part of the spec:
- * Wi-Fi first (cheap, and its failure has its own fallback path), GPS second
- * (mandatory once Wi-Fi is satisfied — a valid Wi-Fi with a far GPS position
- * is the classic spoofing signature).
+ *
+ * PRODUCT DESIGN (2026-09-24, v2 — "Wi-Fi first, GPS as fallback"):
+ *  1. Wi-Fi/IP valid → PASS immediately. No GPS call, no permission dialog,
+ *     zero friction for the 99% case (employee on the store Wi-Fi).
+ *  2. Wi-Fi invalid (store Wi-Fi down, employee on mobile data, ISP changed
+ *     the IP) → 'wifi-fallback': the component then ASKS the user to verify
+ *     via GPS. Only this explicit user-initiated path may trigger the
+ *     geolocation prompt — never a background call.
+ *  3. The GPS verification itself is decided by `resolveGpsFallback()`:
+ *     within the office radius → pass; outside → likely remote/spoof → block.
  */
 export function resolveAttendanceGate(input: GateInput): GateOutcome {
-  const { wifi, gpsPosition, gpsErrorMessage, officeRadiusMeters, distanceToOffice } = input;
+  const { wifi } = input;
 
-  // ── Wi-Fi gate ──
+  // ── Wi-Fi gate (primary signal) ──
   if (!wifi || !wifi.isValid) {
     if (wifi && wifi.useFallback) return { verdict: 'wifi-fallback' };
     return { verdict: 'wifi-invalid' };
   }
 
-  // ── GPS gate (mandatory, runs after Wi-Fi is satisfied) ──
+  // Wi-Fi verified → one-tap pass. GPS position inputs are accepted for
+  // interface stability but intentionally unused here (no prompt, no block).
+  return { verdict: 'pass' };
+}
+
+/** Result of the user-initiated GPS fallback verification. */
+export type GpsFallbackOutcome =
+  | { verdict: 'pass'; distance: number }
+  | { verdict: 'gps-too-far'; distance: number; message: string }
+  | { verdict: 'gps-unavailable'; message: string };
+
+/**
+ * Decide the GPS fallback verification (runs ONLY when the employee explicitly
+ * chooses GPS verification after a Wi-Fi failure).
+ *
+ * Radius buffer: GPS accuracy is added to the office radius so indoor drift
+ * doesn't produce false "too far" blocks (an accuracy=50m fix could be up to
+ * 50m off in any direction).
+ */
+export function resolveGpsFallback(input: {
+  gpsPosition: GateGpsPosition | null;
+  gpsErrorMessage: string | null;
+  officeRadiusMeters: number;
+  distanceToOffice: (lat: number, lon: number) => number;
+}): GpsFallbackOutcome {
+  const { gpsPosition, gpsErrorMessage, officeRadiusMeters, distanceToOffice } = input;
+
   if (!gpsPosition) {
     return {
       verdict: 'gps-unavailable',
       message: gpsErrorMessage || 'Không thể xác định vị trí GPS',
     };
   }
+
   const distance = Math.round(
     distanceToOffice(gpsPosition.coords.latitude, gpsPosition.coords.longitude)
   );
-
-  // BUG 4 FIX: Dynamic radius — add GPS accuracy as a buffer so employees
-  // at the physical store aren't blocked by normal indoor GPS drift.
-  // A phone reporting accuracy=50m means the real position could be up to
-  // 50m in any direction from the reported point. Without this buffer,
-  // employees inside the store but near the edge of the 150m radius get
-  // false "too far" blocks.
   const accuracyBuffer = gpsPosition.coords.accuracy ?? 0;
   const effectiveRadius = officeRadiusMeters + accuracyBuffer;
 
@@ -94,14 +121,12 @@ export function resolveAttendanceGate(input: GateInput): GateOutcome {
       verdict: 'gps-too-far',
       distance,
       message:
-        `Bạn đang cách văn phòng ${distance}m (giới hạn ${Math.round(effectiveRadius)}m, ` +
-        `GPS chính xác ~${Math.round(accuracyBuffer)}m). ` +
-        'Wi-Fi hợp lệ nhưng vị trí GPS lệch xa — nghi ngờ giả mạo Wi-Fi hoặc dùng VPN. ' +
-        'Vui lòng đến văn phòng để chấm công.',
+        `Bạn đang cách cửa hàng ${distance}m (giới hạn ${Math.round(effectiveRadius)}m). ` +
+        'Hãy kết nối Wi-Fi của quán hoặc đến gần hơn để điểm danh.',
     };
   }
 
-  return { verdict: 'pass' };
+  return { verdict: 'pass', distance };
 }
 
 /**

@@ -90,45 +90,22 @@ eq(
   'wifi-fallback'
 );
 
-// GPS gate — runs ONLY after Wi-Fi is satisfied
+// GPS gate — REMOVED from the blocking path (product decision 2026-09-24):
+// Wi-Fi is the only attendance signal; GPS never blocks and never prompts.
 eq(
-  'gps failed → gps-unavailable (default message)',
+  'gps failed → still pass (GPS no longer blocks)',
   resolveAttendanceGate(gateBase({ gpsPosition: null })).verdict,
-  'gps-unavailable'
+  'pass'
 );
-{
-  const o = resolveAttendanceGate(gateBase({ gpsPosition: null, gpsErrorMessage: 'Permission denied' }));
-  eq('gps failed → caller message preserved', o.verdict === 'gps-unavailable' ? o.message : null, 'Permission denied');
-}
+eq(
+  'gps far away → still pass (Wi-Fi is the attendance signal)',
+  resolveAttendanceGate(gateBase({ distanceToOffice: dist(500) })).verdict,
+  'pass'
+);
 eq(
   'gps within radius → pass',
   resolveAttendanceGate(gateBase({ distanceToOffice: dist(30) })).verdict,
   'pass'
-);
-{
-  const o = resolveAttendanceGate(gateBase({ distanceToOffice: dist(250) }));
-  const expected = o.verdict === 'gps-too-far' ? { verdict: o.verdict, distance: o.distance, message: o.message } : null;
-  eq('gps outside radius → gps-too-far with distance', o.verdict === 'gps-too-far' ? { verdict: o.verdict, distance: o.distance } : o, { verdict: 'gps-too-far', distance: 250 });
-  check('too-far carries the same message back', expected !== null);
-}
-check(
-  'too-far message mentions both numbers',
-  (() => {
-    const o = resolveAttendanceGate(gateBase({ distanceToOffice: dist(250) }));
-    return o.verdict === 'gps-too-far' && o.message.includes('250m') && o.message.includes('100m');
-  })()
-);
-// (narrowing note: both message accesses above are guarded by verdict checks)
-// Boundary: exactly AT the radius is allowed (rule is strictly "> radius")
-eq(
-  'gps exactly at radius → pass (strictly-greater rule)',
-  resolveAttendanceGate(gateBase({ distanceToOffice: dist(RADIUS) })).verdict,
-  'pass'
-);
-// Anti-spoof signature: valid Wi-Fi + far GPS must NOT pass
-check(
-  'valid wifi + far gps is rejected (spoof signature)',
-  resolveAttendanceGate(gateBase({ distanceToOffice: dist(500) })).verdict === 'gps-too-far'
 );
 
 // ═══════════════════════════════ isLateCheckIn ═══════════════════════════════
@@ -233,22 +210,32 @@ const IDLE: AttendanceFlowState = { view: 'idle' };
 // attempt → checking; verdicts only land while checking (stale verdicts ignored)
 eq('attempt → checking', flowReducer(IDLE, { type: 'attempt', action: 'checkin' }), { view: 'checking' });
 eq('verdict ignored when not checking', flowReducer(IDLE, { type: 'gate-verdict', verdict: 'pass' }), IDLE);
-eq('gate pass → permission',
+eq('gate pass → camera permission step (photo presence proof)',
   flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'pass' }),
   { view: 'permission' });
 eq('wifi-blocked carries wifi snapshot',
   flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false } }),
-  { view: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false } });
-eq('fallback verdict → fallback-select',
+  { view: 'wifi-blocked', message: 'x', wifi: { publicIP: '1.2.3.4', localIP: null, publicIPValid: false, localIPValid: false, publicIPUnknown: false }, canVerifyGps: false });
+eq('fallback verdict → wifi-blocked with GPS available',
+  flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'fallback', message: 'x', wifi: null, canVerifyGps: true }),
+  { view: 'wifi-blocked', message: 'x', wifi: null, canVerifyGps: true });
+eq('gps-verify-start → loading', flowReducer(IDLE, { type: 'gps-verify-start' }), { view: 'gps-verify', phase: 'loading' });
+eq('gps-verify-result error → error phase',
+  flowReducer({ view: 'gps-verify', phase: 'loading' }, { type: 'gps-verify-result', ok: false, message: 'xa' }),
+  { view: 'gps-verify', phase: 'error', message: 'xa' });
+eq('fallback verdict → wifi-blocked with GPS',
   flowReducer({ view: 'checking' }, { type: 'gate-verdict', verdict: 'fallback' }),
-  { view: 'fallback-select' });
+  { view: 'wifi-blocked', message: '', wifi: null, canVerifyGps: true });
 
-// happy photo path: permission → camera → review → success
+// camera path (restored 2026-09-24: Wi-Fi gate → permission → capture → review)
 eq('camera-allowed', flowReducer({ view: 'permission' }, { type: 'camera-allowed' }), { view: 'camera' });
 eq('camera-denied → fallback-select', flowReducer({ view: 'permission' }, { type: 'camera-denied' }), { view: 'fallback-select' });
-eq('smile-captured → review', flowReducer({ view: 'camera' }, { type: 'smile-captured', photo: 'data:' }), { view: 'review', photo: 'data:' });
+eq('photo-captured → review', flowReducer({ view: 'camera' }, { type: 'photo-captured', photo: 'data:' }), { view: 'review', photo: 'data:' });
 eq('retake → camera', flowReducer({ view: 'review', photo: 'p' }, { type: 'retake' }), { view: 'camera' });
 eq('confirmed from review → success', flowReducer({ view: 'review', photo: 'p' }, { type: 'confirmed' }), { view: 'success' });
+
+// legacy one-tap confirm (superseded by the camera flow, reducer compat)
+eq('confirmed from confirm → success', flowReducer({ view: 'confirm' }, { type: 'confirmed' }), { view: 'success' });
 
 // gps fallback path: select → locate → success beats → confirmed
 check('fallback-gps → gps-locate loading',
