@@ -413,9 +413,10 @@ export const ReviewScreen: React.FC<ReviewScreenProps> = ({
             </p>
           </div>
         ) : (
-          filteredEvidences.map((item) => {
+          filteredEvidences.map((item, idx) => {
             return (
-              <article key={item.id} className="bg-white border border-[#E8DFD0]/70 rounded-2xl p-4 shadow-sm flex flex-col gap-3.5">
+              // Motion design: cards float up, staggered by position in the feed
+              <article key={item.id} className="anim-float-up bg-white border border-[#E8DFD0]/70 rounded-2xl p-4 shadow-sm flex flex-col gap-3.5" style={{ animationDelay: `${Math.min(idx * 60, 360)}ms` }}>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden border border-[#E8DFD0] flex-shrink-0">
                     <img className="w-full h-full object-cover" src={item.employeeAvatar} alt={item.employeeName} />

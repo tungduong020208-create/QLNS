@@ -29,6 +29,8 @@ import { DEFAULT_STORE, OFFICE_WIFI } from '../utils/constants';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useCameraPermission } from '../hooks/useCameraPermission';
 import CameraCapture from './CameraCapture';
+import { SuccessBurst } from './SuccessBurst';
+import { RippleButton } from './RippleButton';
 
 interface CheckInCheckOutProps {
   employeeId: string;
@@ -262,17 +264,24 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
     const result = await camera.probe();
     if (result === 'granted') {
       dispatchFlow({ type: 'camera-allowed' });
-    } else {
-      // Permission denied or camera unavailable/unmounted
-      setCameraRetryCount((prev) => {
-        const next = prev + 1;
-        if (next >= MAX_CAMERA_RETRIES) {
-          setTimeout(() => dispatchFlow({ type: 'open-fallback' }), 500);
-        }
-        return next;
-      });
-      dispatchFlow({ type: 'camera-denied' });
+      return;
     }
+    // Permission denied, camera unavailable, or the prompt was left
+    // unanswered until the hook's timeout fired.
+    setCameraRetryCount((prev) => {
+      const next = prev + 1;
+      if (next >= MAX_CAMERA_RETRIES) {
+        setTimeout(() => dispatchFlow({ type: 'open-fallback' }), 500);
+      }
+      return next;
+    });
+    dispatchFlow({
+      type: 'camera-denied',
+      reason:
+        result === 'timeout'
+          ? 'Chưa trả lời hộp thoại quyền camera. Bạn có thể chọn cách điểm danh khác bên dưới.'
+          : undefined,
+    });
   };
 
   // ── Fallback: GPS locate ─────────────────────────────────────────────
@@ -446,14 +455,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         <div className="px-4 py-4 sm:px-5">
           {session.status !== 'on' ? (
             <>
-              <button
+              <RippleButton
                 onClick={() => handleCaptureClick('checkin')}
                 disabled={busy}
                 className="w-full bg-[#0F1E44] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#1A2D5A] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[24px]">add_a_photo</span>
                 <span className="font-semibold text-[15px]">Check-in ngay</span>
-              </button>
+              </RippleButton>
               <p className="text-xs text-[#7A829A] text-center mt-2">
                 📶 Wi-Fi quán + 📸 ảnh nụ cười xác nhận điểm danh
               </p>
@@ -495,14 +504,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                   </div>
                 )}
               </div>
-              <button
+              <RippleButton
                 onClick={() => handleCaptureClick('checkout')}
                 disabled={busy}
                 className="w-full bg-[#FF3131] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#D42C2C] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[24px]">logout</span>
                 <span className="font-semibold text-[15px]">Check-out</span>
-              </button>
+              </RippleButton>
               <p className="text-xs text-[#7A829A] text-center mt-2">
                 📶 Wi-Fi quán + 📸 ảnh xác nhận điểm danh
               </p>
@@ -746,6 +755,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
             </div>
 
+            {camera.probing && (
+              <div className="bg-[#EFC14B]/10 border border-[#EFC14B]/30 rounded-xl p-3 mb-6 flex items-start gap-2">
+                <div className="w-4 h-4 border-2 border-[#EFC14B]/30 border-t-[#EFC14B] rounded-full animate-spin mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-[#3D4663]">
+                  Đang chờ bạn trả lời hộp thoại quyền của trình duyệt. Nếu không thấy hộp thoại nào, bấm "Từ chối" để dùng cách điểm danh khác.
+                </p>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={() => dispatchFlow({ type: 'camera-denied' })}
@@ -756,7 +774,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </button>
               <button
                 onClick={handlePermissionAllow}
-                className="flex-1 h-12 rounded-xl bg-[#0F1E44] text-white font-semibold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer"
+                disabled={camera.probing}
+                className="flex-1 h-12 rounded-xl bg-[#0F1E44] text-white font-semibold text-sm shadow-md flex items-center justify-center gap-2 hover:bg-[#1A2D5A] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined text-lg">check</span>
                 Cho phép
@@ -815,9 +834,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             <h3 className="font-heading text-xl font-bold text-[#0F1E44] text-center mb-2">
               Phương án dự phòng
             </h3>
-            <p className="text-sm text-[#7A829A] text-center mb-6">
+            <p className="text-sm text-[#7A829A] text-center mb-4">
               Camera gặp sự cố. Chọn cách điểm danh thay thế:
             </p>
+            {flow.note && (
+              <div className="bg-[#FF3131]/10 border border-[#FF3131]/30 rounded-xl p-3 mb-4 flex items-start gap-2">
+                <span className="material-symbols-outlined text-[#FF3131] text-lg mt-0.5">warning</span>
+                <p className="text-xs text-[#3D4663]">{flow.note}</p>
+              </div>
+            )}
 
             <div className="space-y-3 mb-4">
               <button
@@ -1018,8 +1043,11 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Success Modal (state: success) */}
       {flow.view === 'success' && session.lastRecord && (
+        <>
+        {/* Motion design: rings + drawn check burst above the modal */}
+        <SuccessBurst show />
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
+          <div className="anim-modal-in bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-green-600 text-5xl fill">check_circle</span>
             </div>
@@ -1089,6 +1117,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </button>
           </div>
         </div>
+        </>
       )}
     </>
   );

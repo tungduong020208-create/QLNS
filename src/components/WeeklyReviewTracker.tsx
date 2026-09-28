@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { PeerReviewSubmission } from '../types';
 import { computeReviewCycle, REQUIRED_REVIEWS, ReviewPeriod } from '../utils/reviewCycle';
+import { SuccessBurst } from './SuccessBurst';
 
 // Flip the whole requirement back to weekly by changing this one constant —
 // everything else (window math, labels) derives from the period parameter.
@@ -88,14 +89,20 @@ export const WeeklyReviewTracker: React.FC<WeeklyReviewTrackerProps> = ({
         </div>
         <div className="h-2 bg-[#F5EDDF] rounded-full overflow-hidden">
           <div
-            className="h-full rounded-full transition-all duration-500"
+            className="h-full rounded-full transition-all duration-500 relative overflow-hidden"
             style={{
               width: `${progress}%`,
               backgroundColor: statusInfo.color,
             }}
-          />
+          >
+            {/* Motion design: light sheen flowing across the filled portion */}
+            {progress > 0 && <span className="progress-sheen" />}
+          </div>
         </div>
       </div>
+
+      {/* Motion design: full celebration (rings + confetti) on completion */}
+      {isComplete && <SuccessBurst show confetti />}
 
       {/* Warning message if close to deadline */}
       {isWarning && !isComplete && (

@@ -175,7 +175,7 @@ export type AttendanceFlowState =
   /** Gate blocked: GPS too far while Wi-Fi valid (anti-spoof). */
   | { view: 'gps-too-far'; message: string; distance: number }
   /** Gate passed via fallback → choose GPS vs PIN. */
-  | { view: 'fallback-select' }
+  | { view: 'fallback-select'; note?: string }
   /** Legacy one-tap confirm (superseded by the camera flow, kept for compat). */
   | { view: 'confirm' }
   /** Camera consent → smile capture → photo review (restored 2026-09-24:
@@ -196,7 +196,8 @@ export type AttendanceFlowAction =
   | { type: 'attempt'; action: 'checkin' | 'checkout' }
   | { type: 'gate-verdict'; verdict: 'pass' | 'wifi-blocked' | 'fallback' | 'gps-unavailable' | 'gps-too-far'; message?: string; distance?: number; wifi?: WifiSnapshot | null; canVerifyGps?: boolean }
   | { type: 'camera-allowed' }
-  | { type: 'camera-denied' }
+  /** Optional context shown in the fallback picker (e.g. prompt unanswered). */
+  | { type: 'camera-denied'; reason?: string }
   | { type: 'photo-captured'; photo: string }
   | { type: 'retake' }
   | { type: 'confirmed' }
@@ -282,7 +283,9 @@ export function flowReducer(state: AttendanceFlowState, action: AttendanceFlowAc
       return state.view === 'permission' ? { view: 'camera' } : state;
 
     case 'camera-denied':
-      return state.view === 'permission' ? { view: 'fallback-select' } : state;
+      return state.view === 'permission'
+        ? { view: 'fallback-select', note: action.reason }
+        : state;
 
     case 'photo-captured':
       if (state.view !== 'camera' && state.view !== 'review') return state;
@@ -333,7 +336,11 @@ export function flowReducer(state: AttendanceFlowState, action: AttendanceFlowAc
       return { ...state, error: action.message };
 
     case 'open-fallback':
-      return state.view === 'idle' || state.view === 'camera' ? { view: 'fallback-select' } : state;
+      // 'permission' included: an unanswered/denied camera prompt must always
+      // have a way out to the fallback picker, never a dead end.
+      return state.view === 'idle' || state.view === 'camera' || state.view === 'permission'
+        ? { view: 'fallback-select' }
+        : state;
 
     case 'close':
       return idle;

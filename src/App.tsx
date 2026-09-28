@@ -28,6 +28,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { User, EvidenceItem, CheckInRecord, NotificationItem, GeofenceEvent } from './types';
 import { ROUTES, getDefaultHomeRoute } from './routes';
+// DEV-ONLY motion playground — Vite replaces import.meta.env.DEV with false
+// in production builds, so this module is tree-shaken away.
+import MotionLab from './components/screens/MotionLab';
 import { weekEndOf } from './utils/schedule';
 import { computeAutoSchedule } from './utils/autoSchedule';
 import { getCapacityForDate } from './hooks/useShiftCapacity';
@@ -485,6 +488,9 @@ export default function App() {
             </GuestRoute>
           }
         />
+
+        {/* DEV-ONLY: motion design playground (never ships to production) */}
+        {import.meta.env.DEV && <Route path="/effects" element={<MotionLab />} />}
 
         {/* Root: Redirect based on role */}
         <Route

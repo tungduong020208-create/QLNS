@@ -230,6 +230,9 @@ eq('fallback verdict → wifi-blocked with GPS',
 // camera path (restored 2026-09-24: Wi-Fi gate → permission → capture → review)
 eq('camera-allowed', flowReducer({ view: 'permission' }, { type: 'camera-allowed' }), { view: 'camera' });
 eq('camera-denied → fallback-select', flowReducer({ view: 'permission' }, { type: 'camera-denied' }), { view: 'fallback-select' });
+eq('camera-denied with reason → fallback-select + note',
+  flowReducer({ view: 'permission' }, { type: 'camera-denied', reason: 'Chưa trả lời hộp thoại quyền' }),
+  { view: 'fallback-select', note: 'Chưa trả lời hộp thoại quyền' });
 eq('photo-captured → review', flowReducer({ view: 'camera' }, { type: 'photo-captured', photo: 'data:' }), { view: 'review', photo: 'data:' });
 eq('retake → camera', flowReducer({ view: 'review', photo: 'p' }, { type: 'retake' }), { view: 'camera' });
 eq('confirmed from review → success', flowReducer({ view: 'review', photo: 'p' }, { type: 'confirmed' }), { view: 'success' });
@@ -257,8 +260,10 @@ eq('sanitizePinInput strips non-digits', sanitizePinInput('a1b2c3d4e5f6g7'), '12
 eq('close from pin → clean idle', flowReducer({ view: 'pin', input: '123456', error: null }, { type: 'close' }), IDLE);
 eq('close from success → clean idle', flowReducer({ view: 'success' }, { type: 'close' }), IDLE);
 
-// open-fallback allowed only from idle/camera
+// open-fallback allowed from idle/camera AND the permission dialog (no dead end
+// when the camera prompt is denied or left unanswered)
 eq('open-fallback from idle', flowReducer(IDLE, { type: 'open-fallback' }), { view: 'fallback-select' });
+eq('open-fallback from permission', flowReducer({ view: 'permission' }, { type: 'open-fallback' }), { view: 'fallback-select' });
 eq('open-fallback blocked from wifi-blocked', flowReducer({ view: 'wifi-blocked', message: '', wifi: null }, { type: 'open-fallback' }).view, 'wifi-blocked');
 
 // pinReducer: lock at 3rd failure, tick down, auto-unlock at 0

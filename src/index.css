@@ -143,3 +143,247 @@
 .pb-safe-bottom {
   padding-bottom: max(8rem, calc(8rem + env(safe-area-inset-bottom)));
 }
+
+/* ═══ Login flashlight & night mode (LoginScreen) ═══ */
+@keyframes owl-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.animate-owl-bob { animation: owl-bob 3.2s ease-in-out infinite; }
+
+@keyframes owl-blink {
+  0%, 90%, 100% { transform: scaleY(0); }
+  93%, 96% { transform: scaleY(1); }
+}
+.owl-eyelid {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: owl-blink 4.6s ease-in-out infinite;
+}
+
+@keyframes star-twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+.animate-star { animation: star-twinkle var(--tw, 2.8s) ease-in-out infinite; }
+
+@keyframes beam-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.5; }
+}
+.animate-beam { animation: beam-pulse 2.4s ease-in-out infinite; }
+
+/* Dark glass card for the night-mode login */
+.night-panel {
+  background: rgba(13, 23, 54, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* While the flashlight is on, real input text must never leak via selection */
+.flash-input::selection {
+  background: rgba(239, 193, 75, 0.25);
+  color: transparent;
+}
+
+/* ═══ Logout door animation (LogoutDoorButton) ═══ */
+
+/* Door leaf swings open to the right (into the frame) then stays open.
+   transform-origin: right edge = the hinge. */
+@keyframes door-swing {
+  0% { transform: perspective(60px) rotateY(0deg); }
+  45% { transform: perspective(60px) rotateY(-78deg); }
+  100% { transform: perspective(60px) rotateY(-64deg); }
+}
+.door-leaf-open {
+  animation: door-swing 1100ms cubic-bezier(0.45, 0, 0.3, 1) forwards;
+}
+
+/* Figure walks right into the doorway (with a little bob), fading as it
+   "enters" the corridor beyond the leaf. */
+@keyframes figure-walk {
+  0% { transform: translateX(0) rotate(0deg); opacity: 1; }
+  15% { transform: translateX(2px) rotate(0deg); }
+  30% { transform: translateX(5px) translateY(-1px) rotate(1.5deg); }
+  45% { transform: translateX(9px) translateY(0) rotate(-1deg); }
+  60% { transform: translateX(13px) translateY(-1px) rotate(1.5deg); opacity: 1; }
+  78% { transform: translateX(17px) translateY(0) rotate(0deg); opacity: 0.85; }
+  100% { transform: translateX(20px) translateY(-1px) rotate(0deg); opacity: 0; }
+}
+.figure-walk-in {
+  animation: figure-walk 1100ms ease-in-out forwards;
+}
+
+/* Legs + arms swing while walking (matches figure-walk 1100ms, many reps) */
+@keyframes limb-swing-a {
+  0%, 100% { transform: rotate(24deg); }
+  50% { transform: rotate(-24deg); }
+}
+@keyframes limb-swing-b {
+  0%, 100% { transform: rotate(-24deg); }
+  50% { transform: rotate(24deg); }
+}
+.figure-walk-in .leg-f, .figure-walk-in .arm-b { transform-box: fill-box; transform-origin: 1px 1px; animation: limb-swing-a 220ms ease-in-out infinite; }
+.figure-walk-in .leg-b, .figure-walk-in .arm-f { transform-box: fill-box; transform-origin: 1px 1px; animation: limb-swing-b 220ms ease-in-out infinite; }
+
+/* And then… the figure tumbles DOWN out of the frame (rớt xuống) with a spin. */
+@keyframes figure-fall {
+  0% { transform: translateX(14px) translateY(0) rotate(0deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateX(16px) translateY(34px) rotate(210deg); opacity: 0; }
+}
+.figure-fall {
+  animation: figure-fall 950ms cubic-bezier(0.35, 0, 0.6, 1) forwards;
+}
+
+/* Golden stars poofing out when the figure lands */
+@keyframes star-poof {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, -10px))) scale(1.15) rotate(40deg); opacity: 0; }
+}
+.star-poof {
+  animation: star-poof 620ms ease-out forwards;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOTION DESIGN SYSTEM — AiiCafe HR
+   Design tokens: bouncy 0.34s reveals, 220ms micro, 600ms celebrations.
+   Every interactive outcome gets ONE expressive animation; everything
+   else stays calm. Demoed on the dev-only /effects route.
+   ══════════════════════════════════════════════════════════════════ */
+
+/* — 1. Success reveal: check-circle pops in, rings expand outward — */
+@keyframes success-pop {
+  0% { transform: scale(0.2); opacity: 0; }
+  60% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes ring-expand {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.anim-success-pop { animation: success-pop 480ms cubic-bezier(0.34, 1.4, 0.5, 1) forwards; }
+.anim-ring-expand { animation: ring-expand 900ms cubic-bezier(0.2, 0.6, 0.35, 1) forwards; }
+
+/* — 2. Confetti rain for celebrations (weekly review complete etc.) — */
+@keyframes confetti-fall {
+  0% { transform: translateY(-10vh) rotate(0deg) rotateX(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(var(--spin, 540deg)) rotateX(720deg); opacity: 0.9; }
+}
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confetti-fall var(--dur, 2.4s) linear var(--delay, 0s) forwards;
+}
+
+/* — 3. Toasts slide in from the top-right, out to the right — */
+@keyframes toast-in {
+  0% { transform: translateX(120%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes toast-out {
+  0% { transform: translateX(0); opacity: 1; }
+  100% { transform: translateX(130%); opacity: 0; }
+}
+.anim-toast-in { animation: toast-in 320ms cubic-bezier(0.34, 1.3, 0.5, 1) forwards; }
+.anim-toast-out { animation: toast-out 240ms ease-in forwards; }
+
+/* — 4. Modal: fade backdrop + zoom-in card; reverse on close — */
+@keyframes modal-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modal-card-in {
+  0% { transform: translateY(26px) scale(0.94); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes modal-card-out {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(18px) scale(0.96); opacity: 0; }
+}
+.anim-backdrop-in { animation: modal-backdrop-in 200ms ease-out forwards; }
+.anim-modal-in { animation: modal-card-in 300ms cubic-bezier(0.34, 1.25, 0.5, 1) forwards; }
+.anim-modal-out { animation: modal-card-out 180ms ease-in forwards; }
+
+/* — 5. Ripple: expanding circle from the click point — */
+@keyframes ripple-out {
+  from { transform: translate(-50%, -50%) scale(0); opacity: 0.45; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}
+.ripple-ink {
+  position: absolute;
+  width: 260px;
+  height: 260px;
+  border-radius: 9999px;
+  background: currentColor;
+  pointer-events: none;
+  animation: ripple-out 550ms ease-out forwards;
+}
+
+/* — 6. Skeleton shimmer for loading placeholders — */
+@keyframes skeleton-shimmer {
+  0% { background-position: -420px 0; }
+  100% { background-position: 420px 0; }
+}
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #E8DFD0 25%, #F5EDDF 45%, #E8DFD0 65%);
+  background-size: 420px 100%;
+  animation: skeleton-shimmer 1.3s linear infinite;
+}
+.night-demo .skeleton {
+  background: linear-gradient(90deg, #16244e 25%, #1e3060 45%, #16244e 65%);
+  background-size: 420px 100%;
+}
+
+/* — 7. Progress sheen: a light band flowing across the filled bar — */
+@keyframes progress-sheen {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+.progress-sheen {
+  position: absolute;
+  inset: 0;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  animation: progress-sheen 1.9s ease-in-out infinite;
+}
+
+/* — 8. Float-up: gentle entrance for list items / cards — */
+@keyframes float-up {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.anim-float-up { animation: float-up 380ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+/* — 9. Wobble: playful attention-grabber (used when the owl is found) — */
+@keyframes wobble {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-7deg); }
+  40% { transform: rotate(6deg); }
+  60% { transform: rotate(-4deg); }
+  80% { transform: rotate(2deg); }
+}
+.anim-wobble { animation: wobble 650ms ease-in-out; }
+
+/* — 10. Success check path drawing (SVG stroke reveal) — */
+@keyframes check-draw {
+  0% { stroke-dashoffset: 32; }
+  100% { stroke-dashoffset: 0; }
+}
+.anim-check-draw {
+  stroke-dasharray: 32;
+  animation: check-draw 420ms cubic-bezier(0.5, 0, 0.4, 1) 160ms forwards;
+}
+@keyframes circle-draw {
+  0% { stroke-dashoffset: 100; }
+  100% { stroke-dashoffset: 0; }
+}
+.anim-circle-draw {
+  stroke-dasharray: 100;
+  animation: circle-draw 450ms cubic-bezier(0.4, 0, 0.3, 1) forwards;
+}

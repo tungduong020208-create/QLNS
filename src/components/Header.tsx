@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, NotificationItem } from '../types';
+import { LogoutDoorButton } from './LogoutDoorButton';
 
 interface HeaderProps {
   currentUser: User;
@@ -19,7 +20,6 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout
 }) => {
   const [showNotifs, setShowNotifs] = useState(false);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Only show management notifications in the bell
   const managementNotifications = notifications.filter(n => n.category === 'management');
@@ -88,13 +88,15 @@ export const Header: React.FC<HeaderProps> = ({
                   <p>Không có thông báo mới</p>
                 </div>
               ) : (
-                managementNotifications.map(item => (
+                managementNotifications.map((item, idx) => (
                   <div
                     key={item.id}
                     onClick={() => onMarkNotificationRead(item.id)}
-                    className={`p-3.5 hover:bg-[#FDF8EE] transition-colors cursor-pointer flex gap-3 ${
+                    // Motion design: entries float in, staggered
+                    className={`anim-float-up p-3.5 hover:bg-[#FDF8EE] transition-colors cursor-pointer flex gap-3 ${
                       !item.read ? 'bg-[#EFC14B]/5' : ''
                     }`}
+                    style={{ animationDelay: `${Math.min(idx * 50, 300)}ms` }}
                   >
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
                       item.type === 'reward' ? 'bg-[#EFC14B]/20 text-[#0F1E44]' :
@@ -131,50 +133,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* Logout Button */}
-        <button
-          onClick={() => setShowLogoutConfirm(true)}
-          aria-label="Đăng xuất"
-          className="text-[#FF3131] hover:bg-[#FF3131]/10 transition-colors rounded-full p-2 flex items-center justify-center"
-          title="Đăng xuất"
-        >
-          <span className="material-symbols-outlined text-[24px]">logout</span>
-        </button>
+        {/* Logout — the little door-and-stick-figure scene */}
+        <LogoutDoorButton onLogout={onLogout} />
       </div>
 
-      {/* Logout Confirmation Modal */}
-      {showLogoutConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-[90vw] max-w-sm mx-4 overflow-hidden">
-            <div className="p-6 text-center">
-              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#FF3131]/10 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[32px] text-[#FF3131]">logout</span>
-              </div>
-              <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-1">Đăng xuất tài khoản?</h3>
-              <p className="text-[13px] text-[#7A829A] mb-1">
-                Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?
-              </p>
-              <p className="text-[11px] text-[#7A829A]">
-                Tất cả dữ liệu chưa lưu sẽ bị mất.
-              </p>
-            </div>
-            <div className="flex border-t border-[#E8DFD0]">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-3 text-sm font-medium text-[#7A829A] hover:bg-[#FDF8EE] transition-colors"
-              >
-                Hủy
-              </button>
-              <button
-                onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
-                className="flex-1 py-3 text-sm font-medium text-[#FF3131] hover:bg-[#FF3131]/10 transition-colors border-l border-[#E8DFD0]"
-              >
-                Đăng xuất
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </header>
   );
 };
