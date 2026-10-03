@@ -21,8 +21,17 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const [showNotifs, setShowNotifs] = useState(false);
 
-  // Only show management notifications in the bell
-  const managementNotifications = notifications.filter(n => n.category === 'management');
+  // Recipient-aware filtering:
+  // - Employees see ONLY rows addressed to them (userId === me).
+  // - Managers see the full management channel (monitoring: geofence alerts,
+  //   unassigned registrations, …).
+  // Rows without userId are manager-facing by definition — legacy seeded rows
+  // (e.g. "Minh chứng đã được duyệt", "Thưởng hiệu suất tuần") therefore stop
+  // leaking into every employee's bell, with no data migration required.
+  const managementNotifications = notifications.filter(n =>
+    n.category === 'management' &&
+    (currentUser.role === 'manager' || n.userId === currentUser.id)
+  );
   const unreadCount = managementNotifications.filter(n => !n.read).length;
 
   return (

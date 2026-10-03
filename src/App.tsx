@@ -180,7 +180,8 @@ export default function App() {
       time: 'Vừa xong',
       read: false,
       type: 'pending',
-      category: 'management'
+      category: 'management',
+      userId: currentUser?.id   // xác nhận cho chính người nộp
     };
     pushNotification(newNotif);
     addToast('success', 'Nộp minh chứng thành công', 'Minh chứng đã được gửi đến bộ phận quản lý');
@@ -203,7 +204,8 @@ export default function App() {
         time: 'Vừa xong',
         read: false,
         type: status === 'good' ? 'reward' : 'penalty',
-        category: 'management'
+        category: 'management',
+        userId: target.employeeId   // chỉ owner của minh chứng thấy kết quả duyệt
       };
       pushNotification(notifItem);
     }
@@ -267,6 +269,7 @@ export default function App() {
       read: false,
       type: 'penalty',
       category: 'management',
+      // Không userId — cảnh báo giám sát, CHỈ quản lý thấy (Header lọc theo người nhận)
     };
     pushNotification(notifItem);
   };
@@ -342,6 +345,7 @@ export default function App() {
         read: false,
         type: 'pending',
         category: 'management',
+        // Không userId — cảnh báo cho quản lý, nhân viên không thấy
       });
     }
   };

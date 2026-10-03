@@ -270,6 +270,16 @@ export const INITIAL_EVIDENCES: EvidenceItem[] = [
   }
 ];
 
+/**
+ * 2 row seed cũ (trước khi có targeting theo người nhận) — không có userId.
+ * useNotifications gán lại chủ thể khi load để nhân viên đúng người thấy,
+ * người khác không thấy (phục vụ browser đã lưu storage cũ).
+ */
+export const LEGACY_SEED_NOTIFICATION_USER: Record<string, string> = {
+  'notif-1': 'usr-1',   // "Minh chứng đã được duyệt" — chủ thể là minh chứng ev-1 của Văn An
+  'notif-2': 'usr-1',   // "Thưởng hiệu suất tuần" — Văn An
+};
+
 export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   {
     id: 'notif-1',
@@ -278,7 +288,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     time: '10 phút trước',
     read: false,
     type: 'reward',
-    category: 'management'
+    category: 'management',
+    userId: 'usr-1'   // = owner của minh chứng ev-1 — chỉ Văn An thấy
   },
   {
     id: 'notif-2',
@@ -287,7 +298,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     time: '2 giờ trước',
     read: false,
     type: 'reward',
-    category: 'management'
+    category: 'management',
+    userId: 'usr-1'   // phần thưởng cá nhân — chỉ Văn An thấy
   }
 ];
 

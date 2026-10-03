@@ -278,7 +278,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       onSetCapacity(formDate, formShiftName, formCapacity);
     }
 
-    // Notify employee
+    // Notify employee (chỉ nhân viên được phân công thấy)
     onAddNotification({
       id: `notif-${Date.now()}`,
       title: 'Ca làm việc mới được thêm',
@@ -287,6 +287,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       read: false,
       type: 'system',
       category: 'management',
+      userId: formEmployee,
     });
 
     setShowAddModal(false);
@@ -336,14 +337,26 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
     const a: Shift = { ...swapSource, employeeId: swapPartner.employeeId, employeeName: swapPartner.employeeName, employeeAvatar: swapPartner.employeeAvatar, status: 'swapped', swappedWith: swapPartner.employeeId, origin: 'manual' };
     const b: Shift = { ...swapPartner, employeeId: swapSource.employeeId, employeeName: swapSource.employeeName, employeeAvatar: swapSource.employeeAvatar, status: 'swapped', swappedWith: swapSource.employeeId, origin: 'manual' };
     onSwapShifts(a, b);
+    // Hai row riêng — mỗi người liên quan chỉ thấy thông báo của mình
     onAddNotification({
-      id: `notif-swap-${Date.now()}`,
+      id: `notif-swap-${Date.now()}-a`,
       title: 'Ca làm việc được hoán đổi',
-      message: `${a.employeeName} và ${b.employeeName} đã hoán đổi ca ${a.shiftName} ngày ${a.date} (giờ ${a.startTime}-${a.endTime} giữ nguyên).`,
+      message: `Bạn và ${b.employeeName} đã hoán đổi ca ${a.shiftName} ngày ${a.date} (giờ ${a.startTime}-${a.endTime} giữ nguyên).`,
       time: 'Vừa xong',
       read: false,
       type: 'system',
       category: 'management',
+      userId: a.employeeId,
+    });
+    onAddNotification({
+      id: `notif-swap-${Date.now()}-b`,
+      title: 'Ca làm việc được hoán đổi',
+      message: `Bạn và ${a.employeeName} đã hoán đổi ca ${a.shiftName} ngày ${a.date} (giờ ${a.startTime}-${a.endTime} giữ nguyên).`,
+      time: 'Vừa xong',
+      read: false,
+      type: 'system',
+      category: 'management',
+      userId: b.employeeId,
     });
     closeSwapModal();
   };
@@ -382,7 +395,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
     onUpdateShift(updatedShift);
 
-    // Notify employee
+    // Notify employee (chỉ người giữ ca thấy)
     onAddNotification({
       id: `notif-${Date.now()}`,
       title: 'Ca làm việc được chỉnh sửa',
@@ -391,6 +404,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       read: false,
       type: 'system',
       category: 'management',
+      userId: showEditModal.employeeId,
     });
 
     setShowEditModal(null);
@@ -403,7 +417,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
     onDeleteShift(showDeleteConfirm.id);
 
-    // Notify employee
+    // Notify employee (chỉ người giữ ca thấy)
     onAddNotification({
       id: `notif-${Date.now()}`,
       title: 'Ca làm việc bị hủy',
@@ -412,6 +426,7 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
       read: false,
       type: 'penalty',
       category: 'management',
+      userId: showDeleteConfirm.employeeId,
     });
 
     setShowDeleteConfirm(null);

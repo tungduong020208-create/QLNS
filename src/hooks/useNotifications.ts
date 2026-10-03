@@ -9,7 +9,7 @@
 
 import { useEffect } from 'react';
 import { NotificationItem, NotificationCategory } from '../types';
-import { INITIAL_NOTIFICATIONS } from '../data/initialData';
+import { INITIAL_NOTIFICATIONS, LEGACY_SEED_NOTIFICATION_USER } from '../data/initialData';
 import { STORAGE_KEY_NOTIFICATIONS } from '../utils/constants';
 import { usePersistentState } from './usePersistentState';
 
@@ -19,11 +19,19 @@ export function useNotifications() {
     INITIAL_NOTIFICATIONS
   );
 
-  // One-time migration for pre-category rows (no-op for fresh data)
+  // One-time migration for rows persisted before targeting existed:
+  // - category defaulting (reward/penalty → 'management', else 'handover')
+  // - the two legacy SEED rows had no userId — tie them to their subject so
+  //   the Header's recipient filter shows them to the right employee only
+  //   (id người dùng tạo luôn có timestamp nên không bao giờ trùng 'notif-1'/'notif-2')
   useEffect(() => {
-    setNotifications(prev => prev.map(n => n.category ? n : {
-      ...n,
-      category: (n.category || (n.type === 'reward' || n.type === 'penalty' ? 'management' : 'handover')) as NotificationCategory,
+    setNotifications(prev => prev.map(n => {
+      const withCategory = n.category ? n : {
+        ...n,
+        category: (n.category || (n.type === 'reward' || n.type === 'penalty' ? 'management' : 'handover')) as NotificationCategory,
+      };
+      const legacyOwner = LEGACY_SEED_NOTIFICATION_USER[withCategory.id];
+      return legacyOwner && !withCategory.userId ? { ...withCategory, userId: legacyOwner } : withCategory;
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -82,7 +82,7 @@ export interface NotificationItem {
   read: boolean;
   type: 'reward' | 'penalty' | 'pending' | 'system';
   category: NotificationCategory;
-  userId?: string;          // Optional: ties notification to a specific user
+  userId?: string;          // Người nhận: CÓ userId → chỉ user đó thấy; KHÔNG userId → chỉ quản lý thấy (Header lọc nhân viên theo userId === currentUser.id)
 }
 
 export interface WeeklyData {
