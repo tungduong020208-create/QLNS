@@ -193,6 +193,13 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
   // Rest of leaderboard (rank 4+)
   const restOfLeaderboard = useMemo(() => leaderboardWithReviews.slice(3), [leaderboardWithReviews]);
 
+  // Số lượt đánh giá trong kỳ đang xem — để phân biệt 2 trạng thái trống:
+  // (1) kỳ chưa có lượt nào, (2) kỳ có lượt nhưng chưa ai đạt ngưỡng xếp hạng.
+  const monthReviewCount = useMemo(
+    () => peerReviews.filter((r) => r.monthKey === effectiveMonthKey).length,
+    [peerReviews, effectiveMonthKey]
+  );
+
   // My rank
   const myRank = useMemo(() => {
     return leaderboard.find((e) => e.userId === currentUser.id);
@@ -622,7 +629,11 @@ export const PeerReviewScreen: React.FC<PeerReviewScreenProps> = ({
             <div className="bg-white rounded-2xl border border-[#E8DFD0] p-10 text-center">
               <span className="material-symbols-outlined text-5xl text-[#E8DFD0] mb-3 block">leaderboard</span>
               <h3 className="font-heading font-bold text-base text-[#0F1E44] mb-1">Chưa có dữ liệu</h3>
-              <p className="text-xs text-[#7A829A]">Chưa có đánh giá nào trong kỳ này.</p>
+              <p className="text-xs text-[#7A829A]">
+                {monthReviewCount === 0
+                  ? 'Chưa có đánh giá nào trong kỳ này.'
+                  : `Đã có ${monthReviewCount} lượt đánh giá trong kỳ, nhưng chưa ai đạt đủ ${MIN_REVIEWS_FOR_LEADERBOARD} lượt/tháng để vào bảng xếp hạng.`}
+              </p>
             </div>
           ) : (
             <>

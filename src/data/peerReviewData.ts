@@ -1,5 +1,16 @@
 import { PeerReviewCriteria, PeerReviewSubmission } from '../types';
 
+/**
+ * IDs của bộ seed cũ (trước khi bổ sung đánh giá cuối tháng 9/2026).
+ * useReviews dùng để nhận diện storage chỉ chứa seed cũ — chưa hề có bản ghi
+ * nào do người dùng tạo (id người dùng luôn dạng `pr-<timestamp>-<userId>`) —
+ * và tự nâng cấp lên INITIAL_PEER_REVIEWS mới.
+ */
+export const LEGACY_PEER_REVIEW_SEED_IDS = new Set<string>([
+  'pr-1', 'pr-2', 'pr-3', 'pr-4', 'pr-5', 'pr-6',
+  'pr-aug-1', 'pr-aug-2', 'pr-aug-3', 'pr-aug-4',
+]);
+
 export const PEER_REVIEW_CRITERIA: PeerReviewCriteria[] = [
   {
     id: 'criteria-1',
@@ -141,6 +152,89 @@ export const INITIAL_PEER_REVIEWS: PeerReviewSubmission[] = [
     comment: 'Tuần cần cải thiện thêm về chuyên môn',
     submittedAt: '2026-09-04T08:30:00',
     dateString: '2026-09-04',
+    monthKey: '2026-09',
+  },
+
+  // ─── August 2026 Reviews (for month filter testing) ───
+  // ─── Late September 2026 (đẩy Mai & Nam đạt ngưỡng MIN_REVIEWS_FOR_LEADERBOARD) ───
+  {
+    id: 'pr-sep-7',
+    evaluatorId: 'usr-5',
+    evaluatorName: 'Phạm Thị Hương',
+    evaluatorAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    targetId: 'usr-3',
+    targetName: 'Nguyễn Thị Mai',
+    targetAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    answers: [
+      { criteriaId: 'criteria-1', stars: 4 },
+      { criteriaId: 'criteria-2', stars: 4 },
+      { criteriaId: 'criteria-3', stars: 5 },
+    ],
+    totalScore: 13,
+    avgScore: 4.33,
+    comment: 'Mai hỗ trợ khách rất chuyên nghiệp',
+    submittedAt: '2026-09-05T09:20:00',
+    dateString: '2026-09-05',
+    monthKey: '2026-09',
+  },
+  {
+    id: 'pr-sep-8',
+    evaluatorId: 'usr-3',
+    evaluatorName: 'Nguyễn Thị Mai',
+    evaluatorAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAJALCKhG3wOJcDAoYOhNPfG_ZJAa3PY6C9kEzD00zWOT1Ks9SqXcJDYVKP83AcgbFQQ2nXv9KADzeQgVFyASdfJhLiw3GBzduIKVGtrADDCa74ZREY2A5D0S3h2OCG8EJshH78ytQSXG5ssTQSDm70o1nB5TJ9-gXn2nhy1ORyYCJu6PhVj7_TMcTxlIKVTgFrPLnCeM67ZwuajvFnQ_rh0AeStr_DQ7jFHlFitHXyuoM-KpsN7Iac',
+    targetId: 'usr-4',
+    targetName: 'Lê Hoàng Nam',
+    targetAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDMGc0qdI6jsnRkAdviGDc3ViHqQe9QYOtjfWck9WHBklIGHxr1DtQKlX-q58uzWaPxG9hxhIGu3UHhH4UasDlR5VfoM5gtVSlswC_dkKwu44ZcuIMXZ6ncaRud3-cDdBGwhhn4-8Gqo7MSi3q_tCVKQzfE1Z1pvQrzzhYJg58LN6MLie8WhJnOSJ6goBG021mWkr6oSjlRbUtrAucgHrYJs5HyTP2UGlvkWjGYUscJha4qG7j8c-Qj',
+    answers: [
+      { criteriaId: 'criteria-1', stars: 5 },
+      { criteriaId: 'criteria-2', stars: 4 },
+      { criteriaId: 'criteria-3', stars: 5 },
+    ],
+    totalScore: 14,
+    avgScore: 4.67,
+    comment: 'Nam chủ động đề xuất ý tưởng cho quán',
+    submittedAt: '2026-09-06T10:10:00',
+    dateString: '2026-09-06',
+    monthKey: '2026-09',
+  },
+  {
+    id: 'pr-sep-9',
+    evaluatorId: 'usr-1',
+    evaluatorName: 'Nguyễn Văn An',
+    evaluatorAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    targetId: 'usr-4',
+    targetName: 'Lê Hoàng Nam',
+    targetAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDMGc0qdI6jsnRkAdviGDc3ViHqQe9QYOtjfWck9WHBklIGHxr1DtQKlX-q58uzWaPxG9hxhIGu3UHhH4UasDlR5VfoM5gtVSlswC_dkKwu44ZcuIMXZ6ncaRud3-cDdBGwhhn4-8Gqo7MSi3q_tCVKQzfE1Z1pvQrzzhYJg58LN6MLie8WhJnOSJ6goBG021mWkr6oSjlRbUtrAucgHrYJs5HyTP2UGlvkWjGYUscJha4qG7j8c-Qj',
+    answers: [
+      { criteriaId: 'criteria-1', stars: 4 },
+      { criteriaId: 'criteria-2', stars: 4 },
+      { criteriaId: 'criteria-3', stars: 5 },
+    ],
+    totalScore: 13,
+    avgScore: 4.33,
+    comment: undefined,
+    submittedAt: '2026-09-08T15:40:00',
+    dateString: '2026-09-08',
+    monthKey: '2026-09',
+  },
+  {
+    id: 'pr-sep-10',
+    evaluatorId: 'usr-4',
+    evaluatorName: 'Lê Hoàng Nam',
+    evaluatorAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDMGc0qdI6jsnRkAdviGDc3ViHqQe9QYOtjfWck9WHBklIGHxr1DtQKlX-q58uzWaPxG9hxhIGu3UHhH4UasDlR5VfoM5gtVSlswC_dkKwu44ZcuIMXZ6ncaRud3-cDdBGwhhn4-8Gqo7MSi3q_tCVKQzfE1Z1pvQrzzhYJg58LN6MLie8WhJnOSJ6goBG021mWkr6oSjlRbUtrAucgHrYJs5HyTP2UGlvkWjGYUscJha4qG7j8c-Qj',
+    targetId: 'usr-1',
+    targetName: 'Nguyễn Văn An',
+    targetAvatar: 'https://lh3.googleusercontent.com/aida-public/AB6AXuATc96PI_QxRNeqbgaOpVyfvItajNFsw8ki0yuiwSOpCEjVgFnCd7XhRtZhEgwryLhDFvCXb7xDfPmY8secUhxCxUbPUdeV9JUGScKv3k9udnBsyloc_XYHdMPj1hMZ9pCoY-kJvCmvQ-IKznod4Y2FmP5gsE-Wphla8ErGufFCIgg27a6tsnGcPBt0-e5M4c_oJ2_b5zzGVnvcwQDCgAHj7njLHkzYd_CPmBECGLiFQNINkDZxViIO',
+    answers: [
+      { criteriaId: 'criteria-1', stars: 4 },
+      { criteriaId: 'criteria-2', stars: 5 },
+      { criteriaId: 'criteria-3', stars: 4 },
+    ],
+    totalScore: 13,
+    avgScore: 4.33,
+    comment: 'An luôn đúng giờ, thái độ cầu thị',
+    submittedAt: '2026-09-10T08:05:00',
+    dateString: '2026-09-10',
     monthKey: '2026-09',
   },
 
