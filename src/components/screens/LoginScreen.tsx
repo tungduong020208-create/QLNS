@@ -276,17 +276,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
             </div>
           </div>
 
-          {/* Security Notice */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-700 flex items-start gap-2">
-            <span className="material-symbols-outlined text-[16px] mt-0.5">shield</span>
-            <div>
-              <p className="font-semibold">Đăng nhập được kiểm soát</p>
-              <p className="text-[11px] text-blue-600 mt-0.5">
-                Chỉ quản lý mới có quyền tạo tài khoản. Liên hệ <a href="tel:0962499209" className="font-semibold underline">096 2499 209</a> hoặc <a href="mailto:ken02022008@gmail.com" className="font-semibold underline">Email</a> để được cấp tài khoản.
-              </p>
-            </div>
-          </div>
-
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {errorMsg && (
@@ -336,19 +325,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
                   placeholder="Nhập mật khẩu"
                   type={showPassword ? 'text' : 'password'}
                 />
-                {/* Flashlight light — anchored at the button, floods the whole
-                    page with warm light while it is on (see .login-flashlight
-                    in index.css). Always mounted so it can fade in AND out. */}
-                <span className={`login-flashlight${showPassword ? ' on' : ''}`} aria-hidden="true" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  aria-label={showPassword ? 'Tắt đèn pin, ẩn mật khẩu' : 'Bật đèn pin, hiện mật khẩu'}
-                  aria-pressed={showPassword}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 text-[#7A829A] hover:text-[#0F1E44] transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A829A] hover:text-[#0F1E44] transition-colors"
                 >
                   <span className="material-symbols-outlined text-[20px]">
-                    {showPassword ? 'flashlight_on' : 'visibility_off'}
+                    {showPassword ? 'visibility' : 'visibility_off'}
                   </span>
                 </button>
               </div>
