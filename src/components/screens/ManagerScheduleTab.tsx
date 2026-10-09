@@ -99,6 +99,10 @@ export const ManagerScheduleTab: React.FC<ManagerScheduleTabProps> = ({
           onAddNotification={onAddNotification}
           capacityOverrides={capacityOverrides}
           onSetCapacity={onSetCapacity}
+          registrations={registrations}
+          studySchedules={studySchedules}
+          manualAssignments={manualAssignments}
+          onApplyBatchShifts={onApplyBatchShifts}
         />
       )}
 

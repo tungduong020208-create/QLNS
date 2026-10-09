@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { User, EvidenceItem } from '../../types';
+import { User } from '../../types';
 
 interface ProfileScreenProps {
   currentUser: User;
   onUpdateUser: (updated: Partial<User>) => void;
   onLogout: () => void;
-  evidences: EvidenceItem[];
+  /** Full member list — the Team modal shows every member, not just
+   *  the ones who have submitted evidences. */
+  users: User[];
   onOpenAddEmployee?: () => void;  // Manager only
   mustChangePassword?: boolean;   // Force password change flow
   onChangePassword?: (newPassword: string) => void;
@@ -15,7 +17,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   currentUser,
   onUpdateUser,
   onLogout,
-  evidences,
+  users,
   onOpenAddEmployee,
   mustChangePassword,
   onChangePassword,
@@ -630,25 +632,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto divide-y divide-[#F5EDDF]">
-              {evidences.filter(e => e.employeeId !== currentUser.id).reduce((acc, ev) => {
-                if (!acc.find(e => e.employeeId === ev.employeeId)) acc.push(ev);
-                return acc;
-              }, [] as EvidenceItem[]).map(ev => (
-                <div key={ev.employeeId} className="py-3 flex items-center gap-3">
-                  <img src={ev.employeeAvatar} alt={ev.employeeName} className="w-10 h-10 rounded-full object-cover border border-[#E8DFD0]" />
+              {users.filter(u => u.id !== currentUser.id).map(u => (
+                <div key={u.id} className="py-3 flex items-center gap-3">
+                  {u.avatar ? (
+                    <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover border border-[#E8DFD0]" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#EFC14B]/20 border border-[#E8DFD0] flex items-center justify-center text-xs font-bold text-[#0F1E44] flex-shrink-0">
+                      {u.name.split(' ').slice(-2).map(w => w[0]).join('')}
+                    </div>
+                  )}
                   <div className="flex-1">
-                    <div className="font-semibold text-sm text-[#0F1E44]">{ev.employeeName}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-[#0F1E44]">
-                      {evidences.filter(e => e.employeeId === ev.employeeId).reduce((sum, e) => sum + e.points, 0)} pts
-                    </div>
-                    <div className="text-xs text-[#7A829A]">
-                      {evidences.filter(e => e.employeeId === ev.employeeId).length} báo cáo
-                    </div>
+                    <div className="font-semibold text-sm text-[#0F1E44]">{u.name}</div>
                   </div>
                 </div>
               ))}
+              {users.filter(u => u.id !== currentUser.id).length === 0 && (
+                <div className="py-6 text-center text-xs text-[#7A829A]">Chưa có thành viên nào trong team</div>
+              )}
             </div>
             <button onClick={() => setActiveModal(null)} className="w-full py-2.5 bg-[#0F1E44] text-white rounded-xl text-xs font-bold hover:bg-[#1A2D5A] mt-3">Đóng</button>
           </div>

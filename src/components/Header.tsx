@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { User, NotificationItem } from '../types';
-import { LogoutDoorButton } from './LogoutDoorButton';
 
 interface HeaderProps {
   currentUser: User;
@@ -9,6 +8,30 @@ interface HeaderProps {
   onClearAllNotifications: () => void;
   onNavigateToProfile: () => void;
   onLogout: () => void;
+}
+
+// ── Grouping by content type ──
+// The bell used to be one flat stream mixing posting/evidence rows,
+// account-activity alerts and point rewards. Each now gets its own
+// section so unrelated data is not interleaved. Rules run IN ORDER:
+// an evidence row also mentions points ("+15 điểm") but belongs to
+// the posting section; a geofence penalty belongs to activity, not
+// to the points section.
+type NotifGroupKey = 'post' | 'account' | 'points' | 'other';
+
+const NOTIF_GROUPS: { key: NotifGroupKey; label: string }[] = [
+  { key: 'post', label: 'Bài đăng & Minh chứng' },
+  { key: 'account', label: 'Tài khoản & Hoạt động' },
+  { key: 'points', label: 'Thưởng / Phạt điểm' },
+  { key: 'other', label: 'Thông báo khác' },
+];
+
+function notifGroup(n: NotificationItem): NotifGroupKey {
+  const text = `${n.title} ${n.message}`.toLowerCase();
+  if (/minh chứng|bảng tin|đăng bài|bài viết/.test(text)) return 'post';
+  if (/tài khoản|mật khẩu|đăng nhập|phạm vi|điểm danh|check-?in|check-?out/.test(text)) return 'account';
+  if (n.type === 'reward' || n.type === 'penalty' || /thưởng|\+\s?\d+\s?điểm/.test(text)) return 'points';
+  return 'other';
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout
 }) => {
   const [showNotifs, setShowNotifs] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Recipient-aware filtering:
   // - Employees see ONLY rows addressed to them (userId === me).
@@ -97,38 +121,49 @@ export const Header: React.FC<HeaderProps> = ({
                   <p>Không có thông báo mới</p>
                 </div>
               ) : (
-                managementNotifications.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    onClick={() => onMarkNotificationRead(item.id)}
-                    // Motion design: entries float in, staggered
-                    className={`anim-float-up p-3.5 hover:bg-[#FDF8EE] transition-colors cursor-pointer flex gap-3 ${
-                      !item.read ? 'bg-[#EFC14B]/5' : ''
-                    }`}
-                    style={{ animationDelay: `${Math.min(idx * 50, 300)}ms` }}
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                      item.type === 'reward' ? 'bg-[#EFC14B]/20 text-[#0F1E44]' :
-                      item.type === 'penalty' ? 'bg-[#FF3131]/15 text-[#FF3131]' : 'bg-[#F5EDDF] text-[#7A829A]'
-                    }`}>
-                      <span className="material-symbols-outlined text-[18px]">
-                        {item.type === 'reward' ? 'military_tech' : item.type === 'penalty' ? 'warning' : 'info'}
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className={`text-xs font-semibold ${!item.read ? 'text-[#0F1E44]' : 'text-[#3D4663]'}`}>
-                          {item.title}
-                        </span>
-                        <span className="text-[10px] text-[#7A829A]">{item.time}</span>
+                NOTIF_GROUPS.map(({ key, label }) => {
+                  const items = managementNotifications.filter(n => notifGroup(n) === key);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={key}>
+                      <p className="px-3.5 pt-2.5 pb-1 text-[10px] font-bold uppercase tracking-wide text-[#7A829A] bg-[#FDF8EE] border-b border-[#F5EDDF]">
+                        {label}
+                      </p>
+                      <div className="divide-y divide-[#F5EDDF]">
+                        {items.map(item => (
+                          <div
+                            key={item.id}
+                            onClick={() => onMarkNotificationRead(item.id)}
+                            className={`p-3.5 hover:bg-[#FDF8EE] transition-colors cursor-pointer flex gap-3 ${
+                              !item.read ? 'bg-[#EFC14B]/5' : ''
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                              item.type === 'reward' ? 'bg-[#EFC14B]/20 text-[#0F1E44]' :
+                              item.type === 'penalty' ? 'bg-[#FF3131]/15 text-[#FF3131]' : 'bg-[#F5EDDF] text-[#7A829A]'
+                            }`}>
+                              <span className="material-symbols-outlined text-[18px]">
+                                {item.type === 'reward' ? 'military_tech' : item.type === 'penalty' ? 'warning' : 'info'}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className={`text-xs font-semibold ${!item.read ? 'text-[#0F1E44]' : 'text-[#3D4663]'}`}>
+                                  {item.title}
+                                </span>
+                                <span className="text-[10px] text-[#7A829A]">{item.time}</span>
+                              </div>
+                              <p className="text-xs text-[#7A829A] leading-relaxed line-clamp-2">{item.message}</p>
+                            </div>
+                            {!item.read && (
+                              <div className="w-2 h-2 rounded-full bg-[#EFC14B] self-center flex-shrink-0"></div>
+                            )}
+                          </div>
+                        ))}
                       </div>
-                      <p className="text-xs text-[#7A829A] leading-relaxed line-clamp-2">{item.message}</p>
                     </div>
-                    {!item.read && (
-                      <div className="w-2 h-2 rounded-full bg-[#EFC14B] self-center flex-shrink-0"></div>
-                    )}
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
             <div className="p-2 text-center bg-[#FDF8EE] border-t border-[#F5EDDF]">
@@ -142,10 +177,50 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {/* Logout — the little door-and-stick-figure scene */}
-        <LogoutDoorButton onLogout={onLogout} />
+        {/* Logout Button */}
+        <button
+          onClick={() => setShowLogoutConfirm(true)}
+          aria-label="Đăng xuất"
+          className="text-[#FF3131] hover:bg-[#FF3131]/10 transition-colors rounded-full p-2 flex items-center justify-center"
+          title="Đăng xuất"
+        >
+          <span className="material-symbols-outlined text-[24px]">logout</span>
+        </button>
       </div>
 
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-[90vw] max-w-sm mx-4 overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-[#FF3131]/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[32px] text-[#FF3131]">logout</span>
+              </div>
+              <h3 className="font-heading text-lg font-bold text-[#0F1E44] mb-1">Đăng xuất tài khoản?</h3>
+              <p className="text-[13px] text-[#7A829A] mb-1">
+                Bạn có chắc chắn muốn đăng xuất khỏi hệ thống?
+              </p>
+              <p className="text-[11px] text-[#7A829A]">
+                Tất cả dữ liệu chưa lưu sẽ bị mất.
+              </p>
+            </div>
+            <div className="flex border-t border-[#E8DFD0]">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 text-sm font-medium text-[#7A829A] hover:bg-[#FDF8EE] transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => { setShowLogoutConfirm(false); onLogout(); }}
+                className="flex-1 py-3 text-sm font-medium text-[#FF3131] hover:bg-[#FF3131]/10 transition-colors border-l border-[#E8DFD0]"
+              >
+                Đăng xuất
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

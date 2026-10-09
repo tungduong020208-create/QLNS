@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { User, NotificationItem, ShiftCapacityOverride } from '../../types';
+import { User, NotificationItem, WeeklyShiftRegistration, StudySchedule, ManualShiftAssignment, ShiftCapacityOverride } from '../../types';
 import { SHIFT_SLOT_TEMPLATES, SHIFT_NAME_TO_SLOT, getShiftTimeRange } from '../../utils/constants';
 import { getCapacityForDate } from '../../hooks/useShiftCapacity';
+import { computeBatchAutoSchedule, BatchAutoScheduleResult } from '../../utils/batchAutoSchedule';
 
 // Tên 3 ca cố định. KHUNG GIỜ KHÔNG CỐ ĐỊNH Ở ĐÂY NỮA — map động theo
 // loại nhân viên qua getShiftTimeRange() (xem utils/constants.ts).
@@ -49,6 +50,12 @@ interface ManagerScheduleScreenProps {
   /** Capacity per (date, shift) — đếm người/ca + chỉnh max (mục 7). */
   capacityOverrides: ShiftCapacityOverride[];
   onSetCapacity: (date: string, shiftName: string, max: number) => void;
+  // ─── Batch auto-schedule (từ tuần ĐANG XEM, chạy ngay trên tab Ca làm) ───
+  registrations: WeeklyShiftRegistration[];
+  studySchedules: StudySchedule[];
+  manualAssignments: ManualShiftAssignment[];
+  /** Apply batch auto-schedule result directly to the shifts store. */
+  onApplyBatchShifts: (shifts: Shift[]) => void;
 }
 
 // Helper: format date to YYYY-MM-DD using LOCAL time
@@ -94,6 +101,10 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   onAddNotification,
   capacityOverrides,
   onSetCapacity,
+  registrations,
+  studySchedules,
+  manualAssignments,
+  onApplyBatchShifts,
 }) => {
   // View state
   const [weekOffset, setWeekOffset] = useState(0);
@@ -127,6 +138,52 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
   // cho (ngày, ca) khi lưu ca.
   const [formCapacity, setFormCapacity] = useState<number | null>(null);
 
+  // Batch auto-schedule cho tuần ĐANG XEM — chạy engine cùng một cái được dùng
+  // ở tab "Xếp lịch học NV" nhưng truy cập được ngay từ nơi quản lý nhìn lịch.
+  // (weekStartStr + handlers khai báo sau weekDays bên dưới.)
+  const [batchResult, setBatchResult] = useState<BatchAutoScheduleResult | null>(null);
+  const [showBatchResult, setShowBatchResult] = useState(false);
+  const [isAutoScheduling, setIsAutoScheduling] = useState(false);
+
+  const handleAutoScheduleWeek = () => {
+    setIsAutoScheduling(true);
+    setTimeout(() => {
+      const result = computeBatchAutoSchedule(
+        allUsers,
+        registrations.filter((r) => r.weekStart === weekStartStr),
+        studySchedules,
+        shifts,
+        weekStartStr,
+        capacityOverrides
+      );
+      setBatchResult(result);
+      setShowBatchResult(true);
+      setIsAutoScheduling(false);
+    }, 300);
+  };
+
+  const handleConfirmBatchWeek = () => {
+    if (!batchResult) return;
+    onApplyBatchShifts(batchResult.shifts);
+    // Thông báo cho từng nhân viên bị ảnh hưởng (Header lọc theo userId)
+    const affected = new Set(batchResult.shifts.filter((s) => s.origin === 'auto').map((s) => s.employeeId));
+    const [y, m] = weekStartStr.split('-');
+    affected.forEach((userId) => {
+      onAddNotification({
+        id: `notif-batch-${userId}-${Date.now()}`,
+        title: 'Lịch làm việc đã được xếp tự động',
+        message: `Lịch tuần của bạn (${weekStartStr.slice(8)}/${m}/${y}) đã được hệ thống xếp tự động.`,
+        time: 'Vừa xong',
+        read: false,
+        type: 'system',
+        category: 'management',
+        userId,
+      });
+    });
+    setShowBatchResult(false);
+    setBatchResult(null);
+  };
+
 
 
   // Current Monday for week view
@@ -139,6 +196,21 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
 
   const weekDays = useMemo(() => getWeekDays(currentMonday), [currentMonday]);
   const todayStr = toDateStr(new Date());
+
+  // Card "Số người mỗi ca" phải luôn nói về tuần ĐANG XEM: snap theo ngày
+  // cùng vị trí trong tuần mới (T2→T2, …). Nếu manager đã bấm chọn một ngày
+  // NẰM TRONG tuần đang xem thì giữ nguyên lựa chọn tay của họ.
+  useEffect(() => {
+    setSelectedDate((prev) => {
+      const prevDate = new Date(prev + 'T00:00:00');
+      const inThisWeek = weekDays.some((d) => toDateStr(d) === prev);
+      if (inThisWeek) return prev;
+      const idx = Math.min(6, Math.max(0, (prevDate.getDay() + 6) % 7));
+      return toDateStr(weekDays[idx]);
+    });
+  }, [weekDays]);
+
+  const weekStartStr = useMemo(() => toDateStr(weekDays[0]), [weekDays]);
 
   // Filter shifts
   const filteredShifts = useMemo(() => {
@@ -443,14 +515,69 @@ export const ManagerScheduleScreen: React.FC<ManagerScheduleScreenProps> = ({
           <h2 className="font-heading text-2xl font-bold text-[#0F1E44]">Quản lý lịch làm việc</h2>
           <p className="text-xs text-[#7A829A] mt-0.5">Quản lý và phân công ca làm cho tất cả nhân viên</p>
         </div>
-        <button
-          onClick={() => openAddModal()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#0F1E44] text-white rounded-xl text-sm font-semibold shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all"
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          <span>Thêm ca mới</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAutoScheduleWeek}
+            disabled={isAutoScheduling}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#EFC14B] text-[#0F1E44] rounded-xl text-sm font-semibold shadow-md hover:brightness-105 active:scale-[0.98] transition-all disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+            <span>{isAutoScheduling ? 'Đang xếp…' : 'Xếp tự động tuần này'}</span>
+          </button>
+          <button
+            onClick={() => openAddModal()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#0F1E44] text-white rounded-xl text-sm font-semibold shadow-md hover:bg-[#1A2D5A] active:scale-[0.98] transition-all"
+          >
+            <span className="material-symbols-outlined text-[20px]">add</span>
+            <span>Thêm ca mới</span>
+          </button>
+        </div>
       </div>
+
+      {/* Kết quả xếp tự động — summary + cảnh báo thiếu người trước khi áp dụng */}
+      {showBatchResult && batchResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowBatchResult(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-heading font-bold text-base text-[#0F1E44]">Kết quả xếp tự động — tuần {weekLabel}</h3>
+              <button onClick={() => setShowBatchResult(false)} className="text-[#7A829A] hover:text-[#0F1E44]">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="rounded-xl bg-[#FDF8EE] border border-[#E8DFD0] p-3 text-center">
+                <p className="text-lg font-heading font-bold text-[#0F1E44]">{batchResult.summary.filledSlots}/{batchResult.summary.totalSlots}</p>
+                <p className="text-[10px] text-[#7A829A] font-semibold uppercase">Slot đủ</p>
+              </div>
+              <div className="rounded-xl bg-[#FDF8EE] border border-[#E8DFD0] p-3 text-center">
+                <p className="text-lg font-heading font-bold text-[#4CAF72]">{batchResult.summary.totalAssigned}</p>
+                <p className="text-[10px] text-[#7A829A] font-semibold uppercase">Người được xếp</p>
+              </div>
+              <div className={`rounded-xl p-3 text-center border ${batchResult.summary.understaffedSlots > 0 ? 'bg-[#FF3131]/5 border-[#FF3131]/30' : 'bg-[#FDF8EE] border-[#E8DFD0]'}`}>
+                <p className={`text-lg font-heading font-bold ${batchResult.summary.understaffedSlots > 0 ? 'text-[#FF3131]' : 'text-[#0F1E44]'}`}>{batchResult.summary.understaffedSlots}</p>
+                <p className="text-[10px] text-[#7A829A] font-semibold uppercase">Thiếu người</p>
+              </div>
+            </div>
+            {batchResult.understaffedWarnings.length > 0 && (
+              <div className="mb-4 rounded-xl border border-[#FF3131]/30 bg-[#FF3131]/5 p-3">
+                <p className="text-xs font-bold text-[#FF3131] mb-1">Slot thiếu người:</p>
+                <ul className="text-xs text-[#0F1E44] space-y-0.5">
+                  {batchResult.understaffedWarnings.slice(0, 6).map((w) => (
+                    <li key={`${w.date}-${w.shiftName}`}>
+                      • {w.date.slice(8)}/{w.date.slice(5, 7)} — {w.shiftName}: thiếu {w.missingCount} (đã xếp {w.assignedUsers.length}/{w.capacity})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-[10px] text-[#7A829A] mb-4">Ca thủ công (manager đã xếp) sẽ không bị ghi đè. Xác nhận để ghi vào lịch chính.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowBatchResult(false)} className="flex-1 h-10 rounded-xl text-xs font-semibold text-[#7A829A] hover:bg-[#FDF8EE] border border-[#E8DFD0]">Xem lại</button>
+              <button onClick={handleConfirmBatchWeek} className="flex-1 h-10 bg-[#0F1E44] text-white rounded-xl text-xs font-bold hover:bg-[#1A2D5A]">Áp dụng</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-5">

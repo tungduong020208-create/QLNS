@@ -29,8 +29,6 @@ import { DEFAULT_STORE, OFFICE_WIFI } from '../utils/constants';
 import { useCurrentLocation } from '../hooks/useCurrentLocation';
 import { useCameraPermission } from '../hooks/useCameraPermission';
 import CameraCapture from './CameraCapture';
-import { SuccessBurst } from './SuccessBurst';
-import { RippleButton } from './RippleButton';
 
 interface CheckInCheckOutProps {
   employeeId: string;
@@ -455,14 +453,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
         <div className="px-4 py-4 sm:px-5">
           {session.status !== 'on' ? (
             <>
-              <RippleButton
+              <button
                 onClick={() => handleCaptureClick('checkin')}
                 disabled={busy}
                 className="w-full bg-[#0F1E44] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#1A2D5A] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[24px]">add_a_photo</span>
                 <span className="font-semibold text-[15px]">Check-in ngay</span>
-              </RippleButton>
+              </button>
               <p className="text-xs text-[#7A829A] text-center mt-2">
                 📶 Wi-Fi quán + 📸 ảnh nụ cười xác nhận điểm danh
               </p>
@@ -504,14 +502,14 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                   </div>
                 )}
               </div>
-              <RippleButton
+              <button
                 onClick={() => handleCaptureClick('checkout')}
                 disabled={busy}
                 className="w-full bg-[#FF3131] text-white rounded-xl h-[56px] flex items-center justify-center gap-2.5 shadow-md hover:bg-[#D42C2C] transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <span className="material-symbols-outlined fill text-[24px]">logout</span>
                 <span className="font-semibold text-[15px]">Check-out</span>
-              </RippleButton>
+              </button>
               <p className="text-xs text-[#7A829A] text-center mt-2">
                 📶 Wi-Fi quán + 📸 ảnh xác nhận điểm danh
               </p>
@@ -1043,11 +1041,8 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Success Modal (state: success) */}
       {flow.view === 'success' && session.lastRecord && (
-        <>
-        {/* Motion design: rings + drawn check burst above the modal */}
-        <SuccessBurst show />
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="anim-modal-in bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
+          <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-green-600 text-5xl fill">check_circle</span>
             </div>
@@ -1117,7 +1112,6 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </button>
           </div>
         </div>
-        </>
       )}
     </>
   );

@@ -260,7 +260,31 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
       days: editDaySelections,
       updatedAt: new Date().toISOString(),
     };
+    // So sánh lựa chọn cũ/mới để thông báo NÓI ĐƯỢC đã đổi gì (không broadcast
+    // vô nội dung). Engine tự re-run qua onUpdateRegistration nên row lịch
+    // luôn đồng bộ — chỉ cần báo cho người bị ảnh hưởng.
+    const label = (s: ShiftSlot) => SHIFT_OPTIONS.find((o) => o.value === s)?.label || s;
+    const changed = selectedReg.days
+      .map((old, i) => ({ old: old.shift, now: editDaySelections[i]?.shift, date: old.date }))
+      .filter((d) => d.old !== d.now)
+      .map((d) => `${d.date.slice(8)}/${d.date.slice(5, 7)} ${label(d.old)} → ${label(d.now)}`);
+
     onUpdateRegistration(updated);
+
+    // Thông báo cho chính nhân viên bị sửa (Header lọc theo userId) — nếu
+    // đây là sửa hộ thì selectedReg.userId ≠ currentUser.id (quản lý).
+    if (changed.length > 0) {
+      onAddNotification({
+        id: `notif-regedit-${selectedReg.userId}-${Date.now()}`,
+        title: 'Lịch đăng ký của bạn đã được quản lý điều chỉnh',
+        message: `Quản lý đã cập nhật: ${changed.join(', ')} cho tuần ${selectedReg.weekNumber}.`,
+        time: 'Vừa xong',
+        read: false,
+        type: 'system',
+        category: 'management',
+        userId: selectedReg.userId,
+      });
+    }
     setSelectedReg(null);
   };
 
@@ -279,6 +303,13 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
     const total = managerRegistrations.length;
     const submitted = managerRegistrations.filter((r) => r.status === 'submitted').length;
     return { total, submitted };
+  }, [managerRegistrations]);
+
+  // Hàng đợi cho quản lý: đăng ký của tuần đang xem có ca CHƯA XẾP ĐƯỢC
+  // (engine trả conflicts trong autoSchedule) — nổi bật ngay đầu view thay vì
+  // chỉ nằm trong chuông thông báo.
+  const conflictQueue = useMemo(() => {
+    return managerRegistrations.filter((r) => (r.autoSchedule?.conflicts?.length ?? 0) > 0);
   }, [managerRegistrations]);
 
   // ═══════════════════════════════════════════════════
@@ -575,6 +606,36 @@ export const ShiftRegistrationScreen: React.FC<ShiftRegistrationScreenProps> = (
           </button>
         </div>
       </div>
+
+      {/* Hàng đợi đăng ký chưa xếp được — action item cho quản lý */}
+      {conflictQueue.length > 0 && (
+        <div className="mb-4 bg-[#FF3131]/8 border border-[#FF3131]/30 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="material-symbols-outlined text-[#FF3131] text-xl">error</span>
+            <h3 className="text-sm font-bold text-[#0F1E44]">
+              {conflictQueue.length} đăng ký chưa xếp đủ — cần xử lý
+            </h3>
+          </div>
+          <div className="space-y-1.5">
+            {conflictQueue.map((reg) => (
+              <div key={reg.id} className="flex items-start gap-2 text-xs">
+                <img src={reg.userAvatar} alt={reg.userName} className="w-5 h-5 rounded-full object-cover mt-0.5" />
+                <div className="min-w-0">
+                  <span className="font-bold text-[#0F1E44]">{reg.userName}</span>
+                  <span className="text-[#7A829A]"> — {reg.autoSchedule!.conflicts.map((c) => {
+                    const dayIdx = new Date(c.date + 'T00:00:00').getDay();
+                    const label = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][dayIdx];
+                    return `${label} (${c.date.slice(8)}/${c.date.slice(5, 7)}) ${c.shift === 'morning' ? 'sáng' : c.shift === 'afternoon' ? 'chiều' : 'tối'}`;
+                  }).join(', ')}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-[#7A829A] mt-2">
+            Ca đầy hoặc trùng — hãy thêm ca thủ công ở tab “Ca làm” hoặc tăng số người mỗi ca.
+          </p>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3 mb-4">
