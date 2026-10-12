@@ -183,22 +183,22 @@ export const ExportReportScreen: React.FC<ExportReportScreenProps> = ({
       <div className="bg-white rounded-2xl border border-[#E8DFD0] p-4 shadow-sm mb-4">
         {activeExport === 'attendance' ? (
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#7A829A] mb-1">Từ ngày</label>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                className="w-full rounded-lg border E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
+                className="w-full min-w-0 rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-semibold text-[#7A829A] mb-1">Đến ngày</label>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
+                className="w-full min-w-0 rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
             </div>
           </div>
         ) : (
           <div>
             <label className="block text-xs font-semibold text-[#7A829A] mb-1">Tháng</label>
             <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-              className="w-full rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
+              className="w-full min-w-0 rounded-lg border border-[#E8DFD0] px-3 py-2 text-sm text-[#0F1E44] focus:border-[#EFC14B] outline-none" />
           </div>
         )}
         <p className="text-[10px] text-[#7A829A] mt-2">

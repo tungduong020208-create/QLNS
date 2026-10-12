@@ -136,9 +136,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
   if (mustChangePassword && pendingUser) {
     return (
       <div className="bg-[#FDF8EE] text-[#3D4663] min-h-screen w-full flex items-center justify-center relative overflow-hidden p-4">
-        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#EFC14B] opacity-20 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#0F1E44] opacity-10 rounded-full blur-[120px] pointer-events-none" />
-
         <div className="z-10 w-full max-w-md">
           <div className="glass-panel rounded-2xl shadow-lg p-6 sm:p-8 flex flex-col gap-6 border border-[#E8DFD0]/60 bg-white/90">
             {/* Header */}
@@ -257,10 +254,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, allUsers, onP
 
   return (
     <div className="bg-[#FDF8EE] text-[#3D4663] min-h-screen w-full flex items-center justify-center relative overflow-hidden p-4">
-      {/* AiiCafe brand background elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#EFC14B] opacity-20 rounded-full blur-[100px] pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-[#0F1E44] opacity-10 rounded-full blur-[120px] pointer-events-none" />
-
       <div className="z-10 w-full max-w-md">
         <div className="glass-panel rounded-2xl shadow-lg p-6 sm:p-8 flex flex-col gap-6 border border-[#E8DFD0]/60 bg-white/90">
           {/* Logo & Brand Header */}
