@@ -124,7 +124,7 @@ export default function App() {
 
     const timer = window.setTimeout(() => {
       setShowIntroSplash(false);
-    }, 1500);
+    }, 1800);
 
     return () => window.clearTimeout(timer);
   }, [auth.isLoggedIn]);
@@ -494,20 +494,90 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FDF8EE]">
+      <style>{`
+        @keyframes introZoom {
+          0% {
+            opacity: 0;
+            transform: scale(0.7) translateY(18px);
+          }
+          30% {
+            opacity: 1;
+          }
+          60% {
+            transform: scale(1.1) translateY(0);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+
+        @keyframes introGlow {
+          0%, 100% {
+            box-shadow: 0 0 0 rgba(239, 193, 75, 0), 0 0 0 rgba(239, 193, 75, 0);
+          }
+          50% {
+            box-shadow: 0 0 35px rgba(239, 193, 75, 0.38), 0 0 70px rgba(15, 30, 68, 0.38);
+          }
+        }
+
+        @keyframes introLoader {
+          0% {
+            transform: translateX(-40%);
+            opacity: 0.4;
+          }
+          50% {
+            opacity: 1;
+          }
+          100% {
+            transform: translateX(180%);
+            opacity: 0.4;
+          }
+        }
+
+        .intro-splash-bg {
+          background:
+            radial-gradient(circle at center, rgba(239, 193, 75, 0.2), transparent 35%),
+            linear-gradient(135deg, #0F1E44 0%, #101d36 30%, #18264b 100%);
+        }
+
+        .intro-logo {
+          animation: introZoom 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+          animation-delay: 0.05s;
+        }
+
+        .intro-brand {
+          animation: introZoom 0.9s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+          animation-delay: 0.2s;
+        }
+
+        .intro-loader-bar {
+          animation: introLoader 1.2s ease-in-out infinite;
+        }
+      `}</style>
+
       {!auth.isLoggedIn && showIntroSplash && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#FDF8EE] transition-all duration-700">
-          <div className="flex flex-col items-center justify-center gap-4 animate-[pulse_1.2s_ease-in-out_infinite]">
-            <div className="relative flex items-center justify-center">
-              <div className="absolute h-24 w-24 rounded-full bg-[#EFC14B]/25 blur-2xl" />
+        <div className="intro-splash-bg fixed inset-0 z-50 flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.12),_transparent_42%)]" />
+          <div className="relative flex flex-col items-center justify-center gap-5 text-center">
+            <div className="intro-logo relative flex h-28 w-28 items-center justify-center rounded-[30px] border border-white/15 bg-white/5 backdrop-blur-sm">
+              <div className="absolute inset-2 rounded-[24px] border border-[#EFC14B]/40" />
+              <div className="absolute h-20 w-20 rounded-full bg-[#EFC14B]/10 blur-2xl" />
               <img
                 src="/aiicafe-logo-blue.png"
                 alt="AiiCafe"
-                className="relative h-24 w-auto drop-shadow-[0_18px_35px_rgba(15,30,68,0.18)]"
+                className="relative h-16 w-auto drop-shadow-[0_0_35px_rgba(239,193,75,0.45)]"
+                style={{ animation: 'introGlow 1.4s ease-in-out infinite' }}
               />
             </div>
-            <div className="text-center">
-              <h1 className="font-heading text-4xl font-black tracking-tight text-[#0F1E44]">AiiCafe</h1>
-              <p className="mt-1 text-sm text-[#7A829A]">Hệ thống quản trị nhân sự</p>
+            <div className="intro-brand">
+              <h1 className="font-heading text-5xl font-black tracking-[0.18em] text-white">AiiCafe</h1>
+              <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.42em] text-[#F5D687]">
+                Hệ thống quản trị nhân sự
+              </p>
+            </div>
+            <div className="mt-2 h-1.5 w-36 overflow-hidden rounded-full border border-white/10 bg-white/10">
+              <div className="intro-loader-bar h-full w-1/3 rounded-full bg-gradient-to-r from-[#F5D687] via-[#EFC14B] to-[#F9E7A8] shadow-[0_0_20px_rgba(239,193,75,0.7)]" />
             </div>
           </div>
         </div>
