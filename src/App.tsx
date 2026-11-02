@@ -114,6 +114,21 @@ export default function App() {
   // ─── Domain state (each hook owns its localStorage slice) ───
   const auth = useAuth();
   const { currentUser } = auth;
+  const [showIntroSplash, setShowIntroSplash] = useState(!auth.isLoggedIn);
+
+  useEffect(() => {
+    if (auth.isLoggedIn) {
+      setShowIntroSplash(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setShowIntroSplash(false);
+    }, 1500);
+
+    return () => window.clearTimeout(timer);
+  }, [auth.isLoggedIn]);
+
   const { notifications, pushNotification, markRead, markAllRead } = useNotifications();
   const { evidences, submitEvidence: submitEvidenceRaw, reviewEvidence } = useEvidences();
   const { checkInOutRecords, addCheckIn, addCheckOut } = useAttendance();
@@ -479,6 +494,25 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FDF8EE]">
+      {!auth.isLoggedIn && showIntroSplash && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#FDF8EE] transition-all duration-700">
+          <div className="flex flex-col items-center justify-center gap-4 animate-[pulse_1.2s_ease-in-out_infinite]">
+            <div className="relative flex items-center justify-center">
+              <div className="absolute h-24 w-24 rounded-full bg-[#EFC14B]/25 blur-2xl" />
+              <img
+                src="/aiicafe-logo-blue.png"
+                alt="AiiCafe"
+                className="relative h-24 w-auto drop-shadow-[0_18px_35px_rgba(15,30,68,0.18)]"
+              />
+            </div>
+            <div className="text-center">
+              <h1 className="font-heading text-4xl font-black tracking-tight text-[#0F1E44]">AiiCafe</h1>
+              <p className="mt-1 text-sm text-[#7A829A]">Hệ thống quản trị nhân sự</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Routes>
         {/* Public: Login page */}
         <Route
