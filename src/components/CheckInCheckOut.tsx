@@ -461,13 +461,6 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <span className="material-symbols-outlined fill text-[24px]">add_a_photo</span>
                 <span className="font-semibold text-[15px]">Check-in ngay</span>
               </button>
-              <p className="text-xs text-[#7A829A] text-center mt-2">
-                📶 Wi-Fi quán + 📸 ảnh nụ cười xác nhận điểm danh
-              </p>
-              <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">shield</span>
-                Wi-Fi quán được dùng để xác nhận điểm danh
-              </p>
             </>
           ) : (
             <>
@@ -510,13 +503,6 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
                 <span className="material-symbols-outlined fill text-[24px]">logout</span>
                 <span className="font-semibold text-[15px]">Check-out</span>
               </button>
-              <p className="text-xs text-[#7A829A] text-center mt-2">
-                📶 Wi-Fi quán + 📸 ảnh xác nhận điểm danh
-              </p>
-              <p className="text-[11px] text-[#7A829A] text-center mt-1.5 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-[14px]">shield</span>
-                Wi-Fi & camera chỉ dùng để xác nhận điểm danh
-              </p>
 
               {/* Show fallback button after 2 camera failures */}
               {cameraRetryCount >= 2 && (
@@ -535,7 +521,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Wi-Fi hard-block modal (state: wifi-blocked) */}
       {flow.view === 'wifi-blocked' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#FF3131]/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-[#FF3131] text-3xl">wifi_off</span>
@@ -614,7 +600,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* GPS fallback verify modal (state: gps-verify) — user-initiated only */}
       {flow.view === 'gps-verify' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
             {flow.phase === 'loading' && (
               <>
@@ -665,7 +651,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* GPS gate block modal (state: gps-unavailable | gps-too-far) */}
       {(flow.view === 'gps-unavailable' || flow.view === 'gps-too-far') && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
               flow.view === 'gps-too-far' ? 'bg-[#EFC14B]/20' : 'bg-[#FF3131]/20'
@@ -709,7 +695,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Gate checks loading overlay (state: checking) */}
       {flow.view === 'checking' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="inline-block w-8 h-8 border-3 border-[#EFC14B]/30 border-t-[#EFC14B] rounded-full animate-spin" />
@@ -726,7 +712,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Camera Consent Dialog (state: permission) */}
       {flow.view === 'permission' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-[#0F1E44] text-3xl">photo_camera</span>
@@ -785,16 +771,19 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Camera Modal (state: camera) */}
       {flow.view === 'camera' && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-black">
-          <div className="flex items-center justify-between px-4 py-3 bg-black">
-            <button onClick={onClose} className="text-white p-1">
-              <span className="material-symbols-outlined">close</span>
+        <div className="fixed inset-0 z-[60] flex flex-col bg-[#05070d]">
+          <div className="flex items-center justify-between px-4 pb-2 pt-4 bg-black/95 backdrop-blur-sm border-b border-white/10">
+            <button onClick={onClose} className="text-white p-2 rounded-full bg-white/5 border border-white/10">
+              <span className="material-symbols-outlined text-[22px]">close</span>
             </button>
-            <p className="text-white text-sm font-semibold">{actionType === 'checkin' ? 'Check-in' : 'Check-out'} - Chụp ảnh xác nhận</p>
-            <div className="w-8" />
+            <div className="text-center">
+              <p className="text-[10px] uppercase tracking-[0.25em] text-white/50 font-medium">Selfie check</p>
+              <p className="text-white text-sm font-semibold mt-1">{actionType === 'checkin' ? 'Check-in' : 'Check-out'}</p>
+            </div>
+            <div className="w-10" />
           </div>
 
-          <div className="flex-1 flex items-center justify-center px-4">
+          <div className="flex-1 flex items-center justify-center px-2.5 py-3">
             <div className="w-full max-w-md">
               <div id="camera-video">
                 <CameraCapture
@@ -805,15 +794,15 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
             </div>
           </div>
 
-          <div className="px-4 py-4 bg-black">
-            <div className="flex items-center gap-2 text-white/60 text-xs mb-3">
+          <div className="px-4 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.75rem))] pt-2 bg-black/95 border-t border-white/10">
+            <div className="flex items-center justify-center gap-2 text-white/60 text-[11px] mb-3">
               <span className="material-symbols-outlined text-sm">info</span>
-              <p>Đặt khuôn mặt vào khung rồi bấm nút chụp — không cần cười</p>
+              <p className="text-center">Đặt khuôn mặt vào khung rồi bấm nút chụp — không cần cười</p>
             </div>
             {cameraRetryCount >= 1 && (
               <button
                 onClick={() => dispatchFlow({ type: 'open-fallback' })}
-                className="w-full py-2.5 bg-[#EFC14B] text-[#0F1E44] rounded-xl text-sm font-semibold"
+                className="w-full py-2.5 bg-[#EFC14B] text-[#0F1E44] rounded-xl text-sm font-semibold shadow-lg"
               >
                 Dùng phương án dự phòng
               </button>
@@ -824,7 +813,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Fallback Selection Modal (state: fallback-select) */}
       {flow.view === 'fallback-select' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-[#EFC14B]/20 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-[#0F1E44] text-3xl">swap_horiz</span>
@@ -882,7 +871,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* GPS Check-in Modal (state: gps-locate) */}
       {flow.view === 'gps-locate' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
             {flow.phase === 'loading' && (
               <>
@@ -925,7 +914,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* PIN Check-in Modal (state: pin) */}
       {flow.view === 'pin' && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-amber-600 text-3xl">pin</span>
@@ -976,39 +965,46 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Photo Review Modal (state: review) */}
       {flow.view === 'review' && capturedPhoto && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom">
-            <div className="px-5 pt-5 pb-3">
+        <div className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-[#F8F6F2] rounded-t-[32px] sm:rounded-[28px] w-full sm:max-w-md max-h-[92vh] overflow-hidden shadow-[0_20px_80px_rgba(15,30,68,0.35)] animate-in slide-in-from-bottom">
+            <div className="px-5 pt-5 pb-3 border-b border-[#EAE0D0] bg-gradient-to-r from-[#F8F6F2] to-white">
               <div className="flex items-center justify-between">
-                <h3 className="font-heading text-xl font-bold text-[#0F1E44]">
-                  Xác nhận {actionType === 'checkin' ? 'check-in' : 'check-out'}
-                </h3>
-                <button onClick={onClose} className="w-8 h-8 rounded-full bg-[#FDF8EE] flex items-center justify-center">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.24em] text-[#7A829A] font-semibold">Preview</p>
+                  <h3 className="font-heading text-xl font-bold text-[#0F1E44] mt-1">
+                    Xác nhận {actionType === 'checkin' ? 'check-in' : 'check-out'}
+                  </h3>
+                </div>
+                <button onClick={onClose} className="w-10 h-10 rounded-full bg-[#FDF8EE] border border-[#E8DFD0] flex items-center justify-center shadow-sm">
                   <span className="material-symbols-outlined text-[#7A829A] text-xl">close</span>
                 </button>
               </div>
             </div>
 
-            <div className="px-5 mb-4">
-              <div className="rounded-xl overflow-hidden border border-[#E8DFD0] shadow-sm">
-                <img src={capturedPhoto} alt="Check-in photo" className="w-full aspect-[4/3] object-cover" style={{ transform: 'scaleX(-1)' }} />
+            <div className="px-4 pb-3 pt-4">
+              <div className="rounded-[24px] overflow-hidden border border-[#E8DFD0] bg-[#0F1E44] shadow-lg">
+                <img src={capturedPhoto} alt="Check-in photo" className="w-full aspect-[4/5] object-cover" style={{ transform: 'scaleX(-1)' }} />
               </div>
-              <div className="flex items-center gap-2 mt-2 bg-green-50 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2 mt-3 bg-green-50 border border-green-200 rounded-xl px-3 py-2.5">
                 <span className="material-symbols-outlined text-green-600 text-lg">check_circle</span>
                 <p className="text-green-700 text-xs font-semibold">Ảnh xác nhận đã được chụp ✓</p>
               </div>
             </div>
 
-            <div className="px-5 space-y-2.5 mb-5">
-              <div className="flex items-center gap-3 bg-[#FDF8EE] rounded-xl px-4 py-3">
-                <span className="material-symbols-outlined text-[#EFC14B]">schedule</span>
+            <div className="px-4 pb-4 space-y-2.5">
+              <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 border border-[#E8DFD0] shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-[#EFC14B]/12 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#EFC14B]">schedule</span>
+                </div>
                 <div>
                   <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Thời gian</p>
                   <p className="text-sm font-bold text-[#0F1E44]">{formatTime(now)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 bg-[#FDF8EE] rounded-xl px-4 py-3">
-                <span className="material-symbols-outlined text-[#EFC14B]">location_on</span>
+              <div className="flex items-center gap-3 bg-white rounded-2xl px-4 py-3 border border-[#E8DFD0] shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-[#EFC14B]/12 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#EFC14B]">location_on</span>
+                </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[10px] text-[#7A829A] uppercase tracking-wider font-semibold">Địa điểm</p>
                   <p className="text-sm font-bold text-[#0F1E44] truncate">{address}</p>
@@ -1016,10 +1012,10 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
               </div>
             </div>
 
-            <div className="px-5 pb-5 flex gap-3">
+            <div className="px-4 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.75rem))] pt-2 bg-white border-t border-[#EAE0D0] flex gap-3">
               <button
                 onClick={() => dispatchFlow({ type: 'retake' })}
-                className="flex-1 h-12 rounded-xl border-2 border-[#E8DFD0] text-[#7A829A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#FDF8EE] active:scale-[0.98] transition-all cursor-pointer"
+                className="flex-1 h-12 rounded-xl border-2 border-[#E8DFD0] bg-[#FDF8EE] text-[#7A829A] font-semibold text-sm flex items-center justify-center gap-2 hover:bg-[#F6F1E4] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span className="material-symbols-outlined text-lg">refresh</span>
                 Chụp lại
@@ -1041,7 +1037,7 @@ const CheckInCheckOut: React.FC<CheckInCheckOutProps> = ({ employeeId, onCheckIn
 
       {/* Success Modal (state: success) */}
       {flow.view === 'success' && session.lastRecord && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 text-center shadow-2xl">
             <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-green-600 text-5xl fill">check_circle</span>

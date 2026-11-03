@@ -118,7 +118,7 @@ export const BottomNav: React.FC<BottomNavProps> = ({
       )}
 
       {/* Compact bottom bar: home inline + everything else in the "Khác" cluster */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-around items-center px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-[#0F1E44] rounded-t-2xl border-t border-[#1A2D5A] shadow-lg md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 flex justify-around items-center px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] bg-[#0F1E44] rounded-t-2xl border-t border-[#1A2D5A] shadow-lg md:hidden">
         <button
           onClick={() => handleTabClick(homeTab.id)}
           className={`flex flex-col items-center justify-center transition-all duration-200 relative group flex-1 max-w-[100px] ${

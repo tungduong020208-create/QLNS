@@ -65,7 +65,7 @@ const CameraCapture: React.FC<{
   }, [onCameraError]);
 
   return (
-    <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden">
+    <div className="relative w-full h-[68vh] min-h-[420px] max-h-[760px] bg-black overflow-hidden rounded-[28px] shadow-2xl ring-1 ring-white/10">
       <video
         ref={videoRef}
         autoPlay
@@ -75,45 +75,65 @@ const CameraCapture: React.FC<{
         style={{ transform: 'scaleX(-1)' }}
       />
 
+      <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/70" />
+
       {/* Loading overlay */}
       {loading && !error && (
-        <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-3 z-10">
-          <div className="w-10 h-10 border-3 border-white/20 border-t-white rounded-full animate-spin" />
-          <p className="text-white text-sm font-medium">Đang mở camera...</p>
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30">
+          <div className="w-12 h-12 border-3 border-white/20 border-t-white rounded-full animate-spin" />
+          <p className="text-white text-sm font-medium tracking-wide">Đang mở camera...</p>
         </div>
       )}
 
       {/* Error */}
       {error && (
-        <div className="absolute inset-0 bg-black/70 flex items-center justify-center p-4 z-10">
-          <div className="bg-white rounded-xl p-4 max-w-xs text-center">
+        <div className="absolute inset-0 bg-black/75 flex items-center justify-center p-4 z-30">
+          <div className="bg-white rounded-2xl p-5 max-w-xs text-center shadow-xl">
             <span className="material-symbols-outlined text-4xl text-red-500">error</span>
-            <p className="text-sm text-gray-600 mt-2">{error}</p>
+            <p className="text-sm text-gray-600 mt-3 leading-6">{error}</p>
           </div>
         </div>
       )}
 
-      {/* Face guide (static oval, purely cosmetic framing aid) */}
       {!loading && !error && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="w-36 h-44 rounded-full border-2 border-dashed border-white/60" />
-          <div className="absolute bottom-14 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2">
-            <span className="text-white text-sm font-medium">Đặt khuôn mặt vào vòng tròn</span>
+        <>
+          <div className="absolute inset-x-0 top-0 z-20 flex items-center justify-between px-4 pt-4">
+            <div className="rounded-full bg-black/35 px-2.5 py-1.5 border border-white/10 backdrop-blur-md">
+              <span className="text-[10px] uppercase tracking-[0.22em] text-white/75 font-semibold">Selfie</span>
+            </div>
+            <div className="flex items-center gap-2 rounded-full bg-black/35 px-2.5 py-1.5 border border-white/10 backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
+              <span className="text-[10px] text-white/80 font-medium">HD</span>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Shutter button */}
-      {!loading && !error && (
-        <div className="absolute bottom-3 left-0 right-0 flex justify-center z-20">
-          <button
-            onClick={onCapture}
-            className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-100"
-            aria-label="Chụp ảnh"
-          >
-            <span className="material-symbols-outlined text-[#0F1E44] text-3xl">photo_camera</span>
-          </button>
-        </div>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <div className="relative">
+              <div className="w-40 h-52 rounded-[42%] border-2 border-white/85 shadow-[0_0_0_3px_rgba(255,255,255,0.08)]" />
+              <div className="absolute -inset-3 rounded-[45%] border border-white/20" />
+            </div>
+          </div>
+
+          <div className="absolute left-0 right-0 bottom-0 z-20 px-4 pb-5 pt-14 bg-gradient-to-t from-black/80 via-black/35 to-transparent">
+            <div className="mb-5 flex items-center justify-center">
+              <div className="rounded-full bg-black/35 border border-white/10 backdrop-blur-md px-4 py-2 text-white/85 text-xs font-medium shadow-lg">
+                Đặt khuôn mặt vào khung rồi bấm chụp
+              </div>
+            </div>
+
+            <div className="flex items-center justify-center">
+              <button
+                onClick={onCapture}
+                className="group relative flex items-center justify-center w-20 h-20 rounded-full bg-white shadow-[0_0_0_6px_rgba(255,255,255,0.1),0_0_28px_rgba(255,255,255,0.35)] active:scale-95 transition-transform duration-150"
+                aria-label="Chụp ảnh"
+              >
+                <span className="absolute inset-[10px] rounded-full border border-[#0F1E44]/20" />
+                <span className="absolute inset-[3px] rounded-full bg-[#F5F7FB] group-active:scale-95 transition-transform" />
+                <span className="material-symbols-outlined text-[#0F1E44] text-3xl relative z-10">photo_camera</span>
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

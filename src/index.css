@@ -1,3 +1,5 @@
+@source "./src";
+
 @import "tailwindcss";
 
 @theme {

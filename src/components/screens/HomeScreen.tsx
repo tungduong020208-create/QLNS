@@ -29,17 +29,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   return (
     <div className="pb-safe-bottom pt-safe-top px-4 max-w-3xl mx-auto w-full antialiased">
-      <div className="mb-6">
-        <h1 className="font-heading text-2xl md:text-3xl font-bold text-[#0F1E44] tracking-tight">
-          Xin chào, {currentUser.name}
-        </h1>
-        <p className="text-sm text-[#7A829A] mt-1">
-          {currentUser.role === 'manager'
-            ? 'Cập nhật tổng quan hiệu suất'
-            : 'Điểm danh và theo dõi đánh giá từ khách hàng'}
-        </p>
-      </div>
-
       {currentUser.role === 'employee' && (
         <Suspense fallback={null}>
           <CheckInCheckOut employeeId={currentUser.id} onCheckIn={onCheckIn || (() => {})} />
